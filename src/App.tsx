@@ -1,11 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ComboChain, DEFAULT_COMBO_CHAINS } from './data/skillsLibrary';
 import { ComboSequence } from './components/ComboSequence';
-import { ShutdownTimer } from './components/ShutdownTimer';
 import { SessionSummaryModal } from './components/SessionSummaryModal';
-import { ChatBotToggle } from './components/ChatBotToggle';
-import { FarmModeSwitch } from './components/FarmModeSwitch';
-import { SessionSummaryData, FarmMode } from './types';
+import { SessionSummaryData } from './types';
 import {
   Play,
   Square,
@@ -13,8 +10,10 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
-  RotateCcw
+  Sun,
+  Moon
 } from 'lucide-react';
+import { Language, Theme, translations } from './utils/i18n';
 
 export const App: React.FC = () => {
   // Combo Chains (Dynamic chains & customizable steps)
@@ -46,17 +45,38 @@ export const App: React.FC = () => {
   const [isBotRunning, setIsBotRunning] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Farm mode: 'pull' (Агр мобов) or 'normal' (Обычный)
-  const [farmMode, setFarmMode] = useState<FarmMode>('pull');
+  // Theme & Language Settings
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('ezf_theme');
+    return (saved === 'light' || saved === 'dark') ? saved : 'dark';
+  });
 
-  // New features: Session Summary & Chat Bot
+  const [language, setLanguage] = useState<Language>(() => {
+    const saved = localStorage.getItem('ezf_lang');
+    return (saved === 'en' || saved === 'ru') ? saved : 'ru';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('ezf_theme', theme);
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', theme === 'dark');
+      document.documentElement.classList.toggle('light', theme === 'light');
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('ezf_lang', language);
+  }, [language]);
+
+  const t = translations[language];
+  const isDark = theme === 'dark';
+
+  // Session Summary
   const [sessionSummary, setSessionSummary] = useState<SessionSummaryData | null>(null);
   const lastShownStoppedAtMsRef = useRef<number | null>(null);
-  const [isChatRunning, setIsChatRunning] = useState(false);
 
   const [activeCasting, setActiveCasting] = useState<{ chainId: string; stepId: string } | null>(null);
   const isInitialMount = useRef<boolean>(true);
@@ -110,12 +130,6 @@ export const App: React.FC = () => {
           if (!isCancelled && res) {
             if (typeof res.running === 'boolean' && !isStarting && !isStopping) {
               setIsBotRunning(res.running);
-            }
-            if (typeof res.chat_running === 'boolean') {
-              setIsChatRunning(res.chat_running);
-            }
-            if (res.farm_mode === 'pull' || res.farm_mode === 'normal') {
-              setFarmMode(res.farm_mode);
             }
           }
         } catch (err) {
@@ -254,13 +268,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Сброс: возврат комбинаций к дефолтным цепочкам
-  const handleResetToDefault = async () => {
-    setChains(DEFAULT_COMBO_CHAINS);
-    setShowResetConfirm(false);
-    await saveCurrentConfigToBackend(DEFAULT_COMBO_CHAINS);
-    setSuccessMessage('Комбинации клавиш сброшены к начальным');
-  };
 
   // Автосохранение [chains] на диск с debounce ~600мс
   useEffect(() => {
@@ -352,29 +359,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Called when ShutdownTimer expires and automatically stops the bot
-  const handleTimerStoppedBot = useCallback(() => {
-    setIsBotRunning(false);
-    setActiveCasting(null);
-    setIsStopping(false);
-    // Preview session summary test event for timer
-    if (typeof window !== 'undefined' && !window.pywebview) {
-      window.dispatchEvent(
-        new CustomEvent('easyfarm:session-summary', {
-          detail: {
-            started_at_ms: Date.now() - 1800000,
-            stopped_at_ms: Date.now(),
-            duration_s: 1800,
-            kills: 206,
-            kills_per_hour: 412,
-            avg_kill_gap_s: 8.7,
-            lost: 4,
-            stop_reason: 'timer',
-          },
-        })
-      );
-    }
-  }, []);
 
   // Export JSON file download
   const handleExportJson = () => {
@@ -445,45 +429,64 @@ export const App: React.FC = () => {
   }, [isBotRunning, chains]);
 
   return (
-    <div className="min-h-screen w-full bg-black text-zinc-300 flex flex-col selection:bg-zinc-700 selection:text-white justify-center items-center p-1 sm:p-2 md:p-4">
-      {/* Sleek Uber-Black Window Card */}
+    <div className={`min-h-screen w-full flex flex-col justify-center items-center p-1 sm:p-2 md:p-4 transition-colors duration-200 ${
+      isDark ? 'bg-black text-zinc-300 selection:bg-zinc-700 selection:text-white' : 'bg-[#eef0f4] text-zinc-800 selection:bg-blue-200 selection:text-blue-900'
+    }`}>
+      {/* Window Card */}
       <div
         id="app-window-card"
-        className="w-full max-w-[480px] bg-[#07070a] border border-zinc-800/90 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.95),0_0_25px_rgba(255,255,255,0.03)] flex flex-col relative max-h-[98vh] sm:max-h-[96vh]"
+        className={`w-full max-w-[480px] rounded-2xl flex flex-col relative max-h-[98vh] sm:max-h-[96vh] transition-colors duration-200 border ${
+          isDark
+            ? 'bg-[#07070a] border-zinc-800/90 shadow-[0_0_50px_rgba(0,0,0,0.95),0_0_25px_rgba(255,255,255,0.03)]'
+            : 'bg-white border-zinc-200/90 shadow-[0_10px_35px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.05)]'
+        }`}
       >
         {/* Compact Header */}
-        <header className="bg-[#0b0b0f] border-b border-zinc-800/80 px-3 py-2 flex items-center justify-between gap-2 rounded-t-2xl shrink-0">
-          {/* Animated Red Shimmer EZF Logo */}
+        <header className={`px-3 py-2 flex items-center justify-between gap-2 rounded-t-2xl shrink-0 border-b transition-colors ${
+          isDark ? 'bg-[#0b0b0f] border-zinc-800/80' : 'bg-zinc-50 border-zinc-200'
+        }`}>
+          {/* Animated EZF Logo */}
           <div className="flex items-center shrink-0 pl-1">
             <span className="ezf-shimmer font-mono text-base font-black tracking-[0.24em] uppercase select-none cursor-default">
               EZF
             </span>
           </div>
 
-          {/* Right Action Controls: Часы автоостановки, Чат-бот, Старт/Стоп (F5), Сброс, Экспорт */}
+          {/* Right Action Controls: Язык, Тема, Чат-бот, Старт/Стоп, Экспорт */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Auto-shutdown timer clock (left of Start button) */}
-            <ShutdownTimer
-              onBotStopped={handleTimerStoppedBot}
-              onToast={setSuccessMessage}
-            />
+            {/* Language Switcher: RU / EN */}
+            <button
+              type="button"
+              onClick={() => setLanguage(l => l === 'ru' ? 'en' : 'ru')}
+              title={t.langToggle}
+              className={`px-1.5 py-1 rounded-lg text-[10.5px] font-mono font-bold tracking-wider transition cursor-pointer select-none border flex items-center gap-0.5 ${
+                isDark
+                  ? 'bg-[#111118] hover:bg-[#1a1b24] text-zinc-300 hover:text-white border-zinc-700/80 hover:border-zinc-500'
+                  : 'bg-white hover:bg-zinc-100 text-zinc-700 hover:text-black border-zinc-300 hover:border-zinc-400 shadow-xs'
+              }`}
+            >
+              <span className={language === 'ru' ? (isDark ? 'text-blue-400 font-black' : 'text-blue-600 font-black') : 'opacity-40'}>RU</span>
+              <span className="opacity-30">/</span>
+              <span className={language === 'en' ? (isDark ? 'text-blue-400 font-black' : 'text-blue-600 font-black') : 'opacity-40'}>EN</span>
+            </button>
 
-            {/* Compact Chat-Bot Toggle */}
-            <ChatBotToggle
-              chatRunning={isChatRunning}
-              onChatStateChange={setIsChatRunning}
-              onError={setErrorMessage}
-              onSuccess={setSuccessMessage}
-            />
-
-            {/* Farm Mode Switcher: Агр мобов / Обычный (рядом с Чат-бот) */}
-            <FarmModeSwitch
-              isBotRunning={isBotRunning}
-              serverFarmMode={farmMode}
-              onFarmModeChange={setFarmMode}
-              onToast={setSuccessMessage}
-              onError={setErrorMessage}
-            />
+            {/* Theme Switcher: Dark / Light */}
+            <button
+              type="button"
+              onClick={() => setTheme(curr => curr === 'dark' ? 'light' : 'dark')}
+              title={theme === 'dark' ? t.themeLight : t.themeDark}
+              className={`p-1.5 rounded-lg border transition cursor-pointer flex items-center justify-center ${
+                isDark
+                  ? 'bg-[#111118] hover:bg-[#1a1b24] text-amber-300 hover:text-amber-200 border-zinc-700/80 hover:border-zinc-500'
+                  : 'bg-white hover:bg-zinc-100 text-zinc-700 hover:text-black border-zinc-300 hover:border-zinc-400 shadow-xs'
+              }`}
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+              ) : (
+                <Moon className="w-3.5 h-3.5 text-zinc-700" />
+              )}
+            </button>
 
             {/* Start / Stop Button */}
             {isBotRunning ? (
@@ -491,80 +494,49 @@ export const App: React.FC = () => {
                 onClick={handleStopBot}
                 disabled={isStopping}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-lg font-medium text-xs transition cursor-pointer shadow border bg-[#181822] text-white border-zinc-400 hover:bg-[#22222e] disabled:opacity-50 shadow-[0_0_16px_rgba(255,255,255,0.35)] animate-pulse"
-                title="Остановить бота"
+                title={t.stopTitle}
               >
                 {isStopping ? (
                   <Loader2 className="w-3 h-3 text-zinc-200 animate-spin" />
                 ) : (
                   <Square className="w-3 h-3 fill-zinc-100 text-zinc-100" />
                 )}
-                <span>{isStopping ? 'Остановка...' : 'Стоп'}</span>
+                <span>{isStopping ? t.stopping : t.stop}</span>
               </button>
             ) : (
               <button
                 onClick={handleStartBot}
                 disabled={isStarting}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-lg font-medium text-xs transition cursor-pointer shadow border bg-[#111116] hover:bg-[#1a1a22] text-zinc-100 border-zinc-700/80 hover:border-zinc-400 hover:shadow-[0_0_18px_rgba(255,255,255,0.25)] disabled:opacity-50"
-                title="Запустить бота"
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-medium text-xs transition cursor-pointer shadow border disabled:opacity-50 ${
+                  isDark
+                    ? 'bg-[#111116] hover:bg-[#1a1a22] text-zinc-100 border-zinc-700/80 hover:border-zinc-400 hover:shadow-[0_0_18px_rgba(255,255,255,0.25)]'
+                    : 'bg-zinc-900 hover:bg-black text-white border-zinc-800 shadow-xs'
+                }`}
+                title={t.startTitle}
               >
                 {isStarting ? (
                   <Loader2 className="w-3 h-3 text-zinc-300 animate-spin" />
                 ) : (
-                  <Play className="w-3 h-3 fill-zinc-200 text-zinc-200" />
+                  <Play className="w-3 h-3 fill-current" />
                 )}
-                <span>{isStarting ? 'Запуск...' : 'Старт'}</span>
+                <span>{isStarting ? t.starting : t.start}</span>
               </button>
             )}
-
-            {/* Reset to Default Button */}
-            <button
-              onClick={() => setShowResetConfirm(true)}
-              disabled={isBotRunning}
-              className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800/70 hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] rounded-lg border border-transparent hover:border-zinc-700 transition cursor-pointer disabled:opacity-40"
-              title="Сбросить все комбинации"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
 
             {/* Download JSON backup */}
             <button
               onClick={handleExportJson}
-              className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800/70 hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] rounded-lg border border-transparent hover:border-zinc-700 transition cursor-pointer"
-              title="Скачать JSON файл конфигурации"
+              className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                isDark
+                  ? 'text-zinc-400 hover:text-white hover:bg-zinc-800/70 hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] border-transparent hover:border-zinc-700'
+                  : 'text-zinc-600 hover:text-black hover:bg-zinc-100 border-transparent hover:border-zinc-300 shadow-xs'
+              }`}
+              title={t.exportJson}
             >
               <Download className="w-3.5 h-3.5" />
             </button>
           </div>
         </header>
-
-        {/* Reset Confirmation Dialog */}
-        {showResetConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/80 backdrop-blur-xs">
-            <div className="bg-[#0b0b0f] border border-zinc-700 rounded-xl p-3.5 max-w-[290px] w-full shadow-[0_0_40px_rgba(0,0,0,0.95),0_0_20px_rgba(255,255,255,0.06)] flex flex-col gap-2.5">
-              <div className="flex items-center gap-2 text-zinc-200">
-                <RotateCcw className="w-4 h-4 shrink-0 text-zinc-300" />
-                <h3 className="font-medium text-xs text-zinc-100">Сбросить комбинации клавиш?</h3>
-              </div>
-              <p className="text-[11px] text-zinc-400">
-                Все цепочки вернутся к начальным значениям по умолчанию.
-              </p>
-              <div className="flex justify-end gap-1.5 pt-1 border-t border-zinc-800">
-                <button
-                  onClick={() => setShowResetConfirm(false)}
-                  className="px-2.5 py-1 rounded text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition cursor-pointer"
-                >
-                  Отмена
-                </button>
-                <button
-                  onClick={handleResetToDefault}
-                  className="px-2.5 py-1 rounded text-xs font-medium bg-zinc-200 hover:bg-white text-black transition shadow-[0_0_12px_rgba(255,255,255,0.3)] cursor-pointer flex items-center gap-1"
-                >
-                  <span>Сбросить</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Floating Status / Error Notifications */}
         {errorMessage && (
@@ -606,6 +578,8 @@ export const App: React.FC = () => {
             isBotRunning={isBotRunning}
             onToast={setSuccessMessage}
             onError={setErrorMessage}
+            language={language}
+            theme={theme}
           />
         </main>
       </div>
@@ -614,6 +588,8 @@ export const App: React.FC = () => {
       <SessionSummaryModal
         data={sessionSummary}
         onClose={() => setSessionSummary(null)}
+        language={language}
+        theme={theme}
       />
     </div>
   );

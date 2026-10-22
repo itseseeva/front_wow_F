@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ComboChain, ChainStep } from '../data/skillsLibrary';
-import { Plus, Clock, RotateCcw } from 'lucide-react';
+import { Plus, Clock, RotateCcw, Pencil } from 'lucide-react';
 import { CaptureProgressToast, CaptureProgressState } from './CaptureProgressToast';
 import { CaptureSkillsModal } from './CaptureSkillsModal';
 import { CaptureSkillsResponse, CaptureSkillsSlot } from '../types';
 import { soundManager } from '../utils/sound';
+import { Language, Theme, translations } from '../utils/i18n';
 
 interface Props {
   chains: ComboChain[];
@@ -13,9 +14,11 @@ interface Props {
   isBotRunning?: boolean;
   onToast?: (message: string) => void;
   onError?: (message: string) => void;
+  language?: Language;
+  theme?: Theme;
 }
 
-const MAX_CAST_SECONDS = 5;
+const MAX_CAST_SECONDS = 999;
 
 // Extract clean physical game key name from KeyboardEvent (no text caret, no layout mismatch)
 const getPhysicalKeyFromEvent = (e: React.KeyboardEvent): string | null => {
@@ -91,7 +94,11 @@ export const ComboSequence: React.FC<Props> = ({
   isBotRunning = false,
   onToast,
   onError,
+  language = 'ru',
+  theme = 'dark',
 }) => {
+  const t = translations[language];
+  const isDark = theme === 'dark';
   // Capture Skills state
   const [isCapturing, setIsCapturing] = useState(false);
   const [captureProgress, setCaptureProgress] = useState<CaptureProgressState | null>(null);
@@ -450,13 +457,19 @@ export const ComboSequence: React.FC<Props> = ({
 
   return (
     <div className="w-full max-w-[480px] mx-auto flex flex-col gap-2 relative select-none">
-      <div className="w-full rounded-xl p-3 shadow-[0_6px_25px_rgba(0,0,0,0.95)] flex flex-col gap-2 relative transition-all duration-200 bg-[#08080c] border border-zinc-800/90">
+      <div className={`w-full rounded-xl p-3 flex flex-col gap-2 relative transition-all duration-200 border ${
+        isDark
+          ? 'bg-[#08080c] border-zinc-800/90 shadow-[0_6px_25px_rgba(0,0,0,0.95)]'
+          : 'bg-white border-zinc-200 shadow-[0_4px_20px_rgba(0,0,0,0.06)] text-zinc-800'
+      }`}>
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/80 pb-2 text-xs">
+        <div className={`flex flex-wrap items-center justify-between gap-2 border-b pb-2 text-xs ${
+          isDark ? 'border-zinc-800/80 text-zinc-200' : 'border-zinc-200 text-zinc-800'
+        }`}>
           <div className="flex items-center gap-1.5 flex-wrap">
-            <div className="w-1.5 h-1.5 rounded-full bg-zinc-200 shadow-[0_0_8px_rgba(255,255,255,0.85)]" />
-            <span className="font-semibold text-zinc-200 text-xs tracking-wide">
-              Ротация скиллов
+            <div className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-zinc-200 shadow-[0_0_8px_rgba(255,255,255,0.85)]' : 'bg-zinc-800'}`} />
+            <span className={`font-semibold text-xs tracking-wide ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+              {t.rotationTitle}
             </span>
           </div>
 
@@ -464,8 +477,12 @@ export const ComboSequence: React.FC<Props> = ({
             {/* Reset Steps in Chain */}
             <button
               onClick={() => handleClearAllChainSteps(currentChain.id)}
-              title="Очистить все клавиши"
-              className="text-zinc-400 hover:text-white hover:bg-zinc-800/70 hover:shadow-[0_0_10px_rgba(255,255,255,0.15)] p-1 rounded transition cursor-pointer"
+              title={t.clearKeys}
+              className={`p-1 rounded transition cursor-pointer ${
+                isDark
+                  ? 'text-zinc-400 hover:text-white hover:bg-zinc-800/70 hover:shadow-[0_0_10px_rgba(255,255,255,0.15)]'
+                  : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
+              }`}
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
@@ -489,21 +506,31 @@ export const ComboSequence: React.FC<Props> = ({
                     onClick={() => setEditingStep({ chainId: currentChain.id, stepId: step.id })}
                     className={`w-[46px] h-[46px] rounded-lg p-0.5 relative flex flex-col items-center justify-center select-none group transition-all duration-200 shrink-0 cursor-pointer ${
                       isCasting
-                        ? 'ring-2 ring-zinc-200 shadow-[0_0_22px_rgba(255,255,255,0.85)] scale-105 bg-[#22222d] z-20'
+                        ? isDark
+                          ? 'ring-2 ring-zinc-200 shadow-[0_0_22px_rgba(255,255,255,0.85)] scale-105 bg-[#22222d] z-20'
+                          : 'ring-2 ring-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.6)] scale-105 bg-blue-50 z-20'
                         : isIndependent
-                        ? 'bg-[#0b1329] border border-blue-500/80 shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:border-blue-400 hover:bg-[#101b38]'
-                        : 'bg-[#0d0d12] border border-zinc-800/90 hover:border-zinc-400 hover:shadow-[0_0_16px_rgba(220,225,235,0.4)] hover:bg-[#161622]'
+                        ? isDark
+                          ? 'bg-[#0b1329] border border-blue-500/80 shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:border-blue-400 hover:bg-[#101b38]'
+                          : 'bg-blue-50/80 border border-blue-400 shadow-xs hover:border-blue-500 hover:bg-blue-100/60'
+                        : isDark
+                        ? 'bg-[#0d0d12] border border-zinc-800/90 hover:border-zinc-400 hover:shadow-[0_0_16px_rgba(220,225,235,0.4)] hover:bg-[#161622]'
+                        : 'bg-zinc-50 border border-zinc-250 hover:border-zinc-400 hover:shadow-[0_2px_8px_rgba(0,0,0,0.08)] hover:bg-white text-zinc-900'
                     }`}
                     style={{
                       boxShadow: isCasting
                         ? '0 0 18px rgba(255,255,255,0.65), inset 0 1px 0 rgba(255,255,255,0.2)'
                         : isIndependent
                         ? 'inset 0 1px 0 rgba(59,130,246,0.2), 0 2px 6px rgba(0,0,0,0.85)'
-                        : 'inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 5px rgba(0,0,0,0.8)',
+                        : isDark
+                        ? 'inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 5px rgba(0,0,0,0.8)'
+                        : '0 1px 3px rgba(0,0,0,0.05)',
                     }}
                   >
                     {/* Step Index number in top-left */}
-                    <div className="absolute top-0.5 left-1 z-10 font-mono pointer-events-none text-[8px] text-zinc-500 group-hover:text-zinc-300">
+                    <div className={`absolute top-0.5 left-1 z-10 font-mono pointer-events-none text-[8px] ${
+                      isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-zinc-700'
+                    }`}>
                       {idx + 1}
                     </div>
 
@@ -511,14 +538,18 @@ export const ComboSequence: React.FC<Props> = ({
                     {currentChain.steps.length > 1 && (
                       <button
                         onClick={(e) => handleDeleteStep(currentChain.id, step.id, e)}
-                        title="Удалить этот шаг"
-                        className="absolute -top-1 -right-1 z-30 w-3.5 h-3.5 rounded-full bg-[#181822] hover:bg-zinc-700 text-zinc-400 hover:text-white text-[8px] font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow border border-zinc-600 cursor-pointer"
+                        title={t.deleteStep}
+                        className={`absolute -top-1 -right-1 z-30 w-3.5 h-3.5 rounded-full text-[8px] font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow border cursor-pointer ${
+                          isDark
+                            ? 'bg-[#181822] hover:bg-zinc-700 text-zinc-400 hover:text-white border-zinc-600'
+                            : 'bg-white hover:bg-rose-50 text-zinc-500 hover:text-rose-600 border-zinc-300'
+                        }`}
                       >
                         ✕
                       </button>
                     )}
 
-                    {/* Key Input inside the square: No blinking caret, instant key press */}
+                    {/* Key Input inside the square */}
                     <button
                       type="button"
                       tabIndex={0}
@@ -550,64 +581,50 @@ export const ComboSequence: React.FC<Props> = ({
                         activeCapturingStepId === step.id
                           ? 'bg-blue-600/30 text-blue-200 ring-1 ring-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.6)] animate-pulse'
                           : step.key
-                          ? 'text-zinc-100 group-hover:text-white group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]'
-                          : 'text-zinc-600 group-hover:text-zinc-400'
+                          ? isDark
+                            ? 'text-zinc-100 group-hover:text-white group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]'
+                            : 'text-zinc-800 group-hover:text-zinc-950 font-bold'
+                          : isDark
+                          ? 'text-zinc-600 group-hover:text-zinc-400'
+                          : 'text-zinc-400 group-hover:text-zinc-600'
                       }`}
-                      title="Кликните и нажмите любую клавишу — старая клавиша сразу заменится. Клик по плитке открывает редактор"
+                      title={t.stepHoverHint}
                     >
                       {activeCapturingStepId === step.id ? (
-                        <span className="text-[9.5px] text-blue-300 font-sans tracking-tight">Жми...</span>
+                        <span className="text-[9.5px] text-blue-400 font-sans tracking-tight font-bold">{t.pressPrompt}</span>
                       ) : (
                         step.key || '+'
                       )}
                     </button>
 
-                    {/* Skill CD / Permanent badge - Bottom Left Corner */}
-                    {isIndependent ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingStep({ chainId: currentChain.id, stepId: step.id });
-                        }}
-                        title={`Тип: Постоянно (КД: ${skillCd > 0 ? `${skillCd}с` : '0с'}) — клик для настройки`}
-                        className="absolute bottom-0.5 left-0.5 z-20 px-1 py-0.2 rounded font-mono font-bold text-[7.5px] leading-tight flex items-center gap-0.5 bg-blue-950/90 hover:bg-blue-900 text-blue-200 border border-blue-500/80 shadow-[0_0_8px_rgba(59,130,246,0.3)] cursor-pointer transition select-none active:scale-95"
-                      >
-                        <span>⏱</span>
-                        <span>{skillCd > 0 ? `${skillCd}с` : 'CD'}</span>
-                      </button>
-                    ) : hasCd ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingStep({ chainId: currentChain.id, stepId: step.id });
-                        }}
-                        title={`КД скилла: ${skillCd}с (клик для настройки)`}
-                        className="absolute bottom-0.5 left-0.5 z-20 px-1 py-0.2 rounded font-mono font-bold text-[7.5px] leading-tight flex items-center gap-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-600 shadow-[0_0_8px_rgba(255,255,255,0.15)] cursor-pointer transition select-none active:scale-95"
-                      >
-                        <span>⏱</span>
-                        <span>{skillCd}с</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingStep({ chainId: currentChain.id, stepId: step.id });
-                        }}
-                        title="Настроить шаг (КД / Постоянно / Время каста)"
-                        className="absolute bottom-0.5 left-0.5 z-20 px-0.8 py-0.2 rounded font-mono text-[7.5px] leading-tight flex items-center text-zinc-600 hover:text-zinc-200 hover:bg-zinc-800 opacity-0 group-hover:opacity-100 transition cursor-pointer"
-                      >
-                        ⏱
-                      </button>
-                    )}
+                    {/* Step Edit Button (Карандаш редактирования шага - уменьшенный размер) */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingStep({ chainId: currentChain.id, stepId: step.id });
+                      }}
+                      title={t.editStep}
+                      className={`absolute bottom-0.5 left-0.5 z-20 w-3 h-3 rounded flex items-center justify-center transition cursor-pointer select-none active:scale-90 border ${
+                        isIndependent
+                          ? 'bg-blue-950/90 hover:bg-blue-900 text-blue-300 border-blue-500/80 shadow-[0_0_6px_rgba(59,130,246,0.3)]'
+                          : isDark
+                          ? 'bg-[#14141c] hover:bg-[#20202e] text-zinc-400 hover:text-white border-zinc-700/80 hover:border-zinc-500 shadow-[0_1px_3px_rgba(0,0,0,0.6)]'
+                          : 'bg-white hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 border-zinc-300 hover:border-zinc-400 shadow-xs'
+                      }`}
+                    >
+                      <Pencil className="w-1.5 h-1.5" />
+                    </button>
 
                     {/* Repeat Count Badge - Bottom Right Corner */}
                     {step.repeatCount && step.repeatCount > 1 && (
                       <span
-                        title={`Нажимать ${step.repeatCount} раз(а) подряд`}
-                        className="absolute bottom-0.5 right-1 z-20 font-mono text-[7.5px] font-bold text-amber-300 bg-[#120e06] px-1 py-0.2 rounded border border-amber-500/60 shadow-[0_0_6px_rgba(245,158,11,0.3)] select-none pointer-events-none"
+                        title={`${t.repeatTitle}: ${step.repeatCount}`}
+                        className={`absolute bottom-0.5 right-1 z-20 font-mono text-[7.5px] font-bold px-1 py-0.2 rounded border shadow-xs select-none pointer-events-none ${
+                          isDark
+                            ? 'text-amber-300 bg-[#120e06] border-amber-500/60 shadow-[0_0_6px_rgba(245,158,11,0.3)]'
+                            : 'text-amber-800 bg-amber-50 border-amber-400'
+                        }`}
                       >
                         {step.repeatCount}×
                       </span>
@@ -620,8 +637,12 @@ export const ComboSequence: React.FC<Props> = ({
             {/* Add Step '+' button */}
             <button
               onClick={() => handleAddStepToChain(currentChain.id)}
-              title="Добавить шаг в комбинацию"
-              className="w-[46px] h-[46px] rounded-lg border border-dashed border-zinc-800 hover:border-zinc-400 hover:text-white hover:bg-[#14141c] hover:shadow-[0_0_16px_rgba(255,255,255,0.3)] transition flex items-center justify-center text-zinc-500 cursor-pointer shrink-0 group"
+              title={t.addStep}
+              className={`w-[46px] h-[46px] rounded-lg border border-dashed transition flex items-center justify-center cursor-pointer shrink-0 group ${
+                isDark
+                  ? 'border-zinc-800 hover:border-zinc-400 hover:text-white hover:bg-[#14141c] hover:shadow-[0_0_16px_rgba(255,255,255,0.3)] text-zinc-500'
+                  : 'border-zinc-300 hover:border-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 text-zinc-400'
+              }`}
             >
               <Plus className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
             </button>
@@ -632,32 +653,40 @@ export const ComboSequence: React.FC<Props> = ({
       {/* Step Settings Modal: Horizontal & Ergonomic «Редактор шага» */}
       {editingStep && editingStepData && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-150"
+          className={`fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 backdrop-blur-sm animate-in fade-in duration-150 ${
+            isDark ? 'bg-black/85' : 'bg-black/45'
+          }`}
           onClick={() => {
             setEditingStep(null);
             setIsModalKeyCapturing(false);
           }}
         >
           <div
-            className="w-full max-w-[560px] sm:max-w-[620px] bg-[#090a10] border border-zinc-700/80 rounded-2xl p-3 sm:p-3.5 shadow-[0_24px_60px_rgba(0,0,0,0.95),0_0_30px_rgba(255,255,255,0.06)] flex flex-col gap-2.5 text-zinc-200 select-none animate-in zoom-in-95 duration-150"
+            className={`w-full max-w-[560px] sm:max-w-[620px] rounded-2xl p-3 sm:p-3.5 flex flex-col gap-2.5 select-none animate-in zoom-in-95 duration-150 border ${
+              isDark
+                ? 'bg-[#090a10] border-zinc-700/80 text-zinc-200 shadow-[0_24px_60px_rgba(0,0,0,0.95),0_0_30px_rgba(255,255,255,0.06)]'
+                : 'bg-white border-zinc-250 text-zinc-800 shadow-[0_20px_50px_rgba(0,0,0,0.15)]'
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header (Horizontal) */}
-            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+            <div className={`flex items-center justify-between border-b pb-2 ${isDark ? 'border-zinc-800/80' : 'border-zinc-200'}`}>
               <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-zinc-300 shadow-[0_0_8px_rgba(255,255,255,0.5)] shrink-0"></span>
-                <span className="font-semibold text-xs sm:text-[13px] text-white tracking-wide truncate">
-                  Редактор шага #{editingStepIndex + 1}
+                <span className={`w-2 h-2 rounded-full shrink-0 ${isDark ? 'bg-zinc-300 shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'bg-blue-600'}`}></span>
+                <span className={`font-semibold text-xs sm:text-[13px] tracking-wide truncate ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                  {t.stepEditorTitle} #{editingStepIndex + 1}
                 </span>
-                <span className="text-[10px] text-zinc-500 hidden sm:inline">
-                  • Настройка клавиши, каста и КД
+                <span className={`text-[10px] hidden sm:inline ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                  • {t.stepEditorSubtitle}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={() => setEditingStep(null)}
-                className="text-zinc-500 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition text-xs cursor-pointer shrink-0 leading-none"
-                title="Закрыть (Esc)"
+                className={`p-1 rounded-lg transition text-xs cursor-pointer shrink-0 leading-none ${
+                  isDark ? 'text-zinc-500 hover:text-white hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100'
+                }`}
+                title={`${t.cancelBtn} (Esc)`}
               >
                 ✕
               </button>
@@ -667,12 +696,14 @@ export const ComboSequence: React.FC<Props> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {/* LEFT COLUMN: Клавиша, Действие, Каст, Повторы */}
               <div className="flex flex-col gap-2">
-                {/* 1. Клавиша скилла (Hotkey Recorder: без мигающего курсора, просто нажать клавишу) */}
-                <div className="flex items-center justify-between gap-2 bg-[#06070a]/90 px-2.5 py-1.5 rounded-xl border border-zinc-800/80">
+                {/* 1. Клавиша скилла */}
+                <div className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl border ${
+                  isDark ? 'bg-[#06070a]/90 border-zinc-800/80' : 'bg-zinc-50 border-zinc-200'
+                }`}>
                   <div className="flex flex-col min-w-0">
-                    <span className="text-[10px] font-semibold text-zinc-200">Клавиша шага</span>
+                    <span className={`text-[10px] font-semibold ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>{t.stepKeyLabel}</span>
                     <span className="text-[8.5px] text-zinc-500 truncate">
-                      {isModalKeyCapturing ? '⚡ Нажмите клавишу...' : 'Без курсора, жмите кнопку'}
+                      {isModalKeyCapturing ? t.stepKeyHintActive : t.stepKeyHintIdle}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -700,25 +731,31 @@ export const ComboSequence: React.FC<Props> = ({
                         isModalKeyCapturing
                           ? 'bg-blue-600/30 text-blue-200 border-blue-400 ring-2 ring-blue-500/50 shadow-[0_0_12px_rgba(59,130,246,0.6)] animate-pulse'
                           : draftStep.key
-                          ? 'bg-[#14151f] text-white border-zinc-600 hover:border-zinc-400 shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#1a1b28]'
-                          : 'bg-[#101117] text-zinc-500 border-zinc-800 hover:border-zinc-600 hover:text-zinc-300'
+                          ? isDark
+                            ? 'bg-[#14151f] text-white border-zinc-600 hover:border-zinc-400 shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#1a1b28]'
+                            : 'bg-white text-zinc-900 border-zinc-350 hover:border-zinc-500 shadow-xs hover:bg-zinc-50'
+                          : isDark
+                          ? 'bg-[#101117] text-zinc-500 border-zinc-800 hover:border-zinc-600 hover:text-zinc-300'
+                          : 'bg-zinc-100 text-zinc-400 border-zinc-300 hover:border-zinc-400'
                       }`}
-                      title="Кликните и нажмите нужную клавишу на клавиатуре (заменит текущую)"
+                      title={t.stepHoverHint}
                     >
                       {isModalKeyCapturing ? (
-                        <span className="text-[10px] text-blue-300 font-bold animate-pulse font-sans">Жми...</span>
+                        <span className="text-[10px] text-blue-400 font-bold animate-pulse font-sans">{t.pressPrompt}</span>
                       ) : draftStep.key ? (
                         <span className="tracking-wider">[{draftStep.key}]</span>
                       ) : (
-                        <span className="text-zinc-500 font-normal">[ + ]</span>
+                        <span className={isDark ? 'text-zinc-500 font-normal' : 'text-zinc-400 font-normal'}>[ + ]</span>
                       )}
                     </button>
                     {draftStep.key && (
                       <button
                         type="button"
                         onClick={() => setDraftStep(prev => ({ ...prev, key: '' }))}
-                        className="w-5 h-5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white text-[10px] flex items-center justify-center transition cursor-pointer"
-                        title="Очистить клавишу"
+                        className={`w-5 h-5 rounded-md text-[10px] flex items-center justify-center transition cursor-pointer ${
+                          isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white' : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-600 hover:text-zinc-900'
+                        }`}
+                        title={t.clearKeyTitle}
                       >
                         ✕
                       </button>
@@ -727,33 +764,41 @@ export const ComboSequence: React.FC<Props> = ({
                 </div>
 
                 {/* 2. Тип действия */}
-                <div className="flex items-center justify-between gap-2 bg-[#06070a]/90 px-2.5 py-1.5 rounded-xl border border-zinc-800/80">
+                <div className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl border ${
+                  isDark ? 'bg-[#06070a]/90 border-zinc-800/80' : 'bg-zinc-50 border-zinc-200'
+                }`}>
                   <div className="flex flex-col">
-                    <label className="text-[10px] text-zinc-300 font-medium">Тип действия</label>
-                    <span className="text-[8.5px] text-zinc-500">Режим кнопки</span>
+                    <label className={`text-[10px] font-medium ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{t.actionTypeLabel}</label>
+                    <span className="text-[8.5px] text-zinc-500">{t.actionTypeHint}</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-1 p-0.5 rounded-lg bg-[#0e0f17] border border-zinc-800">
+                  <div className={`grid grid-cols-2 gap-1 p-0.5 rounded-lg border ${
+                    isDark ? 'bg-[#0e0f17] border-zinc-800' : 'bg-zinc-200/70 border-zinc-300'
+                  }`}>
                     <button
                       type="button"
                       onClick={() => setDraftStep(prev => ({ ...prev, actionType: 'press' }))}
                       className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition cursor-pointer ${
                         draftStep.actionType === 'press'
-                          ? 'bg-zinc-800 text-white border border-zinc-600 shadow-sm'
-                          : 'text-zinc-400 hover:text-zinc-200'
+                          ? isDark
+                            ? 'bg-zinc-800 text-white border border-zinc-600 shadow-sm'
+                            : 'bg-white text-zinc-900 border border-zinc-350 shadow-xs'
+                          : isDark ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-600 hover:text-zinc-900'
                       }`}
                     >
-                      Нажатие
+                      {t.actionPress}
                     </button>
                     <button
                       type="button"
                       onClick={() => setDraftStep(prev => ({ ...prev, actionType: 'hold' }))}
                       className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition cursor-pointer ${
                         draftStep.actionType === 'hold'
-                          ? 'bg-zinc-800 text-white border border-zinc-600 shadow-sm'
-                          : 'text-zinc-400 hover:text-zinc-200'
+                          ? isDark
+                            ? 'bg-zinc-800 text-white border border-zinc-600 shadow-sm'
+                            : 'bg-white text-zinc-900 border border-zinc-350 shadow-xs'
+                          : isDark ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-600 hover:text-zinc-900'
                       }`}
                     >
-                      Зажатие
+                      {t.actionHold}
                     </button>
                   </div>
                 </div>
@@ -761,35 +806,53 @@ export const ComboSequence: React.FC<Props> = ({
                 {/* 3. Горизонтальная сетка: Время каста и Нажатий подряд */}
                 <div className="grid grid-cols-2 gap-2">
                   {/* Время каста */}
-                  <div className="flex flex-col gap-1 bg-[#06070a]/90 p-2 rounded-xl border border-zinc-800/80">
+                  <div className={`flex flex-col gap-1 p-2 rounded-xl border ${
+                    isDark ? 'bg-[#06070a]/90 border-zinc-800/80' : 'bg-zinc-50 border-zinc-200'
+                  }`}>
                     <div className="flex items-center justify-between">
-                      <label className="text-[9.5px] text-zinc-300 font-medium">Каст</label>
-                      <div className="flex items-center gap-0.5 bg-[#12131b] px-1.5 py-0.2 rounded border border-zinc-700/80">
+                      <label className={`text-[9.5px] font-medium ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{t.castLabel}</label>
+                      <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded border ${
+                        isDark ? 'bg-[#12131b] border-zinc-700/80' : 'bg-white border-zinc-300'
+                      }`}>
                         <input
                           type="number"
                           min="0"
-                          max="5"
-                          step="1"
-                          value={draftStep.castTimeSeconds}
+                          step="any"
+                          value={draftStep.castTimeSeconds === 0 ? '0' : draftStep.castTimeSeconds}
                           onChange={(e) => {
-                            const val = Math.min(5, Math.max(0, parseInt(e.target.value) || 0));
-                            setDraftStep(prev => ({ ...prev, castTimeSeconds: val }));
+                            const raw = e.target.value;
+                            if (raw === '') {
+                              setDraftStep(prev => ({ ...prev, castTimeSeconds: 0 }));
+                              return;
+                            }
+                            const val = parseFloat(raw);
+                            if (!isNaN(val)) {
+                              setDraftStep(prev => ({ ...prev, castTimeSeconds: Math.max(0, val) }));
+                            }
                           }}
-                          className="w-5 bg-transparent text-center font-mono font-bold text-[10.5px] text-zinc-100 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          className={`w-10 sm:w-12 bg-transparent text-center font-mono font-bold text-[10.5px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                            isDark ? 'text-zinc-100' : 'text-zinc-900'
+                          }`}
+                          placeholder="0"
+                          title={t.castTitle}
                         />
-                        <span className="text-[8px] text-zinc-500 font-mono">с</span>
+                        <span className="text-[8px] text-zinc-500 font-mono">{t.castSecondsUnit}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-0.5 pt-0.5">
-                      {[0, 1, 2, 3, 4, 5].map((s) => (
+                      {[0, 1, 2, 3, 5, 10].map((s) => (
                         <button
                           key={s}
                           type="button"
                           onClick={() => setDraftStep(prev => ({ ...prev, castTimeSeconds: s }))}
                           className={`flex-1 h-5 rounded text-[8.5px] font-mono font-bold transition cursor-pointer border flex items-center justify-center ${
                             draftStep.castTimeSeconds === s
-                              ? 'bg-[#1e1e28] text-white border-zinc-400 shadow-[0_0_6px_rgba(255,255,255,0.2)]'
-                              : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:bg-zinc-800'
+                              ? isDark
+                                ? 'bg-[#1e1e28] text-white border-zinc-400 shadow-[0_0_6px_rgba(255,255,255,0.2)]'
+                                : 'bg-zinc-800 text-white border-zinc-900 shadow-xs'
+                              : isDark
+                              ? 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:bg-zinc-800'
+                              : 'bg-zinc-200/80 text-zinc-600 border-zinc-300 hover:text-zinc-900 hover:bg-zinc-300/80'
                           }`}
                         >
                           {s}
@@ -799,10 +862,12 @@ export const ComboSequence: React.FC<Props> = ({
                   </div>
 
                   {/* Нажатий подряд */}
-                  <div className="flex flex-col gap-1 bg-[#06070a]/90 p-2 rounded-xl border border-zinc-800/80">
+                  <div className={`flex flex-col gap-1 p-2 rounded-xl border ${
+                    isDark ? 'bg-[#06070a]/90 border-zinc-800/80' : 'bg-zinc-50 border-zinc-200'
+                  }`}>
                     <div className="flex items-center justify-between">
-                      <label className="text-[9.5px] text-zinc-300 font-medium">Подряд</label>
-                      <span className="text-[8.5px] font-mono font-bold text-amber-400 bg-amber-950/60 px-1 py-0.2 rounded border border-amber-600/40">
+                      <label className={`text-[9.5px] font-medium ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{t.repeatLabel}</label>
+                      <span className="text-[8.5px] font-mono font-bold text-amber-500 bg-amber-950/40 px-1 py-0.2 rounded border border-amber-600/40">
                         {draftStep.repeatCount || 1}×
                       </span>
                     </div>
@@ -815,9 +880,11 @@ export const ComboSequence: React.FC<Props> = ({
                           className={`flex-1 h-5 rounded font-mono text-[9px] font-bold transition cursor-pointer flex items-center justify-center border ${
                             (draftStep.repeatCount || 1) === cnt
                               ? 'bg-amber-600 text-white border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.4)]'
-                              : 'bg-[#12131b] text-zinc-400 hover:text-white border-zinc-800 hover:bg-zinc-800'
+                              : isDark
+                              ? 'bg-[#12131b] text-zinc-400 hover:text-white border-zinc-800 hover:bg-zinc-800'
+                              : 'bg-zinc-200/80 text-zinc-600 hover:text-zinc-900 border-zinc-300 hover:bg-zinc-300/80'
                           }`}
-                          title={`Нажимать ${cnt} раз(а) подряд`}
+                          title={`${t.repeatTitle}: ${cnt}`}
                         >
                           {cnt}×
                         </button>
@@ -830,34 +897,42 @@ export const ComboSequence: React.FC<Props> = ({
               {/* RIGHT COLUMN: Тип запуска (Обычный / Постоянно) и КД скилла */}
               <div className="flex flex-col gap-2">
                 {/* 1. Тип запуска: Обычный / Постоянно */}
-                <div className="flex flex-col gap-1.5 bg-[#06070a]/90 p-2 rounded-xl border border-zinc-800/80">
+                <div className={`flex flex-col gap-1.5 p-2 rounded-xl border ${
+                  isDark ? 'bg-[#06070a]/90 border-zinc-800/80' : 'bg-zinc-50 border-zinc-200'
+                }`}>
                   <div className="flex items-center justify-between">
-                    <label className="text-[10px] text-zinc-400 font-medium">
-                      Тип запуска скилла
+                    <label className={`text-[10px] font-medium ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                      {t.triggerTypeLabel}
                     </label>
                     {draftStep.independent ? (
                       <span className="text-[8.5px] font-bold text-blue-400 bg-blue-950/80 px-1.5 py-0.2 rounded border border-blue-500/60 shadow-[0_0_6px_rgba(59,130,246,0.2)]">
-                        Постоянно по КД
+                        {t.triggerSpam}
                       </span>
                     ) : (
-                      <span className="text-[8.5px] text-zinc-500 bg-zinc-900 px-1.5 py-0.2 rounded border border-zinc-800">
-                        По очереди
+                      <span className={`text-[8.5px] px-1.5 py-0.2 rounded border ${
+                        isDark ? 'text-zinc-500 bg-zinc-900 border-zinc-800' : 'text-zinc-600 bg-zinc-200 border-zinc-300'
+                      }`}>
+                        {t.triggerSequence}
                       </span>
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-1 p-0.5 rounded-lg bg-[#0e0f17] border border-zinc-800">
+                  <div className={`grid grid-cols-2 gap-1 p-0.5 rounded-lg border ${
+                    isDark ? 'bg-[#0e0f17] border-zinc-800' : 'bg-zinc-200/70 border-zinc-300'
+                  }`}>
                     <button
                       type="button"
                       onClick={() => setDraftStep(prev => ({ ...prev, independent: false }))}
                       className={`py-1 px-1.5 rounded-md text-[10px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 ${
                         !draftStep.independent
-                          ? 'bg-zinc-800 text-white border border-zinc-600 shadow-[0_0_10px_rgba(255,255,255,0.12)]'
-                          : 'text-zinc-400 hover:text-zinc-200 border border-transparent hover:bg-zinc-800/40'
+                          ? isDark
+                            ? 'bg-zinc-800 text-white border border-zinc-600 shadow-[0_0_10px_rgba(255,255,255,0.12)]'
+                            : 'bg-white text-zinc-900 border border-zinc-350 shadow-xs'
+                          : isDark ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-600 hover:text-zinc-900'
                       }`}
                     >
-                      <span>Обычный</span>
-                      <span className="text-[8px] opacity-70 font-normal">(в очереди)</span>
+                      <span>{t.triggerSequenceDesc}</span>
+                      <span className="text-[8px] opacity-70 font-normal">{t.triggerSequenceSub}</span>
                     </button>
                     <button
                       type="button"
@@ -869,11 +944,10 @@ export const ComboSequence: React.FC<Props> = ({
                       className={`py-1 px-1.5 rounded-md text-[10px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 ${
                         draftStep.independent
                           ? 'bg-blue-600 text-white border border-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.45)]'
-                          : 'text-zinc-400 hover:text-blue-300 border border-transparent hover:bg-blue-950/30'
+                          : isDark ? 'text-zinc-400 hover:text-blue-300' : 'text-zinc-600 hover:text-blue-600'
                       }`}
                     >
-                      <span>⚡ Постоянно</span>
-                      <span className="text-[8px] opacity-80 font-normal">(по КД)</span>
+                      <span>⚡ {t.triggerSpam}</span>
                     </button>
                   </div>
                 </div>
@@ -881,15 +955,23 @@ export const ComboSequence: React.FC<Props> = ({
                 {/* 2. КД скилла (сек) */}
                 <div className={`flex flex-col gap-1.5 p-2 rounded-xl border transition-all ${
                   draftStep.independent
-                    ? 'bg-[#0a0f1d] border-blue-500/60 shadow-[inset_0_0_12px_rgba(59,130,246,0.06)]'
-                    : 'bg-[#06070a]/90 border-zinc-700/80 shadow-[inset_0_0_10px_rgba(255,255,255,0.02)]'
+                    ? isDark
+                      ? 'bg-[#0a0f1d] border-blue-500/60 shadow-[inset_0_0_12px_rgba(59,130,246,0.06)]'
+                      : 'bg-blue-50/50 border-blue-300'
+                    : isDark
+                    ? 'bg-[#06070a]/90 border-zinc-700/80 shadow-[inset_0_0_10px_rgba(255,255,255,0.02)]'
+                    : 'bg-zinc-50 border-zinc-200'
                 }`}>
                   <div className="flex items-center justify-between gap-2">
-                    <label className="text-[10px] text-zinc-200 font-semibold shrink-0 flex items-center gap-1.5">
-                      <Clock className={`w-3.5 h-3.5 ${draftStep.independent ? 'text-blue-400' : 'text-zinc-400'}`} />
-                      <span>КД скилла (сек)</span>
+                    <label className={`text-[10px] font-semibold shrink-0 flex items-center gap-1.5 ${
+                      isDark ? 'text-zinc-200' : 'text-zinc-800'
+                    }`}>
+                      <Clock className={`w-3.5 h-3.5 ${draftStep.independent ? 'text-blue-500' : isDark ? 'text-zinc-400' : 'text-zinc-500'}`} />
+                      <span>{t.skillCdLabel}</span>
                     </label>
-                    <div className="flex items-center gap-1 bg-[#12131b] px-2 py-0.5 rounded-md border border-zinc-700/80 focus-within:border-zinc-400">
+                    <div className={`flex items-center gap-1 px-2 py-0.5 rounded-md border focus-within:border-zinc-400 ${
+                      isDark ? 'bg-[#12131b] border-zinc-700/80' : 'bg-white border-zinc-300'
+                    }`}>
                       <input
                         type="number"
                         min="0"
@@ -901,16 +983,16 @@ export const ComboSequence: React.FC<Props> = ({
                           setDraftStep(prev => ({ ...prev, skillCooldownSeconds: val }));
                         }}
                         className={`w-11 bg-transparent text-center font-mono font-bold text-[11px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-                          draftStep.independent ? 'text-blue-200 font-black' : 'text-zinc-100'
+                          draftStep.independent ? 'text-blue-500 font-black' : isDark ? 'text-zinc-100' : 'text-zinc-900'
                         }`}
                       />
-                      <span className="text-[9px] text-zinc-400 font-mono">сек</span>
+                      <span className="text-[9px] text-zinc-400 font-mono">{t.castSecondsUnit}</span>
                     </div>
                   </div>
 
                   {/* Быстрые кнопки пресетов */}
                   <div className="flex flex-wrap items-center gap-1 pt-0.2">
-                    <span className="text-[8px] text-zinc-500">Пресет:</span>
+                    <span className="text-[8px] text-zinc-500">Preset:</span>
                     {[0, 3, 6, 8, 12, 15, 20, 24, 30].map((sec) => (
                       <button
                         key={sec}
@@ -919,55 +1001,51 @@ export const ComboSequence: React.FC<Props> = ({
                         className={`px-1.5 py-0.2 rounded text-[8.5px] font-mono font-bold transition cursor-pointer border ${
                           draftStep.skillCooldownSeconds === sec
                             ? draftStep.independent
-                              ? 'bg-blue-900/80 text-white border-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.4)]'
-                              : 'bg-[#1e1e28] text-white border-zinc-400 shadow-[0_0_8px_rgba(255,255,255,0.2)]'
-                            : 'bg-zinc-800 text-zinc-400 border-zinc-700/60 hover:text-white hover:bg-zinc-700'
+                              ? 'bg-blue-600 text-white border-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.4)]'
+                              : isDark
+                              ? 'bg-[#1e1e28] text-white border-zinc-400 shadow-[0_0_8px_rgba(255,255,255,0.2)]'
+                              : 'bg-zinc-800 text-white border-zinc-900'
+                            : isDark
+                            ? 'bg-zinc-800 text-zinc-400 border-zinc-700/60 hover:text-white hover:bg-zinc-700'
+                            : 'bg-zinc-200/80 text-zinc-600 border-zinc-300 hover:text-zinc-900 hover:bg-zinc-300/80'
                         }`}
                       >
-                        {sec}с
+                        {sec}{t.castSecondsUnit}
                       </button>
                     ))}
-                  </div>
-
-                  {/* Подсказка */}
-                  <div className={`p-1 rounded-md border text-[8.5px] leading-tight flex items-start gap-1 mt-0.2 ${
-                    draftStep.independent
-                      ? 'bg-blue-950/40 border-blue-800/60 text-blue-200'
-                      : 'bg-zinc-900 border border-zinc-700/60 text-zinc-300'
-                  }`}>
-                    <span className="shrink-0 text-zinc-400">⏱</span>
-                    <span className="truncate">
-                      {draftStep.independent
-                        ? `Постоянно по своему КД (${draftStep.skillCooldownSeconds || 0}с).`
-                        : draftStep.skillCooldownSeconds > 0
-                        ? `В очереди с проверкой КД (${draftStep.skillCooldownSeconds}с).`
-                        : 'Строго по очереди в комбинации.'}
-                    </span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Footer Buttons: Horizontal bar */}
-            <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80 mt-0.5">
+            <div className={`flex items-center justify-between pt-2 border-t mt-0.5 ${isDark ? 'border-zinc-800/80' : 'border-zinc-200'}`}>
               <div className="text-[9.5px] text-zinc-400 hidden sm:flex items-center gap-1.5">
                 <span className="text-zinc-500">💡</span>
-                <span>Нажмите любую клавишу — старая сразу заменится без стирания</span>
+                <span>{language === 'ru' ? 'Нажмите любую клавишу — старая сразу заменится без стирания' : 'Press any key — binds instantly without backspace'}</span>
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setEditingStep(null)}
-                  className="flex-1 sm:flex-initial py-1.5 px-3 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white text-[11px] font-medium border border-zinc-700/80 transition cursor-pointer"
+                  className={`flex-1 sm:flex-initial py-1.5 px-3 rounded-lg text-[11px] font-medium border transition cursor-pointer ${
+                    isDark
+                      ? 'bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white border-zinc-700/80'
+                      : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 hover:text-zinc-900 border-zinc-300'
+                  }`}
                 >
-                  Отмена
+                  {t.cancelBtn}
                 </button>
                 <button
                   type="button"
                   onClick={handleSaveStep}
-                  className="flex-1 sm:flex-initial py-1.5 px-4 rounded-lg bg-[#181822] hover:bg-[#22222e] text-zinc-100 hover:text-white text-[11px] font-semibold border border-zinc-600 hover:border-zinc-300 shadow-[0_0_12px_rgba(255,255,255,0.18)] transition cursor-pointer"
+                  className={`flex-1 sm:flex-initial py-1.5 px-4 rounded-lg text-[11px] font-semibold border transition cursor-pointer ${
+                    isDark
+                      ? 'bg-[#181822] hover:bg-[#22222e] text-zinc-100 hover:text-white border-zinc-600 hover:border-zinc-300 shadow-[0_0_12px_rgba(255,255,255,0.18)]'
+                      : 'bg-zinc-900 hover:bg-black text-white border-zinc-800 shadow-sm'
+                  }`}
                 >
-                  Сохранить шаг
+                  {t.saveBtn}
                 </button>
               </div>
             </div>
