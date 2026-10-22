@@ -79,7 +79,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       });
       setIsCapturingKey(false);
       if (onToast) {
-        onToast(language === 'ru' ? `Клавиша [${keyName || '—'}] сохранена` : `Key [${keyName || '—'}] saved`);
+        onToast(`${t.keySaved}: [${keyName || '—'}]`);
       }
     };
 
@@ -87,7 +87,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [isCapturingKey, settings, onSettingsChange, onToast, language]);
+  }, [isCapturingKey, settings, onSettingsChange, onToast, t]);
 
   const handleClearKey = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -96,7 +96,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       previousTargetKey: '',
     });
     if (onToast) {
-      onToast(language === 'ru' ? 'Клавиша очищена' : 'Key cleared');
+      onToast(t.keyCleared);
     }
   };
 
@@ -105,7 +105,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* Compact Top Navigation Bar */}
       <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-zinc-800/60 shrink-0">
         <div className="flex items-center gap-2">
-          {/* Back Button in compact black & cyan style */}
+          {/* Back Button */}
           <button
             type="button"
             onClick={onBack}
@@ -132,85 +132,90 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </span>
       </div>
 
-      {/* Compact Settings List */}
-      <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5 min-h-0">
-        {/* Section Header */}
+      {/* Settings List */}
+      <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5 min-h-0">
+        {/* Section Header: Цель и лут */}
         <div className="flex items-center gap-1.5 px-1 pt-0.5 text-zinc-400">
-          <Target className="w-3 h-3 text-cyan-400" />
-          <span className="text-[10px] font-mono font-black uppercase tracking-wider text-zinc-300">
-            {t.targetingSection}
+          <Target className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="text-[10px] sm:text-[11px] font-mono font-black uppercase tracking-wider text-zinc-300">
+            {t.targetAndLootSection}
           </span>
           <div className="flex-1 h-px bg-zinc-800/80 ml-1" />
         </div>
 
-        {/* Compact Setting Row: Previous Target Key */}
-        <div className={`px-2.5 py-1.5 rounded-lg border flex items-center justify-between gap-2 transition-all ${
-          isDark
-            ? 'bg-[#080b10] border-zinc-800/80 hover:border-cyan-900/50'
-            : 'bg-white border-zinc-200 hover:border-blue-200'
-        }`}>
-          <div className="flex flex-col min-w-0 pr-1">
-            <span className="text-[11px] font-mono font-bold text-zinc-200 leading-tight">
-              {t.previousTargetKeyLabel}
-            </span>
-            <span className="text-[9px] text-zinc-400 font-mono truncate leading-tight">
+        {/* Setting Cards Grid - Adapts from 1 column on small windows to 2 columns on wide windows */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-2.5">
+          {/* Setting Card: Предыдущая цель */}
+          <div className={`px-3 py-2.5 rounded-xl border flex flex-col justify-between gap-2 transition-all ${
+            isDark
+              ? 'bg-[#080b10] border-zinc-800/80 hover:border-cyan-900/50 shadow-xs'
+              : 'bg-white border-zinc-200 hover:border-blue-200 shadow-xs'
+          }`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] sm:text-xs font-mono font-bold text-zinc-200 leading-tight">
+                {t.previousTargetKeyLabel}
+              </span>
+
+              {/* Key Binding Button */}
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  ref={captureButtonRef}
+                  type="button"
+                  onClick={() => setIsCapturingKey(true)}
+                  className={`min-w-[58px] sm:min-w-[68px] h-6 sm:h-7 px-2 sm:px-2.5 rounded-md border flex items-center justify-center gap-1 text-[10px] sm:text-[10.5px] font-mono font-black tracking-wider transition-all duration-150 cursor-pointer select-none active:scale-95 ${
+                    isCapturingKey
+                      ? isDark
+                        ? 'bg-[#0c1626] border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.6)] animate-pulse'
+                        : 'bg-blue-100 border-blue-500 text-blue-700 ring-1 ring-blue-300 animate-pulse'
+                      : settings.previousTargetKey
+                        ? isDark
+                          ? 'bg-[#070b12] border-cyan-400/80 text-cyan-300 hover:bg-[#0c1626] hover:border-cyan-300 hover:shadow-[0_0_10px_rgba(6,182,212,0.4)] shadow-[0_0_5px_rgba(6,182,212,0.2)]'
+                          : 'bg-blue-50 border-blue-400 text-blue-700 hover:bg-blue-100 shadow-xs'
+                        : isDark
+                          ? 'bg-[#070b12] border-cyan-900/60 text-zinc-400 hover:text-cyan-200 hover:border-cyan-400 hover:bg-[#0c1626]'
+                          : 'bg-zinc-100 border-zinc-300 text-zinc-500 hover:text-zinc-800 hover:border-zinc-400'
+                  }`}
+                  title={settings.previousTargetKey ? `${t.previousTargetKeyLabel}: ${settings.previousTargetKey}` : t.clickToBind}
+                >
+                  {isCapturingKey ? (
+                    <span className="text-[9.5px] text-cyan-200 font-bold flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5 text-cyan-300 animate-spin" />
+                      <span>{t.pressAnyKey}</span>
+                    </span>
+                  ) : settings.previousTargetKey ? (
+                    <span className="text-[10px] sm:text-[11px] uppercase tracking-wider text-cyan-300 drop-shadow-[0_0_4px_rgba(6,182,212,0.6)] font-black">
+                      {settings.previousTargetKey}
+                    </span>
+                  ) : (
+                    <span className="text-[9px] sm:text-[9.5px] text-zinc-400 hover:text-cyan-300 font-bold uppercase">
+                      {t.clickToBind}
+                    </span>
+                  )}
+                </button>
+
+                {/* Clear Button */}
+                {settings.previousTargetKey && (
+                  <button
+                    type="button"
+                    onClick={handleClearKey}
+                    disabled={isCapturingKey}
+                    className={`w-6 h-6 sm:w-7 sm:h-7 rounded-md border flex items-center justify-center transition-all duration-150 cursor-pointer select-none active:scale-95 ${
+                      isDark
+                        ? 'bg-[#070b12] border-zinc-800 text-zinc-400 hover:text-rose-300 hover:border-rose-500/70 hover:bg-rose-950/20'
+                        : 'bg-white border-zinc-200 text-zinc-400 hover:text-rose-600 hover:border-rose-300'
+                    }`}
+                    title={t.clearKey}
+                  >
+                    <X className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Detailed Hint per requirements */}
+            <p className="text-[9.5px] sm:text-[10px] text-zinc-400 leading-snug">
               {t.previousTargetKeyHint}
-            </span>
-          </div>
-
-          {/* Key Binding Button matching black-and-cyan style */}
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              ref={captureButtonRef}
-              type="button"
-              onClick={() => setIsCapturingKey(true)}
-              className={`min-w-[58px] h-6 px-2 rounded-md border flex items-center justify-center gap-1 text-[10px] font-mono font-black tracking-wider transition-all duration-150 cursor-pointer select-none active:scale-95 ${
-                isCapturingKey
-                  ? isDark
-                    ? 'bg-[#0c1626] border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.6)] animate-pulse'
-                    : 'bg-blue-100 border-blue-500 text-blue-700 ring-1 ring-blue-300 animate-pulse'
-                  : settings.previousTargetKey
-                    ? isDark
-                      ? 'bg-[#070b12] border-cyan-400/80 text-cyan-300 hover:bg-[#0c1626] hover:border-cyan-300 hover:shadow-[0_0_10px_rgba(6,182,212,0.4)] shadow-[0_0_5px_rgba(6,182,212,0.2)]'
-                      : 'bg-blue-50 border-blue-400 text-blue-700 hover:bg-blue-100 shadow-xs'
-                    : isDark
-                      ? 'bg-[#070b12] border-cyan-900/60 text-zinc-400 hover:text-cyan-200 hover:border-cyan-400 hover:bg-[#0c1626]'
-                      : 'bg-zinc-100 border-zinc-300 text-zinc-500 hover:text-zinc-800 hover:border-zinc-400'
-              }`}
-              title={settings.previousTargetKey ? `${t.previousTargetKeyLabel}: ${settings.previousTargetKey}` : t.clickToBind}
-            >
-              {isCapturingKey ? (
-                <span className="text-[9.5px] text-cyan-200 font-bold flex items-center gap-1">
-                  <Sparkles className="w-2.5 h-2.5 text-cyan-300 animate-spin" />
-                  <span>{t.pressAnyKey}</span>
-                </span>
-              ) : settings.previousTargetKey ? (
-                <span className="text-[10px] uppercase tracking-wider text-cyan-300 drop-shadow-[0_0_4px_rgba(6,182,212,0.6)] font-black">
-                  {settings.previousTargetKey}
-                </span>
-              ) : (
-                <span className="text-[9px] text-zinc-400 hover:text-cyan-300 font-bold uppercase">
-                  {t.clickToBind}
-                </span>
-              )}
-            </button>
-
-            {/* Clear Button */}
-            {settings.previousTargetKey && (
-              <button
-                type="button"
-                onClick={handleClearKey}
-                disabled={isCapturingKey}
-                className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all duration-150 cursor-pointer select-none active:scale-95 ${
-                  isDark
-                    ? 'bg-[#070b12] border-zinc-800 text-zinc-400 hover:text-rose-300 hover:border-rose-500/70 hover:bg-rose-950/20'
-                    : 'bg-white border-zinc-200 text-zinc-400 hover:text-rose-600 hover:border-rose-300'
-                }`}
-                title={t.clearKey}
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
+            </p>
           </div>
         </div>
       </div>

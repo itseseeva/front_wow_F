@@ -86,8 +86,16 @@ export const SessionSummaryModal: React.FC<SessionSummaryModalProps> = ({
 
   if (!data) return null;
 
-  const isTimerStop = data.stop_reason === 'timer';
-  const reasonText = isTimerStop ? t.stoppedByTimer : t.stoppedManually;
+  // Support 'user', 'timer', or ANY arbitrary text from bot as-is
+  let reasonText = data.stop_reason;
+  if (data.stop_reason === 'user') {
+    reasonText = t.stoppedManually;
+  } else if (data.stop_reason === 'timer') {
+    reasonText = t.stoppedByTimer;
+  }
+
+  const isUser = data.stop_reason === 'user';
+  const isTimer = data.stop_reason === 'timer';
 
   return (
     <div
@@ -97,7 +105,7 @@ export const SessionSummaryModal: React.FC<SessionSummaryModalProps> = ({
       onClick={onClose}
     >
       <div
-        className={`w-full max-w-[340px] max-h-[calc(100vh-16px)] sm:max-h-[calc(100vh-24px)] rounded-2xl flex flex-col select-none overflow-hidden my-auto border transition-colors ${
+        className={`w-full max-w-[360px] sm:max-w-[420px] md:max-w-[460px] max-h-[calc(100vh-16px)] sm:max-h-[calc(100vh-24px)] rounded-2xl flex flex-col select-none overflow-hidden my-auto border transition-colors ${
           isDark
             ? 'bg-[#09090d] border-zinc-800/90 shadow-[0_20px_50px_rgba(0,0,0,0.95),0_0_30px_rgba(255,255,255,0.03)] text-zinc-200'
             : 'bg-white border-zinc-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)] text-zinc-800'
@@ -157,18 +165,22 @@ export const SessionSummaryModal: React.FC<SessionSummaryModalProps> = ({
               {animatedKills !== null ? Math.round(animatedKills) : data.kills}
             </div>
 
-            {/* Subtitle Badge: Reason */}
-            <div className={`mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[9.5px] ${
+            {/* Subtitle Badge: Reason (user, timer, or arbitrary custom text) */}
+            <div className={`mt-1 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[9.5px] max-w-full ${
               isDark
                 ? 'bg-zinc-900 border-zinc-700/70 text-zinc-300'
                 : 'bg-white border-zinc-300 text-zinc-700 shadow-2xs'
             }`}>
               <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  isTimerStop ? (isDark ? 'bg-zinc-300' : 'bg-zinc-500') : 'bg-emerald-500'
-                } shadow-[0_0_6px_rgba(16,185,129,0.4)]`}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  isUser
+                    ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]'
+                    : isTimer
+                    ? (isDark ? 'bg-zinc-300' : 'bg-zinc-500')
+                    : 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]'
+                }`}
               />
-              <span className="font-medium">{reasonText}</span>
+              <span className="font-medium truncate">{reasonText}</span>
             </div>
           </div>
 
