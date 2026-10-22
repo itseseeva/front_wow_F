@@ -174,6 +174,10 @@ export const ComboSequence: React.FC<Props> = ({
     skillCooldownSeconds: 0,
   });
 
+  // String buffer states for smooth decimal, comma and zero-erasing inputs
+  const [castInputStr, setCastInputStr] = useState<string>('0');
+  const [cdInputStr, setCdInputStr] = useState<string>('0');
+
   // Reference the active rotation chain (single sequence)
   const currentChain = chains[0] || {
     id: 'chain_1',
@@ -267,14 +271,17 @@ export const ComboSequence: React.FC<Props> = ({
       const cd = typeof editingStepData.skillCooldownSeconds === 'number'
         ? editingStepData.skillCooldownSeconds
         : (typeof editingStepData.cooldown === 'number' ? editingStepData.cooldown : 0);
+      const cast = editingStepData.castTimeSeconds ?? 0;
       setDraftStep({
         key: editingStepData.key || '',
         actionType: editingStepData.actionType || 'press',
-        castTimeSeconds: editingStepData.castTimeSeconds ?? 0,
+        castTimeSeconds: cast,
         repeatCount: editingStepData.repeatCount ?? 1,
         independent: Boolean(editingStepData.independent),
         skillCooldownSeconds: cd,
       });
+      setCastInputStr(String(cast));
+      setCdInputStr(String(cd));
     }
   }, [editingStep?.chainId, editingStep?.stepId]);
 
@@ -297,11 +304,16 @@ export const ComboSequence: React.FC<Props> = ({
   // Commit changes from draft to active chain
   const handleSaveStep = () => {
     if (!editingStep) return;
-    const cd = Math.max(0, draftStep.skillCooldownSeconds ?? 0);
+    const parsedCast = parseFloat(castInputStr.replace(',', '.'));
+    const finalCast = !isNaN(parsedCast) ? Math.min(MAX_CAST_SECONDS, Math.max(0, parsedCast)) : (draftStep.castTimeSeconds ?? 0);
+    const parsedCd = parseFloat(cdInputStr.replace(',', '.'));
+    const finalCd = !isNaN(parsedCd) ? Math.min(300, Math.max(0, parsedCd)) : (draftStep.skillCooldownSeconds ?? 0);
+    const cd = Math.max(0, finalCd);
+
     handleUpdateStep(editingStep.chainId, editingStep.stepId, {
       key: draftStep.key.toUpperCase(),
       actionType: draftStep.actionType,
-      castTimeSeconds: draftStep.castTimeSeconds,
+      castTimeSeconds: finalCast,
       repeatCount: Math.min(10, Math.max(1, draftStep.repeatCount ?? 1)),
       independent: draftStep.independent,
       skillCooldownSeconds: cd,
@@ -828,22 +840,46 @@ export const ComboSequence: React.FC<Props> = ({
                         isDark ? 'bg-[#070b12] border-cyan-900/60 focus-within:border-cyan-400 focus-within:shadow-[0_0_8px_rgba(6,182,212,0.35)]' : 'bg-white border-zinc-300'
                       }`}>
                         <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={draftStep.castTimeSeconds === 0 ? '0' : draftStep.castTimeSeconds}
+                          type="text"
+                          inputMode="decimal"
+                          value={castInputStr}
                           onChange={(e) => {
-                            const raw = e.target.value;
+                            let raw = e.target.value;
                             if (raw === '') {
+                              setCastInputStr('');
                               setDraftStep(prev => ({ ...prev, castTimeSeconds: 0 }));
                               return;
                             }
-                            const val = parseFloat(raw);
-                            if (!isNaN(val)) {
-                              setDraftStep(prev => ({ ...prev, castTimeSeconds: Math.max(0, val) }));
+                            // Allow only digits, comma and dot
+                            raw = raw.replace(/[^0-9.,]/g, '');
+                            const parts = raw.split(/[.,]/);
+                            if (parts.length > 2) {
+                              const sep = raw.includes(',') ? ',' : '.';
+                              raw = parts[0] + sep + parts.slice(1).join('');
+                            }
+                            setCastInputStr(raw);
+                            const parsed = parseFloat(raw.replace(',', '.'));
+                            if (!isNaN(parsed)) {
+                              setDraftStep(prev => ({ ...prev, castTimeSeconds: Math.min(MAX_CAST_SECONDS, Math.max(0, parsed)) }));
                             }
                           }}
-                          className={`w-10 sm:w-12 bg-transparent text-center font-mono font-bold text-[10.5px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                          onBlur={() => {
+                            if (castInputStr === '' || castInputStr === '.' || castInputStr === ',') {
+                              setCastInputStr('0');
+                              setDraftStep(prev => ({ ...prev, castTimeSeconds: 0 }));
+                            } else {
+                              const parsed = parseFloat(castInputStr.replace(',', '.'));
+                              if (isNaN(parsed)) {
+                                setCastInputStr('0');
+                                setDraftStep(prev => ({ ...prev, castTimeSeconds: 0 }));
+                              } else {
+                                const val = Math.min(MAX_CAST_SECONDS, Math.max(0, parsed));
+                                setCastInputStr(String(val));
+                                setDraftStep(prev => ({ ...prev, castTimeSeconds: val }));
+                              }
+                            }
+                          }}
+                          className={`w-10 sm:w-12 bg-transparent text-center font-mono font-bold text-[10.5px] outline-none ${
                             isDark ? 'text-cyan-300' : 'text-zinc-900'
                           }`}
                           placeholder="0"
@@ -857,7 +893,10 @@ export const ComboSequence: React.FC<Props> = ({
                         <button
                           key={s}
                           type="button"
-                          onClick={() => setDraftStep(prev => ({ ...prev, castTimeSeconds: s }))}
+                          onClick={() => {
+                            setDraftStep(prev => ({ ...prev, castTimeSeconds: s }));
+                            setCastInputStr(String(s));
+                          }}
                           className={`flex-1 h-5 rounded text-[8.5px] font-mono font-bold transition cursor-pointer border flex items-center justify-center ${
                             draftStep.castTimeSeconds === s
                               ? isDark
@@ -953,11 +992,17 @@ export const ComboSequence: React.FC<Props> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setDraftStep(prev => ({
-                        ...prev,
-                        independent: true,
-                        skillCooldownSeconds: (!prev.skillCooldownSeconds || prev.skillCooldownSeconds === 0) ? 6 : prev.skillCooldownSeconds,
-                      }))}
+                      onClick={() => {
+                        setDraftStep(prev => {
+                          const nextCd = (!prev.skillCooldownSeconds || prev.skillCooldownSeconds === 0) ? 6 : prev.skillCooldownSeconds;
+                          setCdInputStr(String(nextCd));
+                          return {
+                            ...prev,
+                            independent: true,
+                            skillCooldownSeconds: nextCd,
+                          };
+                        });
+                      }}
                       className={`py-1 px-1.5 rounded-md text-[10px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 ${
                         draftStep.independent
                           ? isDark
@@ -992,18 +1037,48 @@ export const ComboSequence: React.FC<Props> = ({
                       isDark ? 'bg-[#070b12] border-cyan-900/60 focus-within:border-cyan-400 focus-within:shadow-[0_0_8px_rgba(6,182,212,0.35)]' : 'bg-white border-zinc-300'
                     }`}>
                       <input
-                        type="number"
-                        min="0"
-                        max="300"
-                        step="1"
-                        value={draftStep.skillCooldownSeconds}
+                        type="text"
+                        inputMode="decimal"
+                        value={cdInputStr}
                         onChange={(e) => {
-                          const val = Math.max(0, parseInt(e.target.value) || 0);
-                          setDraftStep(prev => ({ ...prev, skillCooldownSeconds: val }));
+                          let raw = e.target.value;
+                          if (raw === '') {
+                            setCdInputStr('');
+                            setDraftStep(prev => ({ ...prev, skillCooldownSeconds: 0 }));
+                            return;
+                          }
+                          raw = raw.replace(/[^0-9.,]/g, '');
+                          const parts = raw.split(/[.,]/);
+                          if (parts.length > 2) {
+                            const sep = raw.includes(',') ? ',' : '.';
+                            raw = parts[0] + sep + parts.slice(1).join('');
+                          }
+                          setCdInputStr(raw);
+                          const parsed = parseFloat(raw.replace(',', '.'));
+                          if (!isNaN(parsed)) {
+                            setDraftStep(prev => ({ ...prev, skillCooldownSeconds: Math.min(300, Math.max(0, parsed)) }));
+                          }
                         }}
-                        className={`w-11 bg-transparent text-center font-mono font-bold text-[11px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                        onBlur={() => {
+                          if (cdInputStr === '' || cdInputStr === '.' || cdInputStr === ',') {
+                            setCdInputStr('0');
+                            setDraftStep(prev => ({ ...prev, skillCooldownSeconds: 0 }));
+                          } else {
+                            const parsed = parseFloat(cdInputStr.replace(',', '.'));
+                            if (isNaN(parsed)) {
+                              setCdInputStr('0');
+                              setDraftStep(prev => ({ ...prev, skillCooldownSeconds: 0 }));
+                            } else {
+                              const val = Math.min(300, Math.max(0, parsed));
+                              setCdInputStr(String(val));
+                              setDraftStep(prev => ({ ...prev, skillCooldownSeconds: val }));
+                            }
+                          }
+                        }}
+                        className={`w-11 bg-transparent text-center font-mono font-bold text-[11px] outline-none ${
                           draftStep.independent ? 'text-cyan-300 font-black' : isDark ? 'text-zinc-100' : 'text-zinc-900'
                         }`}
+                        placeholder="0"
                       />
                       <span className={`text-[9px] font-mono ${isDark ? 'text-cyan-400/70' : 'text-zinc-400'}`}>{t.castSecondsUnit}</span>
                     </div>
@@ -1016,7 +1091,10 @@ export const ComboSequence: React.FC<Props> = ({
                       <button
                         key={sec}
                         type="button"
-                        onClick={() => setDraftStep(prev => ({ ...prev, skillCooldownSeconds: sec }))}
+                        onClick={() => {
+                          setDraftStep(prev => ({ ...prev, skillCooldownSeconds: sec }));
+                          setCdInputStr(String(sec));
+                        }}
                         className={`px-1.5 py-0.2 rounded text-[8.5px] font-mono font-bold transition cursor-pointer border ${
                           draftStep.skillCooldownSeconds === sec
                             ? isDark
