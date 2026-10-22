@@ -502,119 +502,128 @@ export const ComboSequence: React.FC<Props> = ({
 
               return (
                 <React.Fragment key={step.id}>
-                  <div
-                    onClick={() => setEditingStep({ chainId: currentChain.id, stepId: step.id })}
-                    className={`w-[46px] h-[46px] rounded-lg p-0.5 relative flex flex-col items-center justify-center select-none group transition-all duration-200 shrink-0 cursor-pointer ${
-                      isCasting
-                        ? isDark
-                          ? 'ring-2 ring-zinc-200 shadow-[0_0_22px_rgba(255,255,255,0.85)] scale-105 bg-[#22222d] z-20'
-                          : 'ring-2 ring-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.6)] scale-105 bg-blue-50 z-20'
-                        : isIndependent
-                        ? isDark
-                          ? 'bg-[#0b1329] border border-blue-500/80 shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:border-blue-400 hover:bg-[#101b38]'
-                          : 'bg-blue-50/80 border border-blue-400 shadow-xs hover:border-blue-500 hover:bg-blue-100/60'
-                        : isDark
-                        ? 'bg-[#0d0d12] border border-zinc-800/90 hover:border-zinc-400 hover:shadow-[0_0_16px_rgba(220,225,235,0.4)] hover:bg-[#161622]'
-                        : 'bg-zinc-50 border border-zinc-250 hover:border-zinc-400 hover:shadow-[0_2px_8px_rgba(0,0,0,0.08)] hover:bg-white text-zinc-900'
-                    }`}
-                    style={{
-                      boxShadow: isCasting
-                        ? '0 0 18px rgba(255,255,255,0.65), inset 0 1px 0 rgba(255,255,255,0.2)'
-                        : isIndependent
-                        ? 'inset 0 1px 0 rgba(59,130,246,0.2), 0 2px 6px rgba(0,0,0,0.85)'
-                        : isDark
-                        ? 'inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 5px rgba(0,0,0,0.8)'
-                        : '0 1px 3px rgba(0,0,0,0.05)',
-                    }}
-                  >
-                    {/* Step Index number in top-left */}
-                    <div className={`absolute top-0.5 left-1 z-10 font-mono pointer-events-none text-[8px] ${
-                      isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-zinc-700'
-                    }`}>
-                      {idx + 1}
-                    </div>
-
-                    {/* Delete Step button in top-right (on hover) */}
-                    {currentChain.steps.length > 1 && (
-                      <button
-                        onClick={(e) => handleDeleteStep(currentChain.id, step.id, e)}
-                        title={t.deleteStep}
-                        className={`absolute -top-1 -right-1 z-30 w-3.5 h-3.5 rounded-full text-[8px] font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow border cursor-pointer ${
-                          isDark
-                            ? 'bg-[#181822] hover:bg-zinc-700 text-zinc-400 hover:text-white border-zinc-600'
-                            : 'bg-white hover:bg-rose-50 text-zinc-500 hover:text-rose-600 border-zinc-300'
+                  {(() => {
+                    const isCurrentlyEditing = editingStep?.stepId === step.id;
+                    return (
+                      <div
+                        onClick={() => setEditingStep({ chainId: currentChain.id, stepId: step.id })}
+                        className={`w-[46px] h-[46px] rounded-lg p-0.5 relative flex flex-col items-center justify-center select-none group transition-all duration-200 shrink-0 cursor-pointer ${
+                          isCasting
+                            ? isDark
+                              ? 'ring-2 ring-zinc-200 shadow-[0_0_22px_rgba(255,255,255,0.85)] scale-105 bg-[#22222d] z-20'
+                              : 'ring-2 ring-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.6)] scale-105 bg-blue-50 z-20'
+                            : isCurrentlyEditing
+                            ? isDark
+                              ? 'ring-2 ring-cyan-400 shadow-[0_0_16px_rgba(6,182,212,0.6)] scale-105 bg-[#0c1626] border border-cyan-400 z-20'
+                              : 'ring-2 ring-blue-500 shadow-[0_0_14px_rgba(59,130,246,0.5)] scale-105 bg-blue-50 border border-blue-400 z-20'
+                            : isIndependent
+                            ? isDark
+                              ? 'bg-[#0b1329] border border-blue-500/80 shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:border-blue-400 hover:bg-[#101b38]'
+                              : 'bg-blue-50/80 border border-blue-400 shadow-xs hover:border-blue-500 hover:bg-blue-100/60'
+                            : isDark
+                            ? 'bg-[#0d0d12] border border-zinc-800/90 hover:border-cyan-500/60 hover:shadow-[0_0_14px_rgba(6,182,212,0.25)] hover:bg-[#111624]'
+                            : 'bg-zinc-50 border border-zinc-250 hover:border-zinc-400 hover:shadow-[0_2px_8px_rgba(0,0,0,0.08)] hover:bg-white text-zinc-900'
                         }`}
+                        style={{
+                          boxShadow: isCasting
+                            ? '0 0 18px rgba(255,255,255,0.65), inset 0 1px 0 rgba(255,255,255,0.2)'
+                            : isCurrentlyEditing
+                            ? '0 0 14px rgba(6,182,212,0.4), inset 0 1px 0 rgba(6,182,212,0.3)'
+                            : isIndependent
+                            ? 'inset 0 1px 0 rgba(59,130,246,0.2), 0 2px 6px rgba(0,0,0,0.85)'
+                            : isDark
+                            ? 'inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 5px rgba(0,0,0,0.8)'
+                            : '0 1px 3px rgba(0,0,0,0.05)',
+                        }}
                       >
-                        ✕
-                      </button>
-                    )}
+                        {/* Step Index number in top-left */}
+                        <div className={`absolute top-0.5 left-1 z-10 font-mono pointer-events-none text-[8px] ${
+                          isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-zinc-700'
+                        }`}>
+                          {idx + 1}
+                        </div>
 
-                    {/* Key Input inside the square */}
-                    <button
-                      type="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveCapturingStepId(step.id);
-                      }}
-                      onBlur={() => {
-                        if (activeCapturingStepId === step.id) {
-                          setActiveCapturingStepId(null);
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') {
-                          setActiveCapturingStepId(null);
-                          e.currentTarget.blur();
-                          return;
-                        }
-                        const captured = getPhysicalKeyFromEvent(e);
-                        if (captured !== null) {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleUpdateStepKey(currentChain.id, step.id, captured);
-                          setActiveCapturingStepId(null);
-                          e.currentTarget.blur();
-                        }
-                      }}
-                      className={`w-full text-center font-mono font-black text-xs uppercase transition-all tracking-wide py-0.5 select-none cursor-pointer caret-transparent outline-none rounded ${
-                        activeCapturingStepId === step.id
-                          ? 'bg-blue-600/30 text-blue-200 ring-1 ring-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.6)] animate-pulse'
-                          : step.key
-                          ? isDark
-                            ? 'text-zinc-100 group-hover:text-white group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]'
-                            : 'text-zinc-800 group-hover:text-zinc-950 font-bold'
-                          : isDark
-                          ? 'text-zinc-600 group-hover:text-zinc-400'
-                          : 'text-zinc-400 group-hover:text-zinc-600'
-                      }`}
-                      title={t.stepHoverHint}
-                    >
-                      {activeCapturingStepId === step.id ? (
-                        <span className="text-[9.5px] text-blue-400 font-sans tracking-tight font-bold">{t.pressPrompt}</span>
-                      ) : (
-                        step.key || '+'
-                      )}
-                    </button>
+                        {/* Delete Step button in top-right (on hover) */}
+                        {currentChain.steps.length > 1 && (
+                          <button
+                            onClick={(e) => handleDeleteStep(currentChain.id, step.id, e)}
+                            title={t.deleteStep}
+                            className={`absolute -top-1 -right-1 z-30 w-3.5 h-3.5 rounded-full text-[8px] font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow border cursor-pointer ${
+                              isDark
+                                ? 'bg-[#181822] hover:bg-zinc-700 text-zinc-400 hover:text-white border-zinc-600'
+                                : 'bg-white hover:bg-rose-50 text-zinc-500 hover:text-rose-600 border-zinc-300'
+                            }`}
+                          >
+                            ✕
+                          </button>
+                        )}
 
-                    {/* Step Edit Button (Карандаш редактирования шага - уменьшенный размер) */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingStep({ chainId: currentChain.id, stepId: step.id });
-                      }}
-                      title={t.editStep}
-                      className={`absolute bottom-0.5 left-0.5 z-20 w-3 h-3 rounded flex items-center justify-center transition cursor-pointer select-none active:scale-90 border ${
-                        isIndependent
-                          ? 'bg-blue-950/90 hover:bg-blue-900 text-blue-300 border-blue-500/80 shadow-[0_0_6px_rgba(59,130,246,0.3)]'
-                          : isDark
-                          ? 'bg-[#14141c] hover:bg-[#20202e] text-zinc-400 hover:text-white border-zinc-700/80 hover:border-zinc-500 shadow-[0_1px_3px_rgba(0,0,0,0.6)]'
-                          : 'bg-white hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 border-zinc-300 hover:border-zinc-400 shadow-xs'
-                      }`}
-                    >
-                      <Pencil className="w-1.5 h-1.5" />
-                    </button>
+                        {/* Key Input inside the square */}
+                        <button
+                          type="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveCapturingStepId(step.id);
+                          }}
+                          onBlur={() => {
+                            if (activeCapturingStepId === step.id) {
+                              setActiveCapturingStepId(null);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                              setActiveCapturingStepId(null);
+                              e.currentTarget.blur();
+                              return;
+                            }
+                            const captured = getPhysicalKeyFromEvent(e);
+                            if (captured !== null) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleUpdateStepKey(currentChain.id, step.id, captured);
+                              setActiveCapturingStepId(null);
+                              e.currentTarget.blur();
+                            }
+                          }}
+                          className={`w-full text-center font-mono font-black text-xs uppercase transition-all tracking-wide py-0.5 select-none cursor-pointer caret-transparent outline-none rounded ${
+                            activeCapturingStepId === step.id
+                              ? 'bg-blue-600/30 text-blue-200 ring-1 ring-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.6)] animate-pulse'
+                              : step.key
+                              ? isDark
+                                ? 'text-zinc-100 group-hover:text-white group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]'
+                                : 'text-zinc-800 group-hover:text-zinc-950 font-bold'
+                              : isDark
+                              ? 'text-zinc-600 group-hover:text-zinc-400'
+                              : 'text-zinc-400 group-hover:text-zinc-600'
+                          }`}
+                          title={t.stepHoverHint}
+                        >
+                          {activeCapturingStepId === step.id ? (
+                            <span className="text-[9.5px] text-blue-400 font-sans tracking-tight font-bold">{t.pressPrompt}</span>
+                          ) : (
+                            step.key || '+'
+                          )}
+                        </button>
+
+                        {/* Step Edit Button (Карандаш редактирования шага - чёрно-синий стиль) */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingStep({ chainId: currentChain.id, stepId: step.id });
+                          }}
+                          title={t.editStep}
+                          className={`absolute bottom-0.5 left-0.5 z-20 w-3 h-3 rounded flex items-center justify-center transition cursor-pointer select-none active:scale-90 border ${
+                            isCurrentlyEditing
+                              ? 'bg-[#0c1626] text-cyan-300 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.6)]'
+                              : isDark
+                              ? 'bg-[#070b12] hover:bg-[#0c1626] text-cyan-400/90 hover:text-cyan-200 border-cyan-900/60 hover:border-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.25)]'
+                              : 'bg-white hover:bg-blue-50 text-blue-600 hover:text-blue-700 border-zinc-300 hover:border-blue-400 shadow-xs'
+                          }`}
+                        >
+                          <Pencil className="w-1.5 h-1.5 drop-shadow-[0_0_3px_rgba(6,182,212,0.6)]" />
+                        </button>
 
                     {/* Repeat Count Badge - Bottom Right Corner */}
                     {step.repeatCount && step.repeatCount > 1 && (
@@ -630,7 +639,9 @@ export const ComboSequence: React.FC<Props> = ({
                       </span>
                     )}
                   </div>
-                </React.Fragment>
+                );
+              })()}
+            </React.Fragment>
               );
             })}
 
@@ -672,11 +683,11 @@ export const ComboSequence: React.FC<Props> = ({
             {/* Modal Header (Horizontal) */}
             <div className={`flex items-center justify-between border-b pb-2 ${isDark ? 'border-zinc-800/80' : 'border-zinc-200'}`}>
               <div className="flex items-center gap-2 min-w-0">
-                <span className={`w-2 h-2 rounded-full shrink-0 ${isDark ? 'bg-zinc-300 shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'bg-blue-600'}`}></span>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${isDark ? 'bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]' : 'bg-blue-600'}`}></span>
                 <span className={`font-semibold text-xs sm:text-[13px] tracking-wide truncate ${isDark ? 'text-white' : 'text-zinc-900'}`}>
                   {t.stepEditorTitle} #{editingStepIndex + 1}
                 </span>
-                <span className={`text-[10px] hidden sm:inline ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                <span className={`text-[10px] hidden sm:inline ${isDark ? 'text-cyan-400/80 font-mono' : 'text-zinc-400'}`}>
                   • {t.stepEditorSubtitle}
                 </span>
               </div>
@@ -684,7 +695,7 @@ export const ComboSequence: React.FC<Props> = ({
                 type="button"
                 onClick={() => setEditingStep(null)}
                 className={`p-1 rounded-lg transition text-xs cursor-pointer shrink-0 leading-none ${
-                  isDark ? 'text-zinc-500 hover:text-white hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100'
+                  isDark ? 'text-zinc-400 hover:text-cyan-300 hover:bg-[#0c1626]' : 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100'
                 }`}
                 title={`${t.cancelBtn} (Esc)`}
               >
@@ -729,19 +740,19 @@ export const ComboSequence: React.FC<Props> = ({
                       }}
                       className={`min-w-[64px] h-7 px-2.5 rounded-lg font-mono font-black text-xs uppercase flex items-center justify-center gap-1 border transition cursor-pointer select-none caret-transparent outline-none ${
                         isModalKeyCapturing
-                          ? 'bg-blue-600/30 text-blue-200 border-blue-400 ring-2 ring-blue-500/50 shadow-[0_0_12px_rgba(59,130,246,0.6)] animate-pulse'
+                          ? 'bg-[#0c1626] text-cyan-200 border-cyan-400 ring-2 ring-cyan-500/50 shadow-[0_0_14px_rgba(6,182,212,0.6)] animate-pulse'
                           : draftStep.key
                           ? isDark
-                            ? 'bg-[#14151f] text-white border-zinc-600 hover:border-zinc-400 shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#1a1b28]'
-                            : 'bg-white text-zinc-900 border-zinc-350 hover:border-zinc-500 shadow-xs hover:bg-zinc-50'
+                            ? 'bg-[#0c1626] text-cyan-300 border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.35)] hover:border-cyan-300 hover:bg-[#0f1f33]'
+                            : 'bg-white text-blue-600 border-blue-400 shadow-xs hover:bg-blue-50'
                           : isDark
-                          ? 'bg-[#101117] text-zinc-500 border-zinc-800 hover:border-zinc-600 hover:text-zinc-300'
+                          ? 'bg-[#070b12] text-zinc-500 border-cyan-950/80 hover:border-cyan-800 hover:text-cyan-200'
                           : 'bg-zinc-100 text-zinc-400 border-zinc-300 hover:border-zinc-400'
                       }`}
                       title={t.stepHoverHint}
                     >
                       {isModalKeyCapturing ? (
-                        <span className="text-[10px] text-blue-400 font-bold animate-pulse font-sans">{t.pressPrompt}</span>
+                        <span className="text-[10px] text-cyan-300 font-bold animate-pulse font-sans">{t.pressPrompt}</span>
                       ) : draftStep.key ? (
                         <span className="tracking-wider">[{draftStep.key}]</span>
                       ) : (
@@ -752,8 +763,10 @@ export const ComboSequence: React.FC<Props> = ({
                       <button
                         type="button"
                         onClick={() => setDraftStep(prev => ({ ...prev, key: '' }))}
-                        className={`w-5 h-5 rounded-md text-[10px] flex items-center justify-center transition cursor-pointer ${
-                          isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white' : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-600 hover:text-zinc-900'
+                        className={`w-5 h-5 rounded-md text-[10px] flex items-center justify-center transition cursor-pointer border ${
+                          isDark
+                            ? 'bg-[#070b12] border-cyan-950/80 hover:border-cyan-400 text-zinc-400 hover:text-cyan-200 hover:shadow-[0_0_8px_rgba(6,182,212,0.3)]'
+                            : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-600 hover:text-zinc-900 border-transparent'
                         }`}
                         title={t.clearKeyTitle}
                       >
@@ -772,7 +785,7 @@ export const ComboSequence: React.FC<Props> = ({
                     <span className="text-[8.5px] text-zinc-500">{t.actionTypeHint}</span>
                   </div>
                   <div className={`grid grid-cols-2 gap-1 p-0.5 rounded-lg border ${
-                    isDark ? 'bg-[#0e0f17] border-zinc-800' : 'bg-zinc-200/70 border-zinc-300'
+                    isDark ? 'bg-[#070b12] border-cyan-900/60 shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]' : 'bg-zinc-200/70 border-zinc-300'
                   }`}>
                     <button
                       type="button"
@@ -780,9 +793,9 @@ export const ComboSequence: React.FC<Props> = ({
                       className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition cursor-pointer ${
                         draftStep.actionType === 'press'
                           ? isDark
-                            ? 'bg-zinc-800 text-white border border-zinc-600 shadow-sm'
-                            : 'bg-white text-zinc-900 border border-zinc-350 shadow-xs'
-                          : isDark ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-600 hover:text-zinc-900'
+                            ? 'bg-[#0c1626] text-cyan-300 border border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.35)] font-bold'
+                            : 'bg-white text-blue-600 border border-blue-400 shadow-xs font-bold'
+                          : isDark ? 'text-zinc-400 hover:text-cyan-200 border border-transparent' : 'text-zinc-600 hover:text-zinc-900 border border-transparent'
                       }`}
                     >
                       {t.actionPress}
@@ -793,9 +806,9 @@ export const ComboSequence: React.FC<Props> = ({
                       className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition cursor-pointer ${
                         draftStep.actionType === 'hold'
                           ? isDark
-                            ? 'bg-zinc-800 text-white border border-zinc-600 shadow-sm'
-                            : 'bg-white text-zinc-900 border border-zinc-350 shadow-xs'
-                          : isDark ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-600 hover:text-zinc-900'
+                            ? 'bg-[#0c1626] text-cyan-300 border border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.35)] font-bold'
+                            : 'bg-white text-blue-600 border border-blue-400 shadow-xs font-bold'
+                          : isDark ? 'text-zinc-400 hover:text-cyan-200 border border-transparent' : 'text-zinc-600 hover:text-zinc-900 border border-transparent'
                       }`}
                     >
                       {t.actionHold}
@@ -811,8 +824,8 @@ export const ComboSequence: React.FC<Props> = ({
                   }`}>
                     <div className="flex items-center justify-between">
                       <label className={`text-[9.5px] font-medium ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{t.castLabel}</label>
-                      <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded border ${
-                        isDark ? 'bg-[#12131b] border-zinc-700/80' : 'bg-white border-zinc-300'
+                      <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded border transition-colors ${
+                        isDark ? 'bg-[#070b12] border-cyan-900/60 focus-within:border-cyan-400 focus-within:shadow-[0_0_8px_rgba(6,182,212,0.35)]' : 'bg-white border-zinc-300'
                       }`}>
                         <input
                           type="number"
@@ -831,12 +844,12 @@ export const ComboSequence: React.FC<Props> = ({
                             }
                           }}
                           className={`w-10 sm:w-12 bg-transparent text-center font-mono font-bold text-[10.5px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-                            isDark ? 'text-zinc-100' : 'text-zinc-900'
+                            isDark ? 'text-cyan-300' : 'text-zinc-900'
                           }`}
                           placeholder="0"
                           title={t.castTitle}
                         />
-                        <span className="text-[8px] text-zinc-500 font-mono">{t.castSecondsUnit}</span>
+                        <span className={`text-[8px] font-mono ${isDark ? 'text-cyan-400/70' : 'text-zinc-500'}`}>{t.castSecondsUnit}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-0.5 pt-0.5">
@@ -848,10 +861,10 @@ export const ComboSequence: React.FC<Props> = ({
                           className={`flex-1 h-5 rounded text-[8.5px] font-mono font-bold transition cursor-pointer border flex items-center justify-center ${
                             draftStep.castTimeSeconds === s
                               ? isDark
-                                ? 'bg-[#1e1e28] text-white border-zinc-400 shadow-[0_0_6px_rgba(255,255,255,0.2)]'
-                                : 'bg-zinc-800 text-white border-zinc-900 shadow-xs'
+                                ? 'bg-[#0c1626] text-cyan-300 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.35)]'
+                                : 'bg-blue-600 text-white border-blue-600 shadow-xs'
                               : isDark
-                              ? 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:bg-zinc-800'
+                              ? 'bg-[#070b12] text-zinc-400 border-zinc-800 hover:text-cyan-200 hover:border-cyan-900/60'
                               : 'bg-zinc-200/80 text-zinc-600 border-zinc-300 hover:text-zinc-900 hover:bg-zinc-300/80'
                           }`}
                         >
@@ -867,7 +880,9 @@ export const ComboSequence: React.FC<Props> = ({
                   }`}>
                     <div className="flex items-center justify-between">
                       <label className={`text-[9.5px] font-medium ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{t.repeatLabel}</label>
-                      <span className="text-[8.5px] font-mono font-bold text-amber-500 bg-amber-950/40 px-1 py-0.2 rounded border border-amber-600/40">
+                      <span className={`text-[8.5px] font-mono font-bold px-1 py-0.2 rounded border ${
+                        isDark ? 'text-cyan-300 bg-[#0c1626] border-cyan-400/80 shadow-[0_0_6px_rgba(6,182,212,0.3)]' : 'text-blue-800 bg-blue-50 border-blue-300'
+                      }`}>
                         {draftStep.repeatCount || 1}×
                       </span>
                     </div>
@@ -879,9 +894,11 @@ export const ComboSequence: React.FC<Props> = ({
                           onClick={() => setDraftStep(prev => ({ ...prev, repeatCount: cnt }))}
                           className={`flex-1 h-5 rounded font-mono text-[9px] font-bold transition cursor-pointer flex items-center justify-center border ${
                             (draftStep.repeatCount || 1) === cnt
-                              ? 'bg-amber-600 text-white border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.4)]'
+                              ? isDark
+                                ? 'bg-[#0c1626] text-cyan-300 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.35)]'
+                                : 'bg-blue-600 text-white border-blue-600 shadow-xs'
                               : isDark
-                              ? 'bg-[#12131b] text-zinc-400 hover:text-white border-zinc-800 hover:bg-zinc-800'
+                              ? 'bg-[#070b12] text-zinc-400 hover:text-cyan-200 border-zinc-800 hover:border-cyan-900/60'
                               : 'bg-zinc-200/80 text-zinc-600 hover:text-zinc-900 border-zinc-300 hover:bg-zinc-300/80'
                           }`}
                           title={`${t.repeatTitle}: ${cnt}`}
@@ -905,12 +922,12 @@ export const ComboSequence: React.FC<Props> = ({
                       {t.triggerTypeLabel}
                     </label>
                     {draftStep.independent ? (
-                      <span className="text-[8.5px] font-bold text-blue-400 bg-blue-950/80 px-1.5 py-0.2 rounded border border-blue-500/60 shadow-[0_0_6px_rgba(59,130,246,0.2)]">
+                      <span className="text-[8.5px] font-bold text-cyan-300 bg-[#0c1626] px-1.5 py-0.2 rounded border border-cyan-400/80 shadow-[0_0_6px_rgba(6,182,212,0.3)]">
                         {t.triggerSpam}
                       </span>
                     ) : (
                       <span className={`text-[8.5px] px-1.5 py-0.2 rounded border ${
-                        isDark ? 'text-zinc-500 bg-zinc-900 border-zinc-800' : 'text-zinc-600 bg-zinc-200 border-zinc-300'
+                        isDark ? 'text-zinc-400 bg-zinc-900 border-zinc-800' : 'text-zinc-600 bg-zinc-200 border-zinc-300'
                       }`}>
                         {t.triggerSequence}
                       </span>
@@ -918,7 +935,7 @@ export const ComboSequence: React.FC<Props> = ({
                   </div>
 
                   <div className={`grid grid-cols-2 gap-1 p-0.5 rounded-lg border ${
-                    isDark ? 'bg-[#0e0f17] border-zinc-800' : 'bg-zinc-200/70 border-zinc-300'
+                    isDark ? 'bg-[#070b12] border-cyan-900/60 shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]' : 'bg-zinc-200/70 border-zinc-300'
                   }`}>
                     <button
                       type="button"
@@ -926,9 +943,9 @@ export const ComboSequence: React.FC<Props> = ({
                       className={`py-1 px-1.5 rounded-md text-[10px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 ${
                         !draftStep.independent
                           ? isDark
-                            ? 'bg-zinc-800 text-white border border-zinc-600 shadow-[0_0_10px_rgba(255,255,255,0.12)]'
-                            : 'bg-white text-zinc-900 border border-zinc-350 shadow-xs'
-                          : isDark ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-600 hover:text-zinc-900'
+                            ? 'bg-[#0c1626] text-cyan-300 border border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.35)] font-bold'
+                            : 'bg-white text-blue-600 border border-blue-400 shadow-xs font-bold'
+                          : isDark ? 'text-zinc-400 hover:text-cyan-200 border border-transparent' : 'text-zinc-600 hover:text-zinc-900 border border-transparent'
                       }`}
                     >
                       <span>{t.triggerSequenceDesc}</span>
@@ -943,8 +960,10 @@ export const ComboSequence: React.FC<Props> = ({
                       }))}
                       className={`py-1 px-1.5 rounded-md text-[10px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 ${
                         draftStep.independent
-                          ? 'bg-blue-600 text-white border border-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.45)]'
-                          : isDark ? 'text-zinc-400 hover:text-blue-300' : 'text-zinc-600 hover:text-blue-600'
+                          ? isDark
+                            ? 'bg-[#0c1626] text-cyan-300 border border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.45)] font-bold'
+                            : 'bg-blue-600 text-white border border-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.45)]'
+                          : isDark ? 'text-zinc-400 hover:text-cyan-200 border border-transparent' : 'text-zinc-600 hover:text-blue-600 border border-transparent'
                       }`}
                     >
                       <span>⚡ {t.triggerSpam}</span>
@@ -956,21 +975,21 @@ export const ComboSequence: React.FC<Props> = ({
                 <div className={`flex flex-col gap-1.5 p-2 rounded-xl border transition-all ${
                   draftStep.independent
                     ? isDark
-                      ? 'bg-[#0a0f1d] border-blue-500/60 shadow-[inset_0_0_12px_rgba(59,130,246,0.06)]'
+                      ? 'bg-[#070b12] border-cyan-900/60 shadow-[inset_0_0_12px_rgba(6,182,212,0.08)]'
                       : 'bg-blue-50/50 border-blue-300'
                     : isDark
-                    ? 'bg-[#06070a]/90 border-zinc-700/80 shadow-[inset_0_0_10px_rgba(255,255,255,0.02)]'
+                    ? 'bg-[#06070a]/90 border-zinc-800/80'
                     : 'bg-zinc-50 border-zinc-200'
                 }`}>
                   <div className="flex items-center justify-between gap-2">
                     <label className={`text-[10px] font-semibold shrink-0 flex items-center gap-1.5 ${
                       isDark ? 'text-zinc-200' : 'text-zinc-800'
                     }`}>
-                      <Clock className={`w-3.5 h-3.5 ${draftStep.independent ? 'text-blue-500' : isDark ? 'text-zinc-400' : 'text-zinc-500'}`} />
+                      <Clock className={`w-3.5 h-3.5 ${draftStep.independent ? 'text-cyan-400' : isDark ? 'text-zinc-400' : 'text-zinc-500'}`} />
                       <span>{t.skillCdLabel}</span>
                     </label>
-                    <div className={`flex items-center gap-1 px-2 py-0.5 rounded-md border focus-within:border-zinc-400 ${
-                      isDark ? 'bg-[#12131b] border-zinc-700/80' : 'bg-white border-zinc-300'
+                    <div className={`flex items-center gap-1 px-2 py-0.5 rounded-md border transition-colors ${
+                      isDark ? 'bg-[#070b12] border-cyan-900/60 focus-within:border-cyan-400 focus-within:shadow-[0_0_8px_rgba(6,182,212,0.35)]' : 'bg-white border-zinc-300'
                     }`}>
                       <input
                         type="number"
@@ -983,10 +1002,10 @@ export const ComboSequence: React.FC<Props> = ({
                           setDraftStep(prev => ({ ...prev, skillCooldownSeconds: val }));
                         }}
                         className={`w-11 bg-transparent text-center font-mono font-bold text-[11px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-                          draftStep.independent ? 'text-blue-500 font-black' : isDark ? 'text-zinc-100' : 'text-zinc-900'
+                          draftStep.independent ? 'text-cyan-300 font-black' : isDark ? 'text-zinc-100' : 'text-zinc-900'
                         }`}
                       />
-                      <span className="text-[9px] text-zinc-400 font-mono">{t.castSecondsUnit}</span>
+                      <span className={`text-[9px] font-mono ${isDark ? 'text-cyan-400/70' : 'text-zinc-400'}`}>{t.castSecondsUnit}</span>
                     </div>
                   </div>
 
@@ -1000,13 +1019,11 @@ export const ComboSequence: React.FC<Props> = ({
                         onClick={() => setDraftStep(prev => ({ ...prev, skillCooldownSeconds: sec }))}
                         className={`px-1.5 py-0.2 rounded text-[8.5px] font-mono font-bold transition cursor-pointer border ${
                           draftStep.skillCooldownSeconds === sec
-                            ? draftStep.independent
-                              ? 'bg-blue-600 text-white border-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.4)]'
-                              : isDark
-                              ? 'bg-[#1e1e28] text-white border-zinc-400 shadow-[0_0_8px_rgba(255,255,255,0.2)]'
-                              : 'bg-zinc-800 text-white border-zinc-900'
+                            ? isDark
+                              ? 'bg-[#0c1626] text-cyan-300 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.35)]'
+                              : 'bg-blue-600 text-white border-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.4)]'
                             : isDark
-                            ? 'bg-zinc-800 text-zinc-400 border-zinc-700/60 hover:text-white hover:bg-zinc-700'
+                            ? 'bg-[#070b12] text-zinc-400 border-zinc-800 hover:text-cyan-200 hover:border-cyan-900/60'
                             : 'bg-zinc-200/80 text-zinc-600 border-zinc-300 hover:text-zinc-900 hover:bg-zinc-300/80'
                         }`}
                       >
@@ -1030,7 +1047,7 @@ export const ComboSequence: React.FC<Props> = ({
                   onClick={() => setEditingStep(null)}
                   className={`flex-1 sm:flex-initial py-1.5 px-3 rounded-lg text-[11px] font-medium border transition cursor-pointer ${
                     isDark
-                      ? 'bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white border-zinc-700/80'
+                      ? 'bg-[#070b12] hover:bg-[#0c1626] text-zinc-400 hover:text-cyan-200 border-cyan-900/60 hover:border-cyan-400 hover:shadow-[0_0_8px_rgba(6,182,212,0.25)]'
                       : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 hover:text-zinc-900 border-zinc-300'
                   }`}
                 >
@@ -1039,10 +1056,10 @@ export const ComboSequence: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={handleSaveStep}
-                  className={`flex-1 sm:flex-initial py-1.5 px-4 rounded-lg text-[11px] font-semibold border transition cursor-pointer ${
+                  className={`flex-1 sm:flex-initial py-1.5 px-4 rounded-lg text-[11px] font-semibold border transition cursor-pointer select-none active:scale-95 ${
                     isDark
-                      ? 'bg-[#181822] hover:bg-[#22222e] text-zinc-100 hover:text-white border-zinc-600 hover:border-zinc-300 shadow-[0_0_12px_rgba(255,255,255,0.18)]'
-                      : 'bg-zinc-900 hover:bg-black text-white border-zinc-800 shadow-sm'
+                      ? 'bg-[#0c1626] hover:bg-[#0f1f33] text-cyan-300 hover:text-cyan-100 border-cyan-400 hover:border-cyan-300 shadow-[0_0_14px_rgba(6,182,212,0.4)] font-bold'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-600 shadow-sm'
                   }`}
                 >
                   {t.saveBtn}

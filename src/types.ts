@@ -8,6 +8,10 @@ export interface SkillConfigItem {
   icon?: string;
 }
 
+export interface AppSettings {
+  previousTargetKey: string;
+}
+
 export type FSMState = 'SEARCH' | 'COMBAT' | 'LOOT' | 'ESCAPE' | 'IDLE';
 
 export interface TargetInfo {

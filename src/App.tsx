@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ComboChain, DEFAULT_COMBO_CHAINS } from './data/skillsLibrary';
 import { ComboSequence } from './components/ComboSequence';
+import { SettingsView } from './components/SettingsView';
 import { SessionSummaryModal } from './components/SessionSummaryModal';
-import { SessionSummaryData } from './types';
+import { SessionSummaryData, AppSettings } from './types';
 import {
   Play,
   Square,
@@ -11,7 +12,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Sun,
-  Moon
+  Moon,
+  Settings
 } from 'lucide-react';
 import { Language, Theme, translations } from './utils/i18n';
 
@@ -58,6 +60,29 @@ export const App: React.FC = () => {
     const saved = localStorage.getItem('ezf_lang');
     return (saved === 'en' || saved === 'ru') ? saved : 'ru';
   });
+
+  // Active View Tab: 'main' | 'settings'
+  const [activeTab, setActiveTab] = useState<'main' | 'settings'>('main');
+
+  // App Settings (Persistent)
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    const saved = localStorage.getItem('tl_app_settings');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          previousTargetKey: parsed.previousTargetKey || '',
+        };
+      } catch (e) {}
+    }
+    return {
+      previousTargetKey: '',
+    };
+  });
+
+  useEffect(() => {
+    localStorage.setItem('tl_app_settings', JSON.stringify(settings));
+  }, [settings]);
 
   useEffect(() => {
     localStorage.setItem('ezf_theme', theme);
@@ -180,6 +205,13 @@ export const App: React.FC = () => {
             }))
           );
         }
+
+        if (cfg.settings && typeof cfg.settings.previousTargetKey === 'string') {
+          setSettings(curr => ({
+            ...curr,
+            previousTargetKey: cfg.settings.previousTargetKey,
+          }));
+        }
       }).catch((err) => {
         console.warn('load_config: не удалось восстановить конфигурацию', err);
       });
@@ -215,11 +247,14 @@ export const App: React.FC = () => {
   }, [chains]);
 
   // Full config object generator matching backend schema
-  const generateConfigObject = useCallback((customChains = chains) => {
+  const generateConfigObject = useCallback((customChains = chains, customSettings = settings) => {
     return {
       "_README": "Конфигурация клавиатурных комбинаций и цепочек ротации для Throne and Liberty.",
       "exportDate": new Date().toISOString(),
       "mode": "keyboard",
+      "settings": {
+        "previousTargetKey": customSettings.previousTargetKey || '',
+      },
       "totalChains": customChains.length,
       "chains": customChains.map(chain => ({
         id: chain.id,
@@ -251,11 +286,11 @@ export const App: React.FC = () => {
         })
       }))
     };
-  }, [chains]);
+  }, [chains, settings]);
 
   // Backend Bridge: save_config(jsonString) autosave safeguard
-  const saveCurrentConfigToBackend = async (customChains = chains) => {
-    const configObj = generateConfigObject(customChains);
+  const saveCurrentConfigToBackend = async (customChains = chains, customSettings = settings) => {
+    const configObj = generateConfigObject(customChains, customSettings);
     const configJson = JSON.stringify(configObj, null, 2);
     if (window.pywebview) {
       try {
@@ -265,6 +300,7 @@ export const App: React.FC = () => {
       }
     } else {
       localStorage.setItem('tl_combo_chains', JSON.stringify(customChains));
+      localStorage.setItem('tl_app_settings', JSON.stringify(customSettings));
     }
   };
 
@@ -452,88 +488,143 @@ export const App: React.FC = () => {
             </span>
           </div>
 
-          {/* Right Action Controls: Язык, Тема, Чат-бот, Старт/Стоп, Экспорт */}
+          {/* Right Action Controls: Unified Black & Cyan / Blue Aesthetic */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Language Switcher: RU / EN */}
-            <button
-              type="button"
-              onClick={() => setLanguage(l => l === 'ru' ? 'en' : 'ru')}
-              title={t.langToggle}
-              className={`px-1.5 py-1 rounded-lg text-[10.5px] font-mono font-bold tracking-wider transition cursor-pointer select-none border flex items-center gap-0.5 ${
+            {/* Segmented Language Switcher: RU / EN */}
+            <div
+              className={`p-0.5 rounded-lg border flex items-center transition-all ${
                 isDark
-                  ? 'bg-[#111118] hover:bg-[#1a1b24] text-zinc-300 hover:text-white border-zinc-700/80 hover:border-zinc-500'
-                  : 'bg-white hover:bg-zinc-100 text-zinc-700 hover:text-black border-zinc-300 hover:border-zinc-400 shadow-xs'
+                  ? 'bg-[#070b12] border-cyan-900/60 shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]'
+                  : 'bg-zinc-200/80 border-zinc-300/80 shadow-xs'
               }`}
+              title={t.langToggle}
             >
-              <span className={language === 'ru' ? (isDark ? 'text-blue-400 font-black' : 'text-blue-600 font-black') : 'opacity-40'}>RU</span>
-              <span className="opacity-30">/</span>
-              <span className={language === 'en' ? (isDark ? 'text-blue-400 font-black' : 'text-blue-600 font-black') : 'opacity-40'}>EN</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setLanguage('ru')}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold tracking-wider transition-all duration-150 cursor-pointer select-none ${
+                  language === 'ru'
+                    ? isDark
+                      ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                      : 'bg-white text-blue-600 shadow-xs border border-zinc-200 font-black'
+                    : isDark
+                      ? 'text-zinc-400 hover:text-cyan-200 border border-transparent'
+                      : 'text-zinc-500 hover:text-zinc-800 border border-transparent'
+                }`}
+              >
+                RU
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage('en')}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold tracking-wider transition-all duration-150 cursor-pointer select-none ${
+                  language === 'en'
+                    ? isDark
+                      ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                      : 'bg-white text-blue-600 shadow-xs border border-zinc-200 font-black'
+                    : isDark
+                      ? 'text-zinc-400 hover:text-cyan-200 border border-transparent'
+                      : 'text-zinc-500 hover:text-zinc-800 border border-transparent'
+                }`}
+              >
+                EN
+              </button>
+            </div>
 
-            {/* Theme Switcher: Dark / Light */}
+            {/* Theme Switcher: Dark / Light matching black-and-cyan style */}
             <button
               type="button"
               onClick={() => setTheme(curr => curr === 'dark' ? 'light' : 'dark')}
               title={theme === 'dark' ? t.themeLight : t.themeDark}
-              className={`p-1.5 rounded-lg border transition cursor-pointer flex items-center justify-center ${
+              className={`w-7.5 h-7.5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer group active:scale-95 ${
                 isDark
-                  ? 'bg-[#111118] hover:bg-[#1a1b24] text-amber-300 hover:text-amber-200 border-zinc-700/80 hover:border-zinc-500'
-                  : 'bg-white hover:bg-zinc-100 text-zinc-700 hover:text-black border-zinc-300 hover:border-zinc-400 shadow-xs'
+                  ? 'bg-[#070b12] border-cyan-900/60 hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
+                  : 'bg-white hover:bg-zinc-100 border-zinc-300 hover:border-blue-400 text-blue-600 shadow-xs'
               }`}
             >
               {theme === 'dark' ? (
-                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <Sun className="w-3.5 h-3.5 text-cyan-300 drop-shadow-[0_0_8px_rgba(6,182,212,0.7)] transition-transform duration-300 group-hover:rotate-45" />
               ) : (
-                <Moon className="w-3.5 h-3.5 text-zinc-700" />
+                <Moon className="w-3.5 h-3.5 text-blue-600 transition-transform duration-300 group-hover:-rotate-12" />
               )}
             </button>
 
-            {/* Start / Stop Button */}
+            {/* Start / Stop Button with Unified Black & Cyan / Blue Aesthetic */}
             {isBotRunning ? (
               <button
                 onClick={handleStopBot}
                 disabled={isStopping}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-lg font-medium text-xs transition cursor-pointer shadow border bg-[#181822] text-white border-zinc-400 hover:bg-[#22222e] disabled:opacity-50 shadow-[0_0_16px_rgba(255,255,255,0.35)] animate-pulse"
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-bold tracking-wider transition-all duration-200 cursor-pointer border select-none disabled:opacity-50 active:scale-95 ${
+                  isDark
+                    ? 'bg-gradient-to-r from-[#190a12] via-[#240e1b] to-[#190a12] text-rose-300 border-rose-500/80 hover:border-rose-400 hover:text-rose-100 hover:shadow-[0_0_18px_rgba(244,63,94,0.45)] shadow-[0_0_10px_rgba(244,63,94,0.25)] animate-pulse'
+                    : 'bg-rose-600 hover:bg-rose-500 text-white border-rose-600 shadow-xs hover:shadow-[0_2px_10px_rgba(244,63,94,0.35)]'
+                }`}
                 title={t.stopTitle}
               >
+                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
+                </span>
                 {isStopping ? (
-                  <Loader2 className="w-3 h-3 text-zinc-200 animate-spin" />
+                  <Loader2 className="w-3 h-3 text-rose-200 animate-spin" />
                 ) : (
-                  <Square className="w-3 h-3 fill-zinc-100 text-zinc-100" />
+                  <Square className="w-2.5 h-2.5 fill-current" />
                 )}
-                <span>{isStopping ? t.stopping : t.stop}</span>
+                <span className="text-[11px] font-black uppercase tracking-wider">{isStopping ? t.stopping : t.stop}</span>
               </button>
             ) : (
               <button
                 onClick={handleStartBot}
                 disabled={isStarting}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-medium text-xs transition cursor-pointer shadow border disabled:opacity-50 ${
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-bold tracking-wider transition-all duration-200 cursor-pointer border select-none disabled:opacity-50 active:scale-95 ${
                   isDark
-                    ? 'bg-[#111116] hover:bg-[#1a1a22] text-zinc-100 border-zinc-700/80 hover:border-zinc-400 hover:shadow-[0_0_18px_rgba(255,255,255,0.25)]'
-                    : 'bg-zinc-900 hover:bg-black text-white border-zinc-800 shadow-xs'
+                    ? 'bg-gradient-to-r from-[#061019] via-[#091b2c] to-[#061019] text-cyan-300 border-cyan-400/80 hover:border-cyan-300 hover:text-cyan-100 hover:shadow-[0_0_18px_rgba(6,182,212,0.5)] shadow-[0_0_10px_rgba(6,182,212,0.3)]'
+                    : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-600 shadow-xs hover:shadow-[0_2px_10px_rgba(37,99,235,0.35)]'
                 }`}
                 title={t.startTitle}
               >
+                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-80"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.9)]"></span>
+                </span>
                 {isStarting ? (
-                  <Loader2 className="w-3 h-3 text-zinc-300 animate-spin" />
+                  <Loader2 className="w-3 h-3 text-cyan-200 animate-spin" />
                 ) : (
-                  <Play className="w-3 h-3 fill-current" />
+                  <Play className="w-2.5 h-2.5 fill-current drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]" />
                 )}
-                <span>{isStarting ? t.starting : t.start}</span>
+                <span className="text-[11px] font-black uppercase tracking-wider">{isStarting ? t.starting : t.start}</span>
               </button>
             )}
 
-            {/* Download JSON backup */}
+            {/* Download JSON backup matching black-and-cyan style */}
             <button
               onClick={handleExportJson}
-              className={`p-1.5 rounded-lg border transition cursor-pointer ${
+              className={`w-7.5 h-7.5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer select-none active:scale-95 ${
                 isDark
-                  ? 'text-zinc-400 hover:text-white hover:bg-zinc-800/70 hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] border-transparent hover:border-zinc-700'
-                  : 'text-zinc-600 hover:text-black hover:bg-zinc-100 border-transparent hover:border-zinc-300 shadow-xs'
+                  ? 'bg-[#070b12] border-cyan-900/60 hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
+                  : 'bg-white border-zinc-300 text-zinc-600 hover:text-blue-600 hover:border-blue-400 shadow-xs'
               }`}
               title={t.exportJson}
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5 drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]" />
+            </button>
+
+            {/* Settings Tab Button matching black-and-cyan style */}
+            <button
+              type="button"
+              onClick={() => setActiveTab(curr => curr === 'settings' ? 'main' : 'settings')}
+              className={`w-7.5 h-7.5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer select-none active:scale-95 ${
+                activeTab === 'settings'
+                  ? isDark
+                    ? 'bg-[#0c1626] border-cyan-400 text-cyan-200 shadow-[0_0_14px_rgba(6,182,212,0.5)] ring-1 ring-cyan-400/50'
+                    : 'bg-blue-50 border-blue-600 text-blue-700 shadow-xs ring-1 ring-blue-500/40'
+                  : isDark
+                    ? 'bg-[#070b12] border-cyan-900/60 hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
+                    : 'bg-white border-zinc-300 text-zinc-600 hover:text-blue-600 hover:border-blue-400 shadow-xs'
+              }`}
+              title={t.settings}
+            >
+              <Settings className={`w-3.5 h-3.5 transition-transform duration-300 ${activeTab === 'settings' ? 'rotate-90 text-cyan-200' : ''} drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]`} />
             </button>
           </div>
         </header>
@@ -569,18 +660,32 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* Main Content: Minimalist Combo Sequence */}
+        {/* Main Content: Minimalist Combo Sequence OR Full Settings View */}
         <main className="p-2 sm:p-3 w-full flex flex-col overflow-y-auto min-h-0 flex-1">
-          <ComboSequence
-            chains={chains}
-            onChainsChange={setChains}
-            activeCasting={activeCasting}
-            isBotRunning={isBotRunning}
-            onToast={setSuccessMessage}
-            onError={setErrorMessage}
-            language={language}
-            theme={theme}
-          />
+          {activeTab === 'settings' ? (
+            <SettingsView
+              settings={settings}
+              onSettingsChange={(newSettings) => {
+                setSettings(newSettings);
+                saveCurrentConfigToBackend(chains, newSettings);
+              }}
+              onBack={() => setActiveTab('main')}
+              language={language}
+              theme={theme}
+              onToast={setSuccessMessage}
+            />
+          ) : (
+            <ComboSequence
+              chains={chains}
+              onChainsChange={setChains}
+              activeCasting={activeCasting}
+              isBotRunning={isBotRunning}
+              onToast={setSuccessMessage}
+              onError={setErrorMessage}
+              language={language}
+              theme={theme}
+            />
+          )}
         </main>
       </div>
 
