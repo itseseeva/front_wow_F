@@ -17,6 +17,7 @@ import {
   CheckCircle,
   Circle,
   Loader2,
+  X,
 } from 'lucide-react';
 
 interface RoutesViewProps {
@@ -37,6 +38,8 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
   // Modals state
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [previewRoute, setPreviewRoute] = useState<RouteInfo | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<RouteInfo | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fetch routes from pywebview or mock
   const fetchRoutes = useCallback(async () => {
@@ -97,30 +100,38 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
     }
   };
 
-  // Delete route with confirmation
-  const handleDelete = async (route: RouteInfo) => {
-    if (!window.confirm(`Удалить маршрут «${route.name}»?`)) return;
+  // Delete route confirmation handler
+  const promptDelete = (route: RouteInfo) => {
+    setDeleteCandidate(route);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteCandidate) return;
+    setIsDeleting(true);
 
     try {
       const api = await getPywebviewApi();
       let res;
       if (api?.delete_route) {
-        res = await api.delete_route(route.id);
+        res = await api.delete_route(deleteCandidate.id);
       } else {
-        res = await mockDeleteRoute(route.id);
+        res = await mockDeleteRoute(deleteCandidate.id);
       }
 
       if (res.ok) {
         onToast({
           type: 'info',
-          message: `Маршрут «${route.name}» удалён`,
+          message: `Маршрут «${deleteCandidate.name}» удалён`,
         });
+        setDeleteCandidate(null);
         fetchRoutes();
       } else {
         onError(res.error || 'Не удалось удалить маршрут');
       }
     } catch (err: any) {
       onError(err?.message || 'Ошибка при удалении маршрута');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -292,7 +303,7 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                   {/* Delete Button */}
                   <button
                     type="button"
-                    onClick={() => handleDelete(route)}
+                    onClick={() => promptDelete(route)}
                     className="w-7 h-7 rounded-md bg-[#05070a] border border-zinc-800 hover:border-rose-500/60 text-zinc-400 hover:text-rose-400 flex items-center justify-center transition-colors cursor-pointer"
                     title="Удалить маршрут"
                   >
@@ -321,6 +332,86 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
         onClose={() => setPreviewRoute(null)}
         onError={onError}
       />
+
+      {/* Custom Delete Confirmation Modal */}
+      {deleteCandidate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/85 backdrop-blur-xs animate-fadeIn select-none">
+          <div className="w-full max-w-[340px] bg-[#090b12] border border-red-900/60 rounded-xl shadow-[0_0_35px_rgba(220,38,38,0.25)] overflow-hidden flex flex-col text-zinc-200">
+            {/* Modal Header */}
+            <div className="px-3.5 py-2.5 bg-[#06080e] border-b border-zinc-800/80 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-red-950/70 border border-red-800/50 flex items-center justify-center text-red-400 shrink-0">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </div>
+                <h3 className="text-xs font-mono font-black text-zinc-100 uppercase tracking-wider">
+                  Удалить маршрут?
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isDeleting && setDeleteCandidate(null)}
+                className="w-6 h-6 rounded flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors cursor-pointer"
+                title="Закрыть"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-3.5 space-y-3">
+              <p className="text-xs text-zinc-300 leading-snug">
+                Вы действительно хотите удалить маршрут{' '}
+                <span className="font-mono font-bold text-amber-300">
+                  «{deleteCandidate.name}»
+                </span>
+                ?
+              </p>
+
+              <div className="bg-[#05070a] border border-zinc-800/80 rounded-lg p-2.5 flex items-center justify-between text-[10px] font-mono text-zinc-400">
+                <span className="text-zinc-300">{deleteCandidate.loop ? 'Круг' : 'Туда-обратно'}</span>
+                <span>•</span>
+                <span>{deleteCandidate.points} точек</span>
+                <span>•</span>
+                <span className="text-amber-400/90 font-bold">≈{deleteCandidate.length_s} с</span>
+              </div>
+
+              <p className="text-[10px] font-mono text-zinc-500">
+                Файл маршрута будет удалён с диска. Это действие нельзя отменить.
+              </p>
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setDeleteCandidate(null)}
+                  disabled={isDeleting}
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-mono font-bold text-zinc-300 hover:text-white bg-[#0f141f] border border-zinc-700/60 hover:bg-zinc-800/80 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  disabled={isDeleting}
+                  className="px-3.5 py-1.5 rounded-lg text-[11px] font-mono font-black text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border border-red-500/80 shadow-[0_0_12px_rgba(239,68,68,0.4)] flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Удаление...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Удалить</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
