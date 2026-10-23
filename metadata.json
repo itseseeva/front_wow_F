@@ -1,6 +1,6 @@
 {
-  "name": "Throne & Liberty EasyFarm Bot Suite",
-  "description": "Interactive web suite for Throne & Liberty EasyFarm: visual skill rotation configurator, real-time FSM & controller simulator, vision calibration sandbox, and dev roadmap.",
+  "name": "WoW Forever Bot Control Panel",
+  "description": "Панель управления ботом для World of Warcraft (WoW Forever): ротация умений, выбор цели и лут, статистика сессий.",
   "capabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ],

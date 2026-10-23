@@ -582,7 +582,7 @@ export const ComboSequence: React.FC<Props> = ({
                 </div>
               </div>
 
-              {/* CELL 2 (Row 1, Col 2): 2. Когда жать + Когда ХП меньше */}
+              {/* CELL 2 (Row 1, Col 2): 2. Когда жать */}
               <div className={`flex flex-col justify-between gap-2 p-2.5 rounded-xl border transition-all h-full ${
                 draftStep.independent
                   ? isDark

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ComboChain, DEFAULT_COMBO_CHAINS } from './data/skillsLibrary';
 import { ComboSequence } from './components/ComboSequence';
 import { SettingsView } from './components/SettingsView';
+import { RoutesView } from './components/RoutesView';
 import { SessionSummaryModal } from './components/SessionSummaryModal';
 import { SessionSummaryData, AppSettings } from './types';
 import {
@@ -11,9 +12,9 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
-  Sun,
-  Moon,
-  Settings
+  Settings,
+  Layers,
+  Compass,
 } from 'lucide-react';
 import { Language, Theme, translations } from './utils/i18n';
 
@@ -61,8 +62,8 @@ export const App: React.FC = () => {
     return (saved === 'en' || saved === 'ru') ? saved : 'ru';
   });
 
-  // Active View Tab: 'main' | 'settings'
-  const [activeTab, setActiveTab] = useState<'main' | 'settings'>('main');
+  // Active View: 'rotation' | 'routes' | 'settings'
+  const [activeView, setActiveView] = useState<'rotation' | 'routes' | 'settings'>('rotation');
 
   // App Settings (default previousTargetKey: 'H')
   const [settings, setSettings] = useState<AppSettings>(() => {
@@ -141,6 +142,25 @@ export const App: React.FC = () => {
     return () => {
       window.removeEventListener('wowbot:session-summary', handleSummaryEvent);
       window.removeEventListener('pywebviewready', checkLastSession);
+    };
+  }, []);
+
+  // Route record auto-stopped listener: "wowbot:route-record-stopped"
+  useEffect(() => {
+    const handleRouteStopped = (e: any) => {
+      const detail = e?.detail;
+      if (detail) {
+        if (detail.route) {
+          setSuccessMessage(`Маршрут «${detail.route.name}» автоматически сохранён!`);
+        } else if (detail.error) {
+          setErrorMessage(detail.error);
+        }
+      }
+    };
+
+    window.addEventListener('wowbot:route-record-stopped', handleRouteStopped);
+    return () => {
+      window.removeEventListener('wowbot:route-record-stopped', handleRouteStopped);
     };
   }, []);
 
@@ -449,91 +469,54 @@ export const App: React.FC = () => {
             : 'bg-white border-zinc-200/90 shadow-[0_10px_35px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.05)]'
         }`}
       >
-        {/* Compact & Responsive Header */}
-        <header className={`px-2.5 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-1.5 sm:gap-3 rounded-t-xl sm:rounded-t-2xl shrink-0 border-b transition-colors ${
-          isDark ? 'bg-[#0b0b0f] border-zinc-800/80' : 'bg-zinc-50 border-zinc-200'
-        }`}>
-          {/* Animated Logo with logo-shimmer CSS class */}
+        {/* Compact & Responsive Header matching image_ba356a08.png */}
+        <header className="px-2.5 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 rounded-t-xl sm:rounded-t-2xl shrink-0 border-b border-zinc-800/80 bg-[#06080d] transition-colors">
+          {/* Left: Animated Logo */}
           <div className="flex items-center shrink-0 pl-0.5 sm:pl-1">
-            <span className="logo-shimmer font-mono text-sm sm:text-base font-black tracking-[0.2em] sm:tracking-[0.24em] uppercase select-none cursor-default">
+            <span className="logo-shimmer font-mono text-sm sm:text-base font-black tracking-[0.2em] sm:tracking-[0.24em] uppercase select-none cursor-default text-cyan-400">
               EZF
             </span>
-            <span className="hidden sm:inline-block ml-2 text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-              WoW Forever
+            <span className="ml-2 text-[10px] sm:text-[11px] font-mono text-zinc-500 uppercase tracking-wider font-bold">
+              WOW FOREVER
             </span>
           </div>
 
-          {/* Right Action Controls: Unified Black & Cyan / Blue Aesthetic */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            {/* Segmented Language Switcher: RU / EN */}
-            <div
-              className={`p-0.5 rounded-lg border flex items-center transition-all ${
-                isDark
-                  ? 'bg-[#070b12] border-cyan-900/60 shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]'
-                  : 'bg-zinc-200/80 border-zinc-300/80 shadow-xs'
-              }`}
-              title={t.langToggle}
-            >
-              <button
-                type="button"
-                onClick={() => setLanguage('ru')}
-                className={`px-1.5 sm:px-2 py-0.5 rounded-md text-[9.5px] sm:text-[10px] font-mono font-bold tracking-wider transition-all duration-150 cursor-pointer select-none ${
-                  language === 'ru'
-                    ? isDark
-                      ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
-                      : 'bg-white text-blue-600 shadow-xs border border-zinc-200 font-black'
-                    : isDark
-                      ? 'text-zinc-400 hover:text-cyan-200 border border-transparent'
-                      : 'text-zinc-500 hover:text-zinc-800 border border-transparent'
-                }`}
-              >
-                RU
-              </button>
-              <button
-                type="button"
-                onClick={() => setLanguage('en')}
-                className={`px-1.5 sm:px-2 py-0.5 rounded-md text-[9.5px] sm:text-[10px] font-mono font-bold tracking-wider transition-all duration-150 cursor-pointer select-none ${
-                  language === 'en'
-                    ? isDark
-                      ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
-                      : 'bg-white text-blue-600 shadow-xs border border-zinc-200 font-black'
-                    : isDark
-                      ? 'text-zinc-400 hover:text-cyan-200 border border-transparent'
-                      : 'text-zinc-500 hover:text-zinc-800 border border-transparent'
-                }`}
-              >
-                EN
-              </button>
-            </div>
-
-            {/* Theme Switcher */}
+          {/* Center: Segmented Pill [ ⊞ Ротация ] [ 🧭 Маршруты ] */}
+          <div className="p-0.5 rounded-lg border border-cyan-900/60 bg-[#070b12] flex items-center shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]">
             <button
               type="button"
-              onClick={() => setTheme(curr => curr === 'dark' ? 'light' : 'dark')}
-              title={theme === 'dark' ? t.themeLight : t.themeDark}
-              className={`w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer group active:scale-95 ${
-                isDark
-                  ? 'bg-[#070b12] border-cyan-900/60 hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
-                  : 'bg-white hover:bg-zinc-100 border-zinc-300 hover:border-blue-400 text-blue-600 shadow-xs'
+              onClick={() => setActiveView('rotation')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-[10.5px] sm:text-[11px] font-mono font-bold tracking-wider transition-all duration-150 cursor-pointer select-none active:scale-95 ${
+                activeView === 'rotation'
+                  ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                  : 'text-zinc-400 hover:text-cyan-200 border border-transparent'
               }`}
             >
-              {theme === 'dark' ? (
-                <Sun className="w-3.5 h-3.5 text-cyan-300 drop-shadow-[0_0_8px_rgba(6,182,212,0.7)] transition-transform duration-300 group-hover:rotate-45" />
-              ) : (
-                <Moon className="w-3.5 h-3.5 text-blue-600 transition-transform duration-300 group-hover:-rotate-12" />
-              )}
+              <Layers className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Ротация</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('routes')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-[10.5px] sm:text-[11px] font-mono font-bold tracking-wider transition-all duration-150 cursor-pointer select-none active:scale-95 ${
+                activeView === 'routes'
+                  ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                  : 'text-zinc-400 hover:text-cyan-200 border border-transparent'
+              }`}
+            >
+              <Compass className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Маршруты</span>
+            </button>
+          </div>
 
+          {/* Right Action Controls: [ • ▶ СТАРТ ] [ ⤓ ] [ ⚙ ] */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             {/* Start / Stop Button with F5 Keybind */}
             {isBotRunning ? (
               <button
                 onClick={handleStopBot}
                 disabled={isStopping}
-                className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-mono font-bold tracking-wider transition-all duration-200 cursor-pointer border select-none disabled:opacity-50 active:scale-95 ${
-                  isDark
-                    ? 'bg-gradient-to-r from-[#190a12] via-[#240e1b] to-[#190a12] text-rose-300 border-rose-500/80 hover:border-rose-400 hover:text-rose-100 hover:shadow-[0_0_18px_rgba(244,63,94,0.45)] shadow-[0_0_10px_rgba(244,63,94,0.25)] animate-pulse'
-                    : 'bg-rose-600 hover:bg-rose-500 text-white border-rose-600 shadow-xs hover:shadow-[0_2px_10px_rgba(244,63,94,0.35)]'
-                }`}
+                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-mono font-bold tracking-wider transition-all duration-200 cursor-pointer border select-none disabled:opacity-50 active:scale-95 bg-gradient-to-r from-[#190a12] via-[#240e1b] to-[#190a12] text-rose-300 border-rose-500/80 hover:border-rose-400 hover:text-rose-100 hover:shadow-[0_0_18px_rgba(244,63,94,0.45)] shadow-[0_0_10px_rgba(244,63,94,0.25)] animate-pulse"
                 title={t.stopTitle}
               >
                 <span className="relative flex h-1.5 w-1.5 shrink-0">
@@ -545,17 +528,15 @@ export const App: React.FC = () => {
                 ) : (
                   <Square className="w-2.5 h-2.5 fill-current" />
                 )}
-                <span className="text-[10.5px] sm:text-[11px] font-black uppercase tracking-wider">{isStopping ? t.stopping : t.stop}</span>
+                <span className="text-[10.5px] sm:text-[11px] font-black uppercase tracking-wider">
+                  {isStopping ? t.stopping : t.stop}
+                </span>
               </button>
             ) : (
               <button
                 onClick={handleStartBot}
                 disabled={isStarting}
-                className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-mono font-bold tracking-wider transition-all duration-200 cursor-pointer border select-none disabled:opacity-50 active:scale-95 ${
-                  isDark
-                    ? 'bg-gradient-to-r from-[#061019] via-[#091b2c] to-[#061019] text-cyan-300 border-cyan-400/80 hover:border-cyan-300 hover:text-cyan-100 hover:shadow-[0_0_18px_rgba(6,182,212,0.5)] shadow-[0_0_10px_rgba(6,182,212,0.3)]'
-                    : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-600 shadow-xs hover:shadow-[0_2px_10px_rgba(37,99,235,0.35)]'
-                }`}
+                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-mono font-bold tracking-wider transition-all duration-200 cursor-pointer border select-none disabled:opacity-50 active:scale-95 bg-gradient-to-r from-[#061019] via-[#091b2c] to-[#061019] text-cyan-300 border-cyan-400/80 hover:border-cyan-300 hover:text-cyan-100 hover:shadow-[0_0_18px_rgba(6,182,212,0.5)] shadow-[0_0_10px_rgba(6,182,212,0.3)]"
                 title={t.startTitle}
               >
                 <span className="relative flex h-1.5 w-1.5 shrink-0">
@@ -567,18 +548,16 @@ export const App: React.FC = () => {
                 ) : (
                   <Play className="w-2.5 h-2.5 fill-current drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]" />
                 )}
-                <span className="text-[10.5px] sm:text-[11px] font-black uppercase tracking-wider">{isStarting ? t.starting : t.start}</span>
+                <span className="text-[10.5px] sm:text-[11px] font-black uppercase tracking-wider">
+                  {isStarting ? t.starting : t.start}
+                </span>
               </button>
             )}
 
             {/* Download JSON backup */}
             <button
               onClick={handleExportJson}
-              className={`w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer select-none active:scale-95 ${
-                isDark
-                  ? 'bg-[#070b12] border-cyan-900/60 hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
-                  : 'bg-white border-zinc-300 text-zinc-600 hover:text-blue-600 hover:border-blue-400 shadow-xs'
-              }`}
+              className="w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-lg border border-cyan-900/60 bg-[#070b12] hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300 flex items-center justify-center transition-all duration-200 cursor-pointer select-none active:scale-95"
               title={t.exportJson}
             >
               <Download className="w-3.5 h-3.5 drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]" />
@@ -587,19 +566,19 @@ export const App: React.FC = () => {
             {/* Settings Tab Button */}
             <button
               type="button"
-              onClick={() => setActiveTab(curr => curr === 'settings' ? 'main' : 'settings')}
+              onClick={() => setActiveView((curr) => (curr === 'settings' ? 'rotation' : 'settings'))}
               className={`w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer select-none active:scale-95 ${
-                activeTab === 'settings'
-                  ? isDark
-                    ? 'bg-[#0c1626] border-cyan-400 text-cyan-200 shadow-[0_0_14px_rgba(6,182,212,0.5)] ring-1 ring-cyan-400/50'
-                    : 'bg-blue-50 border-blue-600 text-blue-700 shadow-xs ring-1 ring-blue-500/40'
-                  : isDark
-                    ? 'bg-[#070b12] border-cyan-900/60 hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
-                    : 'bg-white border-zinc-300 text-zinc-600 hover:text-blue-600 hover:border-blue-400 shadow-xs'
+                activeView === 'settings'
+                  ? 'bg-[#0c1626] border-cyan-400 text-cyan-200 shadow-[0_0_14px_rgba(6,182,212,0.7)] ring-1 ring-cyan-400'
+                  : 'bg-[#070b12] border-cyan-900/60 hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
               }`}
               title={t.settings}
             >
-              <Settings className={`w-3.5 h-3.5 transition-transform duration-300 ${activeTab === 'settings' ? 'rotate-90 text-cyan-200' : ''} drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]`} />
+              <Settings
+                className={`w-3.5 h-3.5 transition-transform duration-300 ${
+                  activeView === 'settings' ? 'rotate-90 text-cyan-200' : ''
+                } drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]`}
+              />
             </button>
           </div>
         </header>
@@ -635,19 +614,29 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* Main Content: Rotation Sequence OR Full Settings View */}
+        {/* Main Content: Rotation Sequence OR Routes View OR Settings View */}
         <main className="p-2 sm:p-3 w-full flex flex-col overflow-y-auto min-h-0 flex-1">
-          {activeTab === 'settings' ? (
+          {activeView === 'settings' ? (
             <SettingsView
               settings={settings}
               onSettingsChange={(newSettings) => {
                 setSettings(newSettings);
                 saveCurrentConfigToBackend(chains, newSettings);
               }}
-              onBack={() => setActiveTab('main')}
+              onBack={() => setActiveView('rotation')}
+              onNavigateToRoutes={() => setActiveView('routes')}
+              onExportJson={handleExportJson}
               language={language}
+              onLanguageChange={setLanguage}
               theme={theme}
+              onThemeChange={setTheme}
               onToast={setSuccessMessage}
+            />
+          ) : activeView === 'routes' ? (
+            <RoutesView
+              isBotRunning={isBotRunning}
+              onToast={setSuccessMessage}
+              onError={setErrorMessage}
             />
           ) : (
             <ComboSequence

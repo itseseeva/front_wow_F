@@ -1,5 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Sparkles, X, Target } from 'lucide-react';
+import {
+  ArrowLeft,
+  SlidersHorizontal,
+  Target,
+  Zap,
+  Compass,
+  Globe,
+  Download,
+  X,
+  Sparkles,
+  Sun,
+  Moon,
+} from 'lucide-react';
 import { AppSettings } from '../types';
 import { Language, Theme, translations } from '../utils/i18n';
 
@@ -7,10 +19,16 @@ interface SettingsViewProps {
   settings: AppSettings;
   onSettingsChange: (settings: AppSettings) => void;
   onBack: () => void;
+  onNavigateToRoutes?: () => void;
+  onExportJson?: () => void;
   language?: Language;
+  onLanguageChange?: (lang: Language) => void;
   theme?: Theme;
+  onThemeChange?: (theme: Theme) => void;
   onToast?: (msg: string) => void;
 }
+
+type SettingCategory = 'target' | 'hotkeys' | 'route' | 'appearance' | 'export';
 
 // Convert physical key event to clean game key format
 const getPhysicalKeyFromEvent = (e: KeyboardEvent): string | null => {
@@ -44,13 +62,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
   onSettingsChange,
   onBack,
+  onNavigateToRoutes,
+  onExportJson,
   language = 'ru',
+  onLanguageChange,
   theme = 'dark',
+  onThemeChange,
   onToast,
 }) => {
   const t = translations[language];
   const isDark = theme === 'dark';
 
+  const [activeCategory, setActiveCategory] = useState<SettingCategory>('target');
   const [isCapturingKey, setIsCapturingKey] = useState(false);
   const captureButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -100,123 +123,332 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
+  const categories: { id: SettingCategory; title: string; subtitle: string; icon: React.ReactNode }[] = [
+    {
+      id: 'target',
+      title: 'Цель и лут',
+      subtitle: 'Предыдущая цель',
+      icon: <Target className="w-3.5 h-3.5 text-cyan-400" />,
+    },
+    {
+      id: 'hotkeys',
+      title: 'Горячие клавиши',
+      subtitle: 'F5 Старт / Стоп',
+      icon: <Zap className="w-3.5 h-3.5 text-cyan-400" />,
+    },
+    {
+      id: 'route',
+      title: 'Запись маршрута',
+      subtitle: 'Фарм маршрут',
+      icon: <Compass className="w-3.5 h-3.5 text-cyan-400" />,
+    },
+    {
+      id: 'appearance',
+      title: 'Язык и тема',
+      subtitle: `${language.toUpperCase()} • ${theme === 'dark' ? 'Dark' : 'Light'}`,
+      icon: <Globe className="w-3.5 h-3.5 text-cyan-400" />,
+    },
+    {
+      id: 'export',
+      title: 'Экспорт JSON',
+      subtitle: 'Резервная копия',
+      icon: <Download className="w-3.5 h-3.5 text-cyan-400" />,
+    },
+  ];
+
   return (
     <div className="flex-1 flex flex-col min-h-0 w-full animate-fadeIn select-none">
-      {/* Compact Top Navigation Bar */}
-      <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-zinc-800/60 shrink-0">
+      {/* Subheader: [ ← Назад ] 🎛️ НАСТРОЙКИ БОТА ------------- [ CONFIG ] */}
+      <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-zinc-800/80 shrink-0">
         <div className="flex items-center gap-2">
           {/* Back Button */}
           <button
             type="button"
             onClick={onBack}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold tracking-wider transition-all duration-150 cursor-pointer border select-none active:scale-95 ${
-              isDark
-                ? 'bg-[#070b12] border-cyan-900/60 hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_10px_rgba(6,182,212,0.4)] text-cyan-300'
-                : 'bg-white border-zinc-300 text-zinc-700 hover:text-blue-600 hover:border-blue-400 shadow-xs'
-            }`}
-            title={t.backToMain}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-mono font-bold tracking-wider bg-[#070b12] border border-cyan-900/60 hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_10px_rgba(6,182,212,0.4)] text-cyan-300 transition-all cursor-pointer active:scale-95"
           >
-            <ArrowLeft className="w-3 h-3 drop-shadow-[0_0_4px_rgba(6,182,212,0.5)]" />
-            <span>{t.backToMain}</span>
+            <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Назад</span>
           </button>
 
-          <span className="text-[11px] font-mono font-black uppercase tracking-wider text-zinc-200">
-            {t.settingsTitle}
-          </span>
+          <div className="flex items-center gap-1.5 text-zinc-100 font-mono font-black text-xs tracking-wider">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+            <span>НАСТРОЙКИ БОТА</span>
+          </div>
         </div>
 
-        <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase tracking-widest border ${
-          isDark ? 'bg-[#070b12] border-cyan-900/60 text-cyan-400' : 'bg-blue-50 border-blue-200 text-blue-600'
-        }`}>
+        <span className="text-[9px] px-2 py-0.5 rounded font-mono font-bold tracking-widest bg-[#070b12] border border-cyan-900/60 text-cyan-400">
           CONFIG
         </span>
       </div>
 
-      {/* Settings List */}
-      <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5 min-h-0">
-        {/* Section Header: Цель и лут */}
-        <div className="flex items-center gap-1.5 px-1 pt-0.5 text-zinc-400">
-          <Target className="w-3.5 h-3.5 text-cyan-400" />
-          <span className="text-[10px] sm:text-[11px] font-mono font-black uppercase tracking-wider text-zinc-300">
-            {t.targetAndLootSection}
-          </span>
-          <div className="flex-1 h-px bg-zinc-800/80 ml-1" />
+      {/* Two-column layout matching screenshot image_ba356a08.png */}
+      <div className="flex-1 flex gap-2.5 min-h-0 overflow-hidden">
+        {/* Left Column: Sidebar Menu */}
+        <div className="w-44 sm:w-48 flex flex-col border border-zinc-800/80 rounded-xl bg-[#06080d] p-1.5 shrink-0">
+          <div className="flex items-center justify-between px-2 py-1 mb-1 border-b border-zinc-800/60 text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider">
+            <span>НАСТРОЙКИ</span>
+            <span className="text-cyan-400 font-black">5</span>
+          </div>
+
+          <div className="space-y-1 overflow-y-auto pr-0.5 flex-1">
+            {categories.map((cat) => {
+              const isActive = activeCategory === cat.id;
+
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`w-full text-left p-2 rounded-lg border transition-all cursor-pointer flex items-start gap-2 ${
+                    isActive
+                      ? 'bg-[#0a1424] border-cyan-400 text-white shadow-[0_0_12px_rgba(6,182,212,0.3)] ring-1 ring-cyan-400/40'
+                      : 'bg-[#080b11] border-zinc-800/80 text-zinc-300 hover:border-zinc-700 hover:text-white'
+                  }`}
+                >
+                  <div className="mt-0.5 shrink-0">{cat.icon}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10.5px] font-mono font-bold leading-tight truncate">
+                      {cat.title}
+                    </div>
+                    <div className="text-[9px] font-mono text-zinc-400 truncate mt-0.5">
+                      {cat.subtitle}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Setting Cards Grid - Adapts from 1 column on small windows to 2 columns on wide windows */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-2.5">
-          {/* Setting Card: Предыдущая цель */}
-          <div className={`px-3 py-2.5 rounded-xl border flex flex-col justify-between gap-2 transition-all ${
-            isDark
-              ? 'bg-[#080b10] border-zinc-800/80 hover:border-cyan-900/50 shadow-xs'
-              : 'bg-white border-zinc-200 hover:border-blue-200 shadow-xs'
-          }`}>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] sm:text-xs font-mono font-bold text-zinc-200 leading-tight">
-                {t.previousTargetKeyLabel}
-              </span>
+        {/* Right Column: Active Category Content */}
+        <div className="flex-1 border border-zinc-800/80 rounded-xl bg-[#06080d] p-3 flex flex-col justify-between overflow-y-auto">
+          {activeCategory === 'target' && (
+            <div className="space-y-3 flex flex-col h-full justify-between">
+              <div>
+                {/* Title */}
+                <div className="flex items-center gap-1.5 text-cyan-400 text-xs font-mono font-black uppercase tracking-wider mb-2.5">
+                  <Target className="w-4 h-4" />
+                  <span>ПРЕДЫДУЩАЯ ЦЕЛЬ</span>
+                </div>
 
-              {/* Key Binding Button */}
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  ref={captureButtonRef}
-                  type="button"
-                  onClick={() => setIsCapturingKey(true)}
-                  className={`min-w-[58px] sm:min-w-[68px] h-6 sm:h-7 px-2 sm:px-2.5 rounded-md border flex items-center justify-center gap-1 text-[10px] sm:text-[10.5px] font-mono font-black tracking-wider transition-all duration-150 cursor-pointer select-none active:scale-95 ${
-                    isCapturingKey
-                      ? isDark
-                        ? 'bg-[#0c1626] border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.6)] animate-pulse'
-                        : 'bg-blue-100 border-blue-500 text-blue-700 ring-1 ring-blue-300 animate-pulse'
-                      : settings.previousTargetKey
-                        ? isDark
-                          ? 'bg-[#070b12] border-cyan-400/80 text-cyan-300 hover:bg-[#0c1626] hover:border-cyan-300 hover:shadow-[0_0_10px_rgba(6,182,212,0.4)] shadow-[0_0_5px_rgba(6,182,212,0.2)]'
-                          : 'bg-blue-50 border-blue-400 text-blue-700 hover:bg-blue-100 shadow-xs'
-                        : isDark
-                          ? 'bg-[#070b12] border-cyan-900/60 text-zinc-400 hover:text-cyan-200 hover:border-cyan-400 hover:bg-[#0c1626]'
-                          : 'bg-zinc-100 border-zinc-300 text-zinc-500 hover:text-zinc-800 hover:border-zinc-400'
-                  }`}
-                  title={settings.previousTargetKey ? `${t.previousTargetKeyLabel}: ${settings.previousTargetKey}` : t.clickToBind}
-                >
-                  {isCapturingKey ? (
-                    <span className="text-[9.5px] text-cyan-200 font-bold flex items-center gap-1">
-                      <Sparkles className="w-2.5 h-2.5 text-cyan-300 animate-spin" />
-                      <span>{t.pressAnyKey}</span>
-                    </span>
-                  ) : settings.previousTargetKey ? (
-                    <span className="text-[10px] sm:text-[11px] uppercase tracking-wider text-cyan-300 drop-shadow-[0_0_4px_rgba(6,182,212,0.6)] font-black">
-                      {settings.previousTargetKey}
-                    </span>
-                  ) : (
-                    <span className="text-[9px] sm:text-[9.5px] text-zinc-400 hover:text-cyan-300 font-bold uppercase">
-                      {t.clickToBind}
-                    </span>
-                  )}
-                </button>
+                {/* Keybind Card */}
+                <div className="p-3 rounded-lg border border-zinc-800 bg-[#090d16] flex items-center justify-between gap-2 shadow-xs">
+                  <div>
+                    <h4 className="text-xs font-mono font-black text-zinc-100">
+                      Клавиша в игре
+                    </h4>
+                    <p className="text-[9.5px] font-mono text-zinc-400 mt-0.5">
+                      {isCapturingKey ? 'Нажмите любую клавишу...' : 'Нажмите для назначения'}
+                    </p>
+                  </div>
 
-                {/* Clear Button */}
-                {settings.previousTargetKey && (
-                  <button
-                    type="button"
-                    onClick={handleClearKey}
-                    disabled={isCapturingKey}
-                    className={`w-6 h-6 sm:w-7 sm:h-7 rounded-md border flex items-center justify-center transition-all duration-150 cursor-pointer select-none active:scale-95 ${
-                      isDark
-                        ? 'bg-[#070b12] border-zinc-800 text-zinc-400 hover:text-rose-300 hover:border-rose-500/70 hover:bg-rose-950/20'
-                        : 'bg-white border-zinc-200 text-zinc-400 hover:text-rose-600 hover:border-rose-300'
-                    }`}
-                    title={t.clearKey}
-                  >
-                    <X className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  </button>
-                )}
+                  {/* Buttons */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      ref={captureButtonRef}
+                      type="button"
+                      onClick={() => setIsCapturingKey(true)}
+                      className={`min-w-[50px] h-7 px-3 rounded-md border flex items-center justify-center font-mono font-black text-xs transition-all cursor-pointer active:scale-95 ${
+                        isCapturingKey
+                          ? 'bg-[#0c1626] border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.6)] animate-pulse'
+                          : settings.previousTargetKey
+                            ? 'bg-[#070b12] border-cyan-400 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.3)] hover:border-cyan-300'
+                            : 'bg-[#070b12] border-zinc-700 text-zinc-400 hover:border-cyan-400'
+                      }`}
+                    >
+                      {isCapturingKey ? (
+                        <Sparkles className="w-3 h-3 text-cyan-300 animate-spin" />
+                      ) : (
+                        settings.previousTargetKey || '—'
+                      )}
+                    </button>
+
+                    {settings.previousTargetKey && (
+                      <button
+                        type="button"
+                        onClick={handleClearKey}
+                        className="w-7 h-7 rounded-md border border-zinc-800 bg-[#070b12] text-zinc-400 hover:text-rose-400 hover:border-rose-500/60 flex items-center justify-center transition-colors cursor-pointer"
+                        title="Очистить клавишу"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Hint Card */}
+              <div className="p-2.5 rounded-lg border border-zinc-800/80 bg-[#080b11] text-[10px] font-mono text-zinc-400 leading-relaxed">
+                Как в игре: Параметры → Управление → Выбор цели → Предыдущая цель. После убийства бот жмёт её, чтобы выделить труп и облутать его
               </div>
             </div>
+          )}
 
-            {/* Detailed Hint per requirements */}
-            <p className="text-[9.5px] sm:text-[10px] text-zinc-400 leading-snug">
-              {t.previousTargetKeyHint}
-            </p>
-          </div>
+          {activeCategory === 'hotkeys' && (
+            <div className="space-y-3 flex flex-col h-full justify-between">
+              <div>
+                <div className="flex items-center gap-1.5 text-cyan-400 text-xs font-mono font-black uppercase tracking-wider mb-2.5">
+                  <Zap className="w-4 h-4" />
+                  <span>ГОРЯЧИЕ КЛАВИШИ</span>
+                </div>
+
+                <div className="p-3 rounded-lg border border-zinc-800 bg-[#090d16] flex items-center justify-between gap-2 shadow-xs">
+                  <div>
+                    <h4 className="text-xs font-mono font-black text-zinc-100">
+                      Старт / Стоп бота
+                    </h4>
+                    <p className="text-[9.5px] font-mono text-zinc-400 mt-0.5">
+                      Быстрое включение и выключение
+                    </p>
+                  </div>
+                  <span className="px-3 py-1 rounded-md bg-[#070b12] border border-cyan-400 text-cyan-300 font-mono font-black text-xs shadow-[0_0_8px_rgba(6,182,212,0.3)]">
+                    F5
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-lg border border-zinc-800/80 bg-[#080b11] text-[10px] font-mono text-zinc-400 leading-relaxed">
+                Клавиша F5 работает в панели и в игре для мгновенного запуска и остановки цикла фарма.
+              </div>
+            </div>
+          )}
+
+          {activeCategory === 'route' && (
+            <div className="space-y-3 flex flex-col h-full justify-between">
+              <div>
+                <div className="flex items-center gap-1.5 text-cyan-400 text-xs font-mono font-black uppercase tracking-wider mb-2.5">
+                  <Compass className="w-4 h-4" />
+                  <span>ЗАПИСЬ МАРШРУТА</span>
+                </div>
+
+                <div className="p-3 rounded-lg border border-zinc-800 bg-[#090d16] flex items-center justify-between gap-2 shadow-xs">
+                  <div>
+                    <h4 className="text-xs font-mono font-black text-zinc-100">
+                      Управление маршрутами
+                    </h4>
+                    <p className="text-[9.5px] font-mono text-zinc-400 mt-0.5">
+                      Запись, просмотр и выбор основного пути
+                    </p>
+                  </div>
+                  {onNavigateToRoutes && (
+                    <button
+                      type="button"
+                      onClick={onNavigateToRoutes}
+                      className="px-2.5 py-1 rounded-md border border-cyan-400 bg-cyan-950/40 text-cyan-300 hover:bg-cyan-900/50 font-mono font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      К маршрутам →
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-lg border border-zinc-800/80 bg-[#080b11] text-[10px] font-mono text-zinc-400 leading-relaxed">
+                Вы можете записывать обходы карты, просматривать вариации движения и назначать основной маршрут во вкладке «Маршруты».
+              </div>
+            </div>
+          )}
+
+          {activeCategory === 'appearance' && (
+            <div className="space-y-3 flex flex-col h-full justify-between">
+              <div>
+                <div className="flex items-center gap-1.5 text-cyan-400 text-xs font-mono font-black uppercase tracking-wider mb-2.5">
+                  <Globe className="w-4 h-4" />
+                  <span>ЯЗЫК И ТЕМА</span>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Language switcher */}
+                  <div className="p-2.5 rounded-lg border border-zinc-800 bg-[#090d16] flex items-center justify-between gap-2 shadow-xs">
+                    <div>
+                      <h4 className="text-xs font-mono font-black text-zinc-100">Язык интерфейса</h4>
+                      <p className="text-[9.5px] font-mono text-zinc-400">RU / EN</p>
+                    </div>
+                    <div className="flex items-center gap-1 bg-[#05070a] p-0.5 rounded-md border border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={() => onLanguageChange && onLanguageChange('ru')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                          language === 'ru'
+                            ? 'bg-cyan-500 text-black'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        RU
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onLanguageChange && onLanguageChange('en')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                          language === 'en'
+                            ? 'bg-cyan-500 text-black'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        EN
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Theme switcher */}
+                  <div className="p-2.5 rounded-lg border border-zinc-800 bg-[#090d16] flex items-center justify-between gap-2 shadow-xs">
+                    <div>
+                      <h4 className="text-xs font-mono font-black text-zinc-100">Тема оформления</h4>
+                      <p className="text-[9.5px] font-mono text-zinc-400">{theme === 'dark' ? 'Тёмная' : 'Светлая'}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')}
+                      className="px-2.5 py-1 rounded-md border border-cyan-900/60 bg-[#070b12] text-cyan-300 hover:border-cyan-400 font-mono text-xs flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-cyan-400" /> : <Moon className="w-3.5 h-3.5 text-blue-500" />}
+                      <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-lg border border-zinc-800/80 bg-[#080b11] text-[10px] font-mono text-zinc-400 leading-relaxed">
+                Настройки темы и языка сохраняются в браузере автоматически.
+              </div>
+            </div>
+          )}
+
+          {activeCategory === 'export' && (
+            <div className="space-y-3 flex flex-col h-full justify-between">
+              <div>
+                <div className="flex items-center gap-1.5 text-cyan-400 text-xs font-mono font-black uppercase tracking-wider mb-2.5">
+                  <Download className="w-4 h-4" />
+                  <span>ЭКСПОРТ И ИМПОРТ</span>
+                </div>
+
+                <div className="p-3 rounded-lg border border-zinc-800 bg-[#090d16] flex items-center justify-between gap-2 shadow-xs">
+                  <div>
+                    <h4 className="text-xs font-mono font-black text-zinc-100">
+                      Резервная копия
+                    </h4>
+                    <p className="text-[9.5px] font-mono text-zinc-400 mt-0.5">
+                      Файл wowbot_config.json
+                    </p>
+                  </div>
+                  {onExportJson && (
+                    <button
+                      type="button"
+                      onClick={onExportJson}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-md border border-cyan-400 bg-cyan-950/50 hover:bg-cyan-900/60 text-cyan-300 font-mono font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Скачать</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-lg border border-zinc-800/80 bg-[#080b11] text-[10px] font-mono text-zinc-400 leading-relaxed">
+                Экспортирует конфигурацию ротации умений, задержек и параметров в формате JSON для переноса между ПК.
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
