@@ -3,6 +3,7 @@ import { RouteInfo } from '../types';
 import { RouteCanvas } from './RouteCanvas';
 import { RouteRecordModal } from './RouteRecordModal';
 import { RoutePreviewModal } from './RoutePreviewModal';
+import { getPywebviewApi } from '../utils/pywebviewBridge';
 import {
   mockListRoutes,
   mockSetActiveRoute,
@@ -11,22 +12,16 @@ import {
 import {
   Compass,
   Plus,
-  Play,
   Eye,
   Trash2,
   CheckCircle,
   Circle,
-  Clock,
-  MapPin,
-  Repeat,
-  Sparkles,
   Loader2,
-  ShieldAlert,
 } from 'lucide-react';
 
 interface RoutesViewProps {
   isBotRunning: boolean;
-  onToast: (msg: string) => void;
+  onToast: (toast: { type: 'success' | 'error' | 'info'; message: string }) => void;
   onError: (msg: string) => void;
 }
 
@@ -46,9 +41,10 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
   // Fetch routes from pywebview or mock
   const fetchRoutes = useCallback(async () => {
     try {
+      const api = await getPywebviewApi();
       let res;
-      if (window.pywebview?.api?.list_routes) {
-        res = await window.pywebview.api.list_routes();
+      if (api?.list_routes) {
+        res = await api.list_routes();
       } else {
         res = await mockListRoutes();
       }
@@ -73,9 +69,10 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
   // Set active route (or null for auto)
   const handleSetActive = async (id: string | null) => {
     try {
+      const api = await getPywebviewApi();
       let res;
-      if (window.pywebview?.api?.set_active_route) {
-        res = await window.pywebview.api.set_active_route(id);
+      if (api?.set_active_route) {
+        res = await api.set_active_route(id);
       } else {
         res = await mockSetActiveRoute(id);
       }
@@ -88,7 +85,10 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
             active: id === null ? false : r.id === id,
           }))
         );
-        onToast(id ? 'Маршрут выбран основным' : 'Включён автовыбор маршрута');
+        onToast({
+          type: 'success',
+          message: id ? 'Маршрут выбран основным' : 'Включён автовыбор маршрута',
+        });
       } else {
         onError(res.error || 'Ошибка выбора маршрута');
       }
@@ -102,15 +102,19 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
     if (!window.confirm(`Удалить маршрут «${route.name}»?`)) return;
 
     try {
+      const api = await getPywebviewApi();
       let res;
-      if (window.pywebview?.api?.delete_route) {
-        res = await window.pywebview.api.delete_route(route.id);
+      if (api?.delete_route) {
+        res = await api.delete_route(route.id);
       } else {
         res = await mockDeleteRoute(route.id);
       }
 
       if (res.ok) {
-        onToast(`Маршрут «${route.name}» удалён`);
+        onToast({
+          type: 'info',
+          message: `Маршрут «${route.name}» удалён`,
+        });
         fetchRoutes();
       } else {
         onError(res.error || 'Не удалось удалить маршрут');
@@ -175,7 +179,7 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
           <span className="text-zinc-400">ближайший маршрут своей карты</span>
         </div>
         {activeId === null && (
-          <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-800/50">
+          <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-800/50">
             АКТИВЕН
           </span>
         )}
@@ -209,24 +213,25 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                     : 'bg-[#07090e] border-zinc-800/80 hover:border-zinc-700'
                 }`}
               >
-                {/* Left: Thumbnail Canvas */}
+                {/* Left: Thumbnail 96x64 px (w-24 h-16) with RouteCanvas in thumb mode */}
                 <div
                   onClick={() => setPreviewRoute(route)}
-                  className="w-16 h-12 rounded-lg bg-[#040508] border border-cyan-900/40 overflow-hidden cursor-pointer shrink-0 relative group"
+                  className="w-24 h-16 rounded-lg bg-[#040508] border border-cyan-900/40 overflow-hidden cursor-pointer shrink-0 relative group"
                   title="Нажмите для предпросмотра"
                 >
                   <RouteCanvas
                     points={route.thumb && route.thumb.length > 0 ? route.thumb : []}
+                    mapId={route.map_id}
                     mode="thumb"
                     loop={route.loop}
                     aspect={1.5}
                   />
-                  <div className="absolute inset-0 bg-cyan-950/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <Eye className="w-3.5 h-3.5 text-cyan-300" />
+                  <div className="absolute inset-0 bg-cyan-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <Eye className="w-4 h-4 text-cyan-300" />
                   </div>
                 </div>
 
-                {/* Middle: Details & Active Toggle */}
+                {/* Middle: Details */}
                 <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                   <div className="flex items-center gap-1.5">
                     <h4 className="text-[11px] sm:text-xs font-mono font-bold text-zinc-100 truncate">
@@ -234,22 +239,22 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                     </h4>
                     {route.loop ? (
                       <span className="text-[8.5px] px-1 py-0.2 rounded bg-amber-950/40 text-amber-300 border border-amber-800/40 shrink-0">
-                        Круг
+                        круг
                       </span>
                     ) : (
                       <span className="text-[8.5px] px-1 py-0.2 rounded bg-purple-950/40 text-purple-300 border border-purple-800/40 shrink-0">
-                        Линия
+                        туда-обратно
                       </span>
                     )}
                   </div>
 
-                  {/* Badges */}
-                  <div className="flex items-center gap-2 text-[9px] font-mono text-zinc-400 mt-0.5">
-                    <span>Карта: {route.map_id ?? 'Auto'}</span>
+                  {/* Metadata: ≈{length_s} с бега, {points} точек, карта {map_id} */}
+                  <div className="flex items-center gap-2 text-[9px] font-mono text-zinc-400 mt-1">
+                    <span className="text-amber-400 font-bold">≈{route.length_s} с бега</span>
                     <span>•</span>
                     <span>{route.points} точек</span>
                     <span>•</span>
-                    <span className="text-amber-400/90">{route.length_s} с</span>
+                    <span>карта {route.map_id ?? '—'}</span>
                   </div>
                 </div>
 
@@ -305,10 +310,9 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
         isOpen={isRecordModalOpen}
         onClose={() => setIsRecordModalOpen(false)}
         onRouteSaved={(newRoute) => {
-          onToast(`Маршрут «${newRoute.name}» успешно сохранён!`);
           fetchRoutes();
         }}
-        onError={onError}
+        onToast={onToast}
       />
 
       {/* Preview Modal */}

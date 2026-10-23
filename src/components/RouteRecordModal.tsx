@@ -1,25 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RouteInfo, RouteRecordStatus } from '../types';
 import { RouteCanvas } from './RouteCanvas';
+import { getPywebviewApi } from '../utils/pywebviewBridge';
 import {
   mockStartRouteRecord,
   mockStopRouteRecord,
   mockGetRouteRecordStatus,
 } from '../data/mockRoutes';
-import { Radio, AlertTriangle, Square, Check, X, Loader2, MapPin } from 'lucide-react';
+import { Radio, AlertTriangle, Square, Check, X, Loader2 } from 'lucide-react';
 
 interface RouteRecordModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRouteSaved: (route: RouteInfo) => void;
-  onError: (msg: string) => void;
+  onToast: (toast: { type: 'success' | 'error' | 'info'; message: string }) => void;
 }
 
 export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
   isOpen,
   onClose,
   onRouteSaved,
-  onError,
+  onToast,
 }) => {
   const [routeName, setRouteName] = useState('Маршрут 1');
   const [isStarting, setIsStarting] = useState(false);
@@ -28,24 +29,26 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
 
   const pollTimerRef = useRef<number | null>(null);
 
-  // Check backend bridge methods with fallback to mocks
   const startRecordApi = async (name: string) => {
-    if (window.pywebview?.api?.start_route_record) {
-      return await window.pywebview.api.start_route_record(name);
+    const api = await getPywebviewApi();
+    if (api?.start_route_record) {
+      return await api.start_route_record(name);
     }
     return await mockStartRouteRecord(name);
   };
 
   const stopRecordApi = async (save: boolean) => {
-    if (window.pywebview?.api?.stop_route_record) {
-      return await window.pywebview.api.stop_route_record(save);
+    const api = await getPywebviewApi();
+    if (api?.stop_route_record) {
+      return await api.stop_route_record(save);
     }
     return await mockStopRouteRecord(save);
   };
 
   const getStatusApi = async (): Promise<RouteRecordStatus> => {
-    if (window.pywebview?.api?.get_route_record_status) {
-      return await window.pywebview.api.get_route_record_status();
+    const api = await getPywebviewApi();
+    if (api?.get_route_record_status) {
+      return await api.get_route_record_status();
     }
     return await mockGetRouteRecordStatus();
   };
@@ -66,7 +69,6 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
         if (s) {
           setStatus(s);
           if (!s.recording && s.name) {
-            // Stopped externally
             if (pollTimerRef.current) clearInterval(pollTimerRef.current);
           }
         }
@@ -84,7 +86,7 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
     };
   }, [isOpen, status?.recording]);
 
-  // Initial check on modal open if already recording
+  // Initial check on modal open
   useEffect(() => {
     if (isOpen) {
       getStatusApi().then((s) => {
@@ -96,6 +98,8 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
       });
     } else {
       setStatus(null);
+      setIsStarting(false);
+      setIsStopping(false);
     }
   }, [isOpen]);
 
@@ -112,10 +116,16 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
         const initialStatus = await getStatusApi();
         setStatus(initialStatus);
       } else {
-        onError(res.error || 'Не удалось начать запись маршрута');
+        onToast({
+          type: 'error',
+          message: res.error || 'Не удалось начать запись маршрута',
+        });
       }
     } catch (err: any) {
-      onError(err?.message || 'Ошибка запуска записи маршрута');
+      onToast({
+        type: 'error',
+        message: err?.message || 'Ошибка запуска записи маршрута',
+      });
     } finally {
       setIsStarting(false);
     }
@@ -126,16 +136,29 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
     setIsStopping(true);
     try {
       const res = await stopRecordApi(true);
-      if (res.ok) {
-        if (res.route) {
-          onRouteSaved(res.route);
-        }
+      if (res.ok && res.route) {
+        const routeType = res.route.loop ? 'круг' : 'туда-обратно';
+        onToast({
+          type: 'success',
+          message: `Маршрут «${res.route.name}» сохранён: ${res.route.points} точек, ${routeType}, ≈${res.route.length_s} с бега`,
+        });
+        onRouteSaved(res.route);
         onClose();
       } else {
-        onError(res.error || 'Ошибка при сохранении маршрута');
+        onToast({
+          type: 'error',
+          message: `Маршрут не сохранён: ${res.error || 'маршрут слишком короткий'}`,
+        });
+        setStatus(null);
+        onClose();
       }
     } catch (err: any) {
-      onError(err?.message || 'Ошибка сохранения');
+      onToast({
+        type: 'error',
+        message: `Маршрут не сохранён: ${err?.message || 'ошибка при сохранении'}`,
+      });
+      setStatus(null);
+      onClose();
     } finally {
       setIsStopping(false);
     }
@@ -143,30 +166,27 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
 
   const handleCancelRecord = async () => {
     if (isStopping) return;
-    if (window.confirm('Отменить запись маршрута без сохранения?')) {
-      setIsStopping(true);
-      try {
-        await stopRecordApi(false);
-      } catch (err) {
-        console.warn(err);
-      } finally {
-        setIsStopping(false);
-        onClose();
-      }
+    setIsStopping(true);
+    try {
+      await stopRecordApi(false);
+      onToast({
+        type: 'info',
+        message: 'Запись отменена',
+      });
+    } catch (err) {
+      console.warn(err);
+    } finally {
+      setIsStopping(false);
+      setStatus(null);
+      onClose();
     }
   };
 
-  const formatTime = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/80 backdrop-blur-xs animate-fadeIn select-none">
-      <div className="w-full max-w-[480px] bg-[#090b10] border border-cyan-900/60 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col text-zinc-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-3 bg-black/85 backdrop-blur-xs animate-fadeIn select-none">
+      <div className="w-full max-w-[500px] bg-[#090b10] border border-cyan-900/60 rounded-xl shadow-[0_0_35px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col text-zinc-200">
         {/* Header */}
-        <div className="px-3.5 py-2.5 bg-[#06080d] border-b border-zinc-800/80 flex items-center justify-between">
+        <div className="px-3.5 py-2.5 bg-[#06080d] border-b border-zinc-800/80 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
             <span className="text-xs font-mono font-black uppercase tracking-wider text-zinc-100">
@@ -182,7 +202,7 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
           </button>
         </div>
 
-        {/* Content */}
+        {/* Start dialog if not currently recording */}
         {!status?.recording ? (
           <form onSubmit={handleStart} className="p-4 space-y-3.5">
             <div className="text-[11px] text-zinc-300 leading-relaxed bg-[#0c1018] p-3 rounded-lg border border-zinc-800/60">
@@ -229,38 +249,22 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
             </div>
           </form>
         ) : (
-          <div className="p-3 space-y-2.5 flex flex-col">
-            {/* Top HUD metrics */}
-            <div className="grid grid-cols-4 gap-1.5 text-center">
-              <div className="bg-[#05070a] border border-zinc-800/80 rounded-md py-1 px-1.5">
-                <div className="flex items-center justify-center gap-1 text-[9px] font-mono text-rose-400 font-bold uppercase">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block" />
-                  <span>REC</span>
-                </div>
-                <div className="text-xs font-mono font-black text-rose-300">
-                  {formatTime(status.seconds)}
-                </div>
+          /* Active Recording HUD */
+          <div className="p-3 space-y-2 flex flex-col">
+            {/* Top Status Line: «Карта {map_id} · Точек {N} · {секунды записи} с · ≈{length_s} с бега» */}
+            <div className="flex items-center justify-between text-[10.5px] font-mono bg-[#05070a] px-3 py-1.5 rounded-lg border border-zinc-800/80 text-zinc-300">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping inline-block" />
+                <span className="text-rose-400 font-bold">REC</span>
+                <span className="text-zinc-500">·</span>
+                <span>Карта {status.map_id ?? '—'}</span>
               </div>
-
-              <div className="bg-[#05070a] border border-zinc-800/80 rounded-md py-1 px-1.5">
-                <div className="text-[9px] font-mono text-zinc-400 uppercase">Точек</div>
-                <div className="text-xs font-mono font-black text-cyan-300">
-                  {status.points?.length || 0}
-                </div>
-              </div>
-
-              <div className="bg-[#05070a] border border-zinc-800/80 rounded-md py-1 px-1.5">
-                <div className="text-[9px] font-mono text-zinc-400 uppercase">Длина</div>
-                <div className="text-xs font-mono font-black text-amber-300">
-                  {status.length_s} с
-                </div>
-              </div>
-
-              <div className="bg-[#05070a] border border-zinc-800/80 rounded-md py-1 px-1.5">
-                <div className="text-[9px] font-mono text-zinc-400 uppercase">Карта</div>
-                <div className="text-xs font-mono font-black text-zinc-300">
-                  {status.map_id ?? '—'}
-                </div>
+              <div className="flex items-center gap-2">
+                <span>Точек <strong className="text-cyan-300">{status.points?.length || 0}</strong></span>
+                <span className="text-zinc-500">·</span>
+                <span>{status.seconds} с</span>
+                <span className="text-zinc-500">·</span>
+                <span className="text-amber-300 font-bold">≈{status.length_s} с бега</span>
               </div>
             </div>
 
@@ -272,15 +276,21 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
               </div>
             )}
 
-            {/* Live Minimap View */}
-            <div className="h-44 w-full bg-[#05070b] border border-cyan-900/40 rounded-lg overflow-hidden relative shadow-inner">
+            {/* Canvas: full width, height ~220px */}
+            <div className="h-[220px] w-full bg-[#05070b] border border-cyan-900/40 rounded-lg overflow-hidden relative shadow-inner">
               <RouteCanvas
                 points={status.points || []}
+                mapId={status.map_id}
                 mode="live_record"
                 aspect={1.5}
                 loop={false}
               />
             </div>
+
+            {/* Caption below canvas */}
+            <p className="text-[9.5px] font-mono text-zinc-500 text-center select-none">
+              Запись идёт сама. Бот ничего не нажимает. Вернись к старту — получится круг.
+            </p>
 
             {/* Bottom Actions */}
             <div className="flex items-center justify-between pt-1 border-t border-zinc-800/60">
@@ -297,7 +307,7 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
               <button
                 type="button"
                 onClick={handleFinishAndSave}
-                disabled={isStopping || (status.points?.length || 0) < 3}
+                disabled={isStopping || (status.points?.length || 0) < 2}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-mono font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-black shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50 transition-all cursor-pointer active:scale-95"
               >
                 {isStopping ? (

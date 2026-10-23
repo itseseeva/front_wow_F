@@ -9,6 +9,25 @@ export interface BotStatusResponse {
   error?: string;
 }
 
+// Ответ get_map_image: картинка карты зоны WoW (та же, что карта мира в игре).
+// Координаты маршрута (доли 0..1) — это доли ЭТОЙ картинки: точка [x, y] лежит в пикселе (x * width, y * height).
+export interface MapImageResponse {
+  ok: boolean;
+  status: 'ready' | 'loading' | 'error';
+  image?: string;   // data:image/jpeg;base64,... — только при ready
+  width?: number;   // размер картинки в пикселях, обычно 1002×668
+  height?: number;
+  source?: string;  // откуда карта, например «Forever 1.60.1.70532» — показать мелко в углу
+  error?: string;   // при error — понятный текст для пользователя
+}
+
+// Событие wowbot:route-record-stopped (запись остановилась САМА) — в detail теперь есть причина:
+export interface RouteRecordStoppedDetail {
+  route: RouteInfo | null; // сохранённый маршрут или null, если не сохранён
+  error: string | null;    // почему не сохранён
+  reason: string;          // почему запись остановилась: «сменилась карта», «данных аддона нет 30 с», «20 минут»
+}
+
 // Точка маршрута — доли карты зоны WoW: x, y от 0 до 1, y растёт ВНИЗ (как на карте мира).
 export type RoutePoint = [number, number];
 
@@ -80,6 +99,9 @@ declare global {
         get_route_preview?(id: string): Promise<{ ok: boolean; error?: string; preview?: RoutePreview }>;
         delete_route?(id: string): Promise<{ ok: boolean; error?: string }>;
         set_active_route?(id: string | null): Promise<{ ok: boolean; error?: string }>;
+
+        // Map Image API
+        get_map_image?(map_id: number): Promise<MapImageResponse>;
       };
     };
   }

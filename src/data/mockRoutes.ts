@@ -1,4 +1,4 @@
-import { RouteInfo, RoutePoint, RoutePreview, RouteRecordStatus, RoutePath } from '../types';
+import { RouteInfo, RoutePoint, RoutePreview, RouteRecordStatus, RoutePath, MapImageResponse } from '../types';
 
 // Generate points along an ellipse
 const generateOvalPoints = (count: number, cx = 0.5, cy = 0.5, rx = 0.35, ry = 0.25): RoutePoint[] => {
@@ -147,7 +147,7 @@ export const mockGetRouteRecordStatus = async (): Promise<RouteRecordStatus> => 
 };
 
 // Mock stop_route_record(save)
-export const mockStopRouteRecord = async (save: boolean) => {
+export const mockStopRouteRecord = async (save: boolean): Promise<{ ok: boolean; error?: string; route?: RouteInfo }> => {
   if (!activeRecordSession) {
     return { ok: false, error: 'Запись не была запущена' };
   }
@@ -178,6 +178,15 @@ export const mockStopRouteRecord = async (save: boolean) => {
   saveStoredRoutes();
 
   return { ok: true, route: newRoute };
+};
+
+// Mock get_map_image(map_id) for browser development
+export const mockGetMapImage = async (_mapId: number): Promise<MapImageResponse> => {
+  return {
+    ok: false,
+    status: 'error',
+    error: 'нет связи с ботом (режим разработки)',
+  };
 };
 
 // Mock get_route_preview(id) with 3 paths and marks

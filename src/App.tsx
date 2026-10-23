@@ -4,7 +4,7 @@ import { ComboSequence } from './components/ComboSequence';
 import { SettingsView } from './components/SettingsView';
 import { RoutesView } from './components/RoutesView';
 import { SessionSummaryModal } from './components/SessionSummaryModal';
-import { SessionSummaryData, AppSettings } from './types';
+import { SessionSummaryData, AppSettings, RouteRecordStoppedDetail } from './types';
 import {
   Play,
   Square,
@@ -50,6 +50,21 @@ export const App: React.FC = () => {
   const [isStopping, setIsStopping] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Floating Toast Notifications (top right corner, 5s timeout, dismiss on click)
+  const [toasts, setToasts] = useState<{ id: string; type: 'success' | 'error' | 'info'; message: string }[]>([]);
+
+  const addToast = useCallback((toast: { type: 'success' | 'error' | 'info'; message: string }) => {
+    const id = `toast_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    setToasts((prev) => [...prev, { id, ...toast }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 5000);
+  }, []);
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
 
   // Theme & Language Settings
   const [theme, setTheme] = useState<Theme>(() => {
@@ -148,12 +163,19 @@ export const App: React.FC = () => {
   // Route record auto-stopped listener: "wowbot:route-record-stopped"
   useEffect(() => {
     const handleRouteStopped = (e: any) => {
-      const detail = e?.detail;
+      const detail: RouteRecordStoppedDetail = e?.detail;
       if (detail) {
+        const reason = detail.reason || 'авто';
         if (detail.route) {
-          setSuccessMessage(`Маршрут «${detail.route.name}» автоматически сохранён!`);
-        } else if (detail.error) {
-          setErrorMessage(detail.error);
+          addToast({
+            type: 'success',
+            message: `Запись остановилась сама (${reason}). Маршрут «${detail.route.name}» сохранён`,
+          });
+        } else {
+          addToast({
+            type: 'error',
+            message: `Запись остановилась (${reason}). ${detail.error || 'Маршрут не сохранён'}`,
+          });
         }
       }
     };
@@ -162,7 +184,7 @@ export const App: React.FC = () => {
     return () => {
       window.removeEventListener('wowbot:route-record-stopped', handleRouteStopped);
     };
-  }, []);
+  }, [addToast]);
 
   // 2) Status polling: sync bot running and chat_running from get_status()
   useEffect(() => {
@@ -630,13 +652,13 @@ export const App: React.FC = () => {
               onLanguageChange={setLanguage}
               theme={theme}
               onThemeChange={setTheme}
-              onToast={setSuccessMessage}
+              onToast={(msg) => addToast({ type: 'success', message: msg })}
             />
           ) : activeView === 'routes' ? (
             <RoutesView
               isBotRunning={isBotRunning}
-              onToast={setSuccessMessage}
-              onError={setErrorMessage}
+              onToast={addToast}
+              onError={(msg) => addToast({ type: 'error', message: msg })}
             />
           ) : (
             <ComboSequence
@@ -644,13 +666,40 @@ export const App: React.FC = () => {
               onChainsChange={setChains}
               activeCasting={activeCasting}
               isBotRunning={isBotRunning}
-              onToast={setSuccessMessage}
-              onError={setErrorMessage}
+              onToast={(msg) => addToast({ type: 'success', message: msg })}
+              onError={(msg) => addToast({ type: 'error', message: msg })}
               language={language}
               theme={theme}
             />
           )}
         </main>
+      </div>
+
+      {/* Floating Toast Notifications in top-right corner (5s auto-dismiss, click to dismiss) */}
+      <div className="fixed top-3 right-3 z-50 flex flex-col gap-1.5 max-w-sm pointer-events-none select-none">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            onClick={() => removeToast(toast.id)}
+            className={`px-3 py-2 rounded-lg border text-xs font-mono shadow-[0_0_20px_rgba(0,0,0,0.95)] cursor-pointer pointer-events-auto flex items-start gap-2 transition-transform active:scale-95 animate-fadeIn ${
+              toast.type === 'success'
+                ? 'bg-[#061810] border-emerald-500/70 text-emerald-200'
+                : toast.type === 'error'
+                ? 'bg-[#1a0a0f] border-rose-500/70 text-rose-200'
+                : 'bg-[#12141a] border-zinc-700/80 text-zinc-300'
+            }`}
+            title="Нажмите, чтобы закрыть"
+          >
+            {toast.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            ) : toast.type === 'error' ? (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
+            )}
+            <span className="leading-snug flex-1">{toast.message}</span>
+          </div>
+        ))}
       </div>
 
       {/* Session Summary Modal */}
