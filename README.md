@@ -1,4 +1,4 @@
-# EasyFarm — AI Bot Suite for Throne and Liberty
+# EasyFarm — AI Bot Suite for wow Forever
 
 Веб-приложение и интерактивный комплекс для разработки, конфигурации и тестирования бота для MMORPG **Throne and Liberty**.
 
