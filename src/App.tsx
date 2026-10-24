@@ -15,6 +15,8 @@ import {
   Settings,
   Layers,
   Compass,
+  Swords,
+  Pickaxe,
 } from 'lucide-react';
 import { Language, Theme, translations } from './utils/i18n';
 
@@ -80,19 +82,28 @@ export const App: React.FC = () => {
   // Active View: 'rotation' | 'routes' | 'settings'
   const [activeView, setActiveView] = useState<'rotation' | 'routes' | 'settings'>('rotation');
 
-  // App Settings (default previousTargetKey: 'H')
+  // Исходный объект settings из бэкенда (сохраняем неизвестные фронту поля)
+  const rawLoadedSettingsRef = useRef<Record<string, any>>({});
+
+  // App Settings (default previousTargetKey: 'H', mode: 'grind')
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('wowbot_settings');
+    let prevKey = 'H';
+    let mode: 'grind' | 'gather' = 'grind';
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        return {
-          previousTargetKey: parsed.previousTargetKey !== undefined ? parsed.previousTargetKey : 'H',
-        };
+        if (parsed.previousTargetKey !== undefined && typeof parsed.previousTargetKey === 'string') {
+          prevKey = parsed.previousTargetKey;
+        }
+        if (parsed.mode === 'grind' || parsed.mode === 'gather') {
+          mode = parsed.mode;
+        }
       } catch (e) {}
     }
     return {
-      previousTargetKey: 'H',
+      previousTargetKey: prevKey,
+      mode,
     };
   });
 
@@ -245,10 +256,19 @@ export const App: React.FC = () => {
           ]);
         }
 
-        if (cfg.settings && typeof cfg.settings.previousTargetKey === 'string') {
+        if (cfg.settings && typeof cfg.settings === 'object') {
+          rawLoadedSettingsRef.current = { ...cfg.settings };
+          const loadedMode = (cfg.settings.mode === 'grind' || cfg.settings.mode === 'gather')
+            ? cfg.settings.mode
+            : undefined;
+          const loadedPrevKey = typeof cfg.settings.previousTargetKey === 'string'
+            ? cfg.settings.previousTargetKey
+            : undefined;
+
           setSettings(curr => ({
             ...curr,
-            previousTargetKey: cfg.settings.previousTargetKey,
+            ...(loadedPrevKey !== undefined ? { previousTargetKey: loadedPrevKey } : {}),
+            ...(loadedMode !== undefined ? { mode: loadedMode } : {}),
           }));
         }
       }).catch((err) => {
@@ -285,12 +305,17 @@ export const App: React.FC = () => {
     localStorage.setItem('wowbot_rotation', JSON.stringify(chains));
   }, [chains]);
 
-  // Backend config format: {settings: {previousTargetKey}, chains: [{steps: [{key, castTimeSeconds, skillCooldownSeconds, repeatCount, independent, hpBelowPercent}]}]}
+  // Backend config format: {settings: {...rawLoadedSettings, previousTargetKey, mode}, chains: [{steps: [...]}]}
   const generateConfigObject = useCallback((customChains = chains, customSettings = settings) => {
     const mainChain = customChains[0] || { steps: [] };
+    const safeMode = (customSettings.mode === 'grind' || customSettings.mode === 'gather')
+      ? customSettings.mode
+      : 'grind';
     return {
       settings: {
+        ...rawLoadedSettingsRef.current,
         previousTargetKey: customSettings.previousTargetKey || 'H',
+        mode: safeMode,
       },
       chains: [
         {
@@ -309,6 +334,14 @@ export const App: React.FC = () => {
 
   // Backend Bridge: save_config(jsonString) autosave safeguard
   const saveCurrentConfigToBackend = async (customChains = chains, customSettings = settings) => {
+    const safeMode = (customSettings.mode === 'grind' || customSettings.mode === 'gather')
+      ? customSettings.mode
+      : 'grind';
+    rawLoadedSettingsRef.current = {
+      ...rawLoadedSettingsRef.current,
+      previousTargetKey: customSettings.previousTargetKey || 'H',
+      mode: safeMode,
+    };
     const configObj = generateConfigObject(customChains, customSettings);
     const configJson = JSON.stringify(configObj, null, 2);
     if (window.pywebview?.api?.save_config) {
@@ -321,6 +354,17 @@ export const App: React.FC = () => {
       localStorage.setItem('wowbot_rotation', JSON.stringify(customChains));
       localStorage.setItem('wowbot_settings', JSON.stringify(customSettings));
     }
+  };
+
+  // Переключение режима «Гринд» / «Сбор» с мгновенным сохранением в save_config
+  const handleModeChange = (newMode: 'grind' | 'gather') => {
+    if (isBotRunning || settings.mode === newMode) return;
+    const updatedSettings: AppSettings = {
+      ...settings,
+      mode: newMode,
+    };
+    setSettings(updatedSettings);
+    saveCurrentConfigToBackend(chains, updatedSettings);
   };
 
   // Автосохранение [chains] на диск с debounce ~600мс
@@ -485,14 +529,14 @@ export const App: React.FC = () => {
       {/* Window Card - Responsive and adapts fluidly to window enlargement/reduction */}
       <div
         id="app-window-card"
-        className={`w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl rounded-xl sm:rounded-2xl flex flex-col relative max-h-[99vh] sm:max-h-[96vh] my-auto transition-all duration-200 border ${
+        className={`w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl rounded-xl sm:rounded-2xl flex flex-col relative max-h-[99vh] sm:max-h-[96vh] my-auto transition-all duration-350 ease-[cubic-bezier(0.4,0,0.2,1)] border ${
           isDark
             ? 'bg-[#07070a] border-zinc-800/90 shadow-[0_0_50px_rgba(0,0,0,0.95),0_0_25px_rgba(255,255,255,0.03)]'
             : 'bg-white border-zinc-200/90 shadow-[0_10px_35px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.05)]'
         }`}
       >
         {/* Compact & Responsive Header matching image_ba356a08.png */}
-        <header className="px-2.5 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 rounded-t-xl sm:rounded-t-2xl shrink-0 border-b border-zinc-800/80 bg-[#06080d] transition-colors">
+        <header className="px-2.5 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 rounded-t-xl sm:rounded-t-2xl shrink-0 border-b border-zinc-800/80 bg-[#06080d] transition-colors flex-wrap sm:flex-nowrap">
           {/* Left: Animated Logo */}
           <div className="flex items-center shrink-0 pl-0.5 sm:pl-1">
             <span className="logo-shimmer font-mono text-sm sm:text-base font-black tracking-[0.2em] sm:tracking-[0.24em] uppercase select-none cursor-default text-cyan-400">
@@ -503,8 +547,9 @@ export const App: React.FC = () => {
             </span>
           </div>
 
-          {/* Center: Segmented Pill [ ⊞ Ротация ] [ 🧭 Маршруты ] */}
-          <div className="p-0.5 rounded-lg border border-cyan-900/60 bg-[#070b12] flex items-center shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]">
+          {/* Center: Single Continuous Segmented Control [ ⊞ Ротация ] [ 🧭 Маршруты ] [ ⚔️ Гринд ] [ ⛏️ Сбор ] */}
+          <div className="p-0.5 rounded-lg border border-cyan-900/60 bg-[#070b12] flex items-center shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] shrink-0">
+            {/* Ротация */}
             <button
               type="button"
               onClick={() => setActiveView('rotation')}
@@ -517,6 +562,8 @@ export const App: React.FC = () => {
               <Layers className="w-3.5 h-3.5 text-cyan-400" />
               <span>Ротация</span>
             </button>
+
+            {/* Маршруты */}
             <button
               type="button"
               onClick={() => setActiveView('routes')}
@@ -528,6 +575,42 @@ export const App: React.FC = () => {
             >
               <Compass className="w-3.5 h-3.5 text-cyan-400" />
               <span>Маршруты</span>
+            </button>
+
+            {/* Гринд */}
+            <button
+              type="button"
+              disabled={isBotRunning}
+              onClick={() => handleModeChange('grind')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-[10.5px] sm:text-[11px] font-mono font-bold tracking-wider transition-all duration-150 select-none ${
+                isBotRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-95'
+              } ${
+                settings.mode === 'grind'
+                  ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                  : 'text-zinc-400 hover:text-cyan-200 border border-transparent'
+              }`}
+              title={isBotRunning ? 'Режим применяется при старте' : undefined}
+            >
+              <Swords className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Гринд</span>
+            </button>
+
+            {/* Сбор */}
+            <button
+              type="button"
+              disabled={isBotRunning}
+              onClick={() => handleModeChange('gather')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-[10.5px] sm:text-[11px] font-mono font-bold tracking-wider transition-all duration-150 select-none ${
+                isBotRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-95'
+              } ${
+                settings.mode === 'gather'
+                  ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                  : 'text-zinc-400 hover:text-cyan-200 border border-transparent'
+              }`}
+              title={isBotRunning ? 'Режим применяется при старте' : undefined}
+            >
+              <Pickaxe className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Сбор</span>
             </button>
           </div>
 

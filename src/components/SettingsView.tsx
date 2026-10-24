@@ -276,6 +276,45 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     )}
                   </div>
                 </div>
+
+                {/* Bot Mode Setting Card */}
+                <div className="p-3 rounded-lg border border-zinc-800 bg-[#090d16] flex items-center justify-between gap-2 shadow-xs">
+                  <div>
+                    <h4 className="text-xs font-mono font-black text-zinc-100">
+                      Режим бота
+                    </h4>
+                    <p className="text-[9.5px] font-mono text-zinc-400 mt-0.5">
+                      {settings.mode === 'grind'
+                        ? 'Гринд — бой с мобами, руда и травы по дороге'
+                        : 'Сбор — только руда и травы, бой — если напали'}
+                    </p>
+                  </div>
+
+                  <div className="p-0.5 rounded-lg border border-cyan-900/60 bg-[#070b12] flex items-center shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]">
+                    <button
+                      type="button"
+                      onClick={() => onSettingsChange({ ...settings, mode: 'grind' })}
+                      className={`px-2.5 py-1 rounded-md text-[10.5px] font-mono font-bold tracking-wider transition-all duration-150 cursor-pointer select-none active:scale-95 ${
+                        settings.mode === 'grind'
+                          ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                          : 'text-zinc-400 hover:text-cyan-200 border border-transparent'
+                      }`}
+                    >
+                      Гринд
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSettingsChange({ ...settings, mode: 'gather' })}
+                      className={`px-2.5 py-1 rounded-md text-[10.5px] font-mono font-bold tracking-wider transition-all duration-150 cursor-pointer select-none active:scale-95 ${
+                        settings.mode === 'gather'
+                          ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                          : 'text-zinc-400 hover:text-cyan-200 border border-transparent'
+                      }`}
+                    >
+                      Сбор
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Hint Card */}

@@ -1,6 +1,8 @@
 export interface AppSettings {
   previousTargetKey: string;
+  mode: 'grind' | 'gather';
 }
+
 
 export interface BotStatusResponse {
   running: boolean;
