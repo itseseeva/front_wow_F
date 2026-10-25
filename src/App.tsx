@@ -4,7 +4,7 @@ import { ComboSequence } from './components/ComboSequence';
 import { SettingsView } from './components/SettingsView';
 import { RoutesView } from './components/RoutesView';
 import { SessionSummaryModal } from './components/SessionSummaryModal';
-import { SessionSummaryData, AppSettings, RouteRecordStoppedDetail } from './types';
+import { SessionSummaryData, AppSettings, RouteRecordStoppedDetail, ALLOWED_MINIMAP_ZOOM_KEYS } from './types';
 import {
   Play,
   Square,
@@ -85,11 +85,13 @@ export const App: React.FC = () => {
   // Исходный объект settings из бэкенда (сохраняем неизвестные фронту поля)
   const rawLoadedSettingsRef = useRef<Record<string, any>>({});
 
-  // App Settings (default previousTargetKey: 'H', mode: 'grind')
+  // App Settings (default previousTargetKey: 'H', mode: 'grind', minimapZoomInKey: 'PAGEUP', minimapZoomOutKey: 'PAGEDOWN')
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('wowbot_settings');
     let prevKey = 'H';
     let mode: 'grind' | 'gather' = 'grind';
+    let zoomIn = 'PAGEUP';
+    let zoomOut = 'PAGEDOWN';
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -99,11 +101,19 @@ export const App: React.FC = () => {
         if (parsed.mode === 'grind' || parsed.mode === 'gather') {
           mode = parsed.mode;
         }
+        if (typeof parsed.minimapZoomInKey === 'string') {
+          zoomIn = parsed.minimapZoomInKey;
+        }
+        if (typeof parsed.minimapZoomOutKey === 'string') {
+          zoomOut = parsed.minimapZoomOutKey;
+        }
       } catch (e) {}
     }
     return {
       previousTargetKey: prevKey,
       mode,
+      minimapZoomInKey: zoomIn,
+      minimapZoomOutKey: zoomOut,
     };
   });
 
@@ -264,11 +274,19 @@ export const App: React.FC = () => {
           const loadedPrevKey = typeof cfg.settings.previousTargetKey === 'string'
             ? cfg.settings.previousTargetKey
             : undefined;
+          const loadedZoomIn = typeof cfg.settings.minimapZoomInKey === 'string'
+            ? cfg.settings.minimapZoomInKey
+            : undefined;
+          const loadedZoomOut = typeof cfg.settings.minimapZoomOutKey === 'string'
+            ? cfg.settings.minimapZoomOutKey
+            : undefined;
 
           setSettings(curr => ({
             ...curr,
             ...(loadedPrevKey !== undefined ? { previousTargetKey: loadedPrevKey } : {}),
             ...(loadedMode !== undefined ? { mode: loadedMode } : {}),
+            ...(loadedZoomIn !== undefined ? { minimapZoomInKey: loadedZoomIn } : {}),
+            ...(loadedZoomOut !== undefined ? { minimapZoomOutKey: loadedZoomOut } : {}),
           }));
         }
       }).catch((err) => {
@@ -305,7 +323,7 @@ export const App: React.FC = () => {
     localStorage.setItem('wowbot_rotation', JSON.stringify(chains));
   }, [chains]);
 
-  // Backend config format: {settings: {...rawLoadedSettings, previousTargetKey, mode}, chains: [{steps: [...]}]}
+  // Backend config format: {settings: {...rawLoadedSettings, previousTargetKey, mode, minimapZoomInKey, minimapZoomOutKey}, chains: [{steps: [...]}]}
   const generateConfigObject = useCallback((customChains = chains, customSettings = settings) => {
     const mainChain = customChains[0] || { steps: [] };
     const safeMode = (customSettings.mode === 'grind' || customSettings.mode === 'gather')
@@ -316,6 +334,8 @@ export const App: React.FC = () => {
         ...rawLoadedSettingsRef.current,
         previousTargetKey: customSettings.previousTargetKey || 'H',
         mode: safeMode,
+        minimapZoomInKey: customSettings.minimapZoomInKey !== undefined ? customSettings.minimapZoomInKey : 'PAGEUP',
+        minimapZoomOutKey: customSettings.minimapZoomOutKey !== undefined ? customSettings.minimapZoomOutKey : 'PAGEDOWN',
       },
       chains: [
         {
@@ -341,6 +361,8 @@ export const App: React.FC = () => {
       ...rawLoadedSettingsRef.current,
       previousTargetKey: customSettings.previousTargetKey || 'H',
       mode: safeMode,
+      minimapZoomInKey: customSettings.minimapZoomInKey !== undefined ? customSettings.minimapZoomInKey : 'PAGEUP',
+      minimapZoomOutKey: customSettings.minimapZoomOutKey !== undefined ? customSettings.minimapZoomOutKey : 'PAGEDOWN',
     };
     const configObj = generateConfigObject(customChains, customSettings);
     const configJson = JSON.stringify(configObj, null, 2);

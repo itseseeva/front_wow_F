@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan to achieve 60 FPS buttery smooth route deletion animation and seamless container height transitions, eliminating layout thrashing and heavy blur filters.",
-  "updatedAt":  "2026-10-23T21:46:30.036069427Z",
+  "summary":  "План внедрения кинематографичной 60 FPS анимации переключения экранов («Сборка блоков с размытием и масштабом» длительностью 450 мс) между вкладками «Ротация», «Маршруты» и «Настройки».",
+  "updatedAt":  "2026-10-25T01:24:57.415146010Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

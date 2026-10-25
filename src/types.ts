@@ -1,6 +1,27 @@
+export const ALLOWED_MINIMAP_ZOOM_KEYS = [
+  '',
+  'PAGEUP',
+  'PAGEDOWN',
+  'HOME',
+  'END',
+  'INSERT',
+  'DELETE',
+  'F6',
+  'F7',
+  'F8',
+  'F9',
+  'F10',
+  'F11',
+  'F12',
+] as const;
+
+export type MinimapZoomKey = typeof ALLOWED_MINIMAP_ZOOM_KEYS[number];
+
 export interface AppSettings {
   previousTargetKey: string;
   mode: 'grind' | 'gather';
+  minimapZoomInKey: string;
+  minimapZoomOutKey: string;
 }
 
 

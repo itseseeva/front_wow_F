@@ -123,6 +123,70 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
+  const [zoomConflictError, setZoomConflictError] = useState<string | null>(null);
+
+  const handleZoomKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    setter: (keyName: string) => void
+  ) => {
+    if (['Tab', 'Escape', 'Enter'].includes(e.key)) return;
+    if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
+
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      return; // allow normal deletion
+    }
+
+    let keyName = '';
+    if (e.key === 'PageUp') keyName = 'PAGEUP';
+    else if (e.key === 'PageDown') keyName = 'PAGEDOWN';
+    else if (e.key === 'Home') keyName = 'HOME';
+    else if (e.key === 'End') keyName = 'END';
+    else if (e.key === 'Insert') keyName = 'INSERT';
+    else if (e.key === 'ArrowUp') keyName = 'UP';
+    else if (e.key === 'ArrowDown') keyName = 'DOWN';
+    else if (e.key === 'ArrowLeft') keyName = 'LEFT';
+    else if (e.key === 'ArrowRight') keyName = 'RIGHT';
+    else if (/^F([1-9]|1[0-2])$/i.test(e.key)) keyName = e.key.toUpperCase();
+    else if (e.code.startsWith('Key')) keyName = e.code.replace('Key', '').toUpperCase();
+    else if (e.code.startsWith('Digit')) keyName = e.code.replace('Digit', '');
+    else if (e.code.startsWith('Numpad')) keyName = 'NUM' + e.code.replace('Numpad', '').toUpperCase();
+    else if (e.key === ' ' || e.code === 'Space') keyName = 'SPACE';
+    else if (e.key.length === 1) keyName = e.key.toUpperCase();
+
+    if (keyName) {
+      e.preventDefault();
+      setter(keyName);
+    }
+  };
+
+  const handleZoomInChange = (rawKey: string) => {
+    const newKey = rawKey.toUpperCase().trim();
+    if (newKey !== '' && newKey === (settings.minimapZoomOutKey || '').toUpperCase().trim()) {
+      setZoomConflictError(t.minimapZoomConflictError);
+      if (onToast) onToast(t.minimapZoomConflictError);
+      return;
+    }
+    setZoomConflictError(null);
+    onSettingsChange({
+      ...settings,
+      minimapZoomInKey: newKey,
+    });
+  };
+
+  const handleZoomOutChange = (rawKey: string) => {
+    const newKey = rawKey.toUpperCase().trim();
+    if (newKey !== '' && newKey === (settings.minimapZoomInKey || '').toUpperCase().trim()) {
+      setZoomConflictError(t.minimapZoomConflictError);
+      if (onToast) onToast(t.minimapZoomConflictError);
+      return;
+    }
+    setZoomConflictError(null);
+    onSettingsChange({
+      ...settings,
+      minimapZoomOutKey: newKey,
+    });
+  };
+
   const categories: { id: SettingCategory; title: string; subtitle: string; icon: React.ReactNode }[] = [
     {
       id: 'target',
@@ -275,6 +339,86 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       </button>
                     )}
                   </div>
+                </div>
+
+                {/* Minimap Zoom Block */}
+                <div className="p-3 rounded-lg border border-zinc-800 bg-[#090d16] flex flex-col gap-2 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-mono font-black text-zinc-100">
+                        {t.minimapZoomTitle}
+                      </h4>
+                      <p className="text-[9.5px] font-mono text-zinc-400 mt-0.5">
+                        {t.minimapZoomInLabel} / {t.minimapZoomOutLabel}
+                      </p>
+                    </div>
+                    {zoomConflictError && (
+                      <span className="text-[10px] font-mono text-rose-400 font-bold animate-pulse text-right max-w-[200px]">
+                        {zoomConflictError}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                    {/* Zoom In Input */}
+                    <div className="flex items-center justify-between gap-2 p-2 rounded-md bg-[#070b12] border border-zinc-800/80">
+                      <label className="text-[10px] sm:text-[10.5px] font-mono text-zinc-300 font-bold whitespace-nowrap">
+                        {t.minimapZoomInLabel}
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={settings.minimapZoomInKey ?? ''}
+                          onChange={(e) => handleZoomInChange(e.target.value)}
+                          onKeyDown={(e) => handleZoomKeyDown(e, handleZoomInChange)}
+                          placeholder=""
+                          className="w-24 sm:w-28 bg-[#0b101b] text-cyan-300 border border-cyan-900/70 hover:border-cyan-400 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 rounded px-2 py-1 text-xs font-mono font-black outline-none transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)] text-center uppercase"
+                        />
+                        {settings.minimapZoomInKey && (
+                          <button
+                            type="button"
+                            onClick={() => handleZoomInChange('')}
+                            className="w-6 h-6 rounded border border-zinc-800 bg-[#070b12] text-zinc-500 hover:text-rose-400 flex items-center justify-center transition-colors cursor-pointer"
+                            title="Очистить"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Zoom Out Input */}
+                    <div className="flex items-center justify-between gap-2 p-2 rounded-md bg-[#070b12] border border-zinc-800/80">
+                      <label className="text-[10px] sm:text-[10.5px] font-mono text-zinc-300 font-bold whitespace-nowrap">
+                        {t.minimapZoomOutLabel}
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={settings.minimapZoomOutKey ?? ''}
+                          onChange={(e) => handleZoomOutChange(e.target.value)}
+                          onKeyDown={(e) => handleZoomKeyDown(e, handleZoomOutChange)}
+                          placeholder=""
+                          className="w-24 sm:w-28 bg-[#0b101b] text-cyan-300 border border-cyan-900/70 hover:border-cyan-400 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 rounded px-2 py-1 text-xs font-mono font-black outline-none transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)] text-center uppercase"
+                        />
+                        {settings.minimapZoomOutKey && (
+                          <button
+                            type="button"
+                            onClick={() => handleZoomOutChange('')}
+                            className="w-6 h-6 rounded border border-zinc-800 bg-[#070b12] text-zinc-500 hover:text-rose-400 flex items-center justify-center transition-colors cursor-pointer"
+                            title="Очистить"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Подсказка мелким текстом под блоком */}
+                  <p className="text-[9.5px] font-mono text-zinc-400 leading-relaxed border-t border-zinc-800/60 pt-2 mt-0.5">
+                    {t.minimapZoomHint}
+                  </p>
                 </div>
 
                 {/* Bot Mode Setting Card */}
