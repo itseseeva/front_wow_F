@@ -4,7 +4,14 @@ import { ComboSequence } from './components/ComboSequence';
 import { SettingsView } from './components/SettingsView';
 import { RoutesView } from './components/RoutesView';
 import { SessionSummaryModal } from './components/SessionSummaryModal';
-import { SessionSummaryData, AppSettings, RouteRecordStoppedDetail, ALLOWED_MINIMAP_ZOOM_KEYS } from './types';
+import { TerrainNotificationCard } from './components/TerrainNotificationCard';
+import {
+  SessionSummaryData,
+  AppSettings,
+  RouteRecordStoppedDetail,
+  ALLOWED_MINIMAP_ZOOM_KEYS,
+  TerrainStatus,
+} from './types';
 import {
   Play,
   Square,
@@ -67,6 +74,44 @@ export const App: React.FC = () => {
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
+
+  // Terrain mesh generation notifications (deduplicated by map_id)
+  const [terrainCards, setTerrainCards] = useState<
+    Record<number, { routeName: string; initialTerrain: TerrainStatus }>
+  >({});
+
+  const handleTerrainResponse = useCallback(
+    (routeName: string, terrain: TerrainStatus) => {
+      if (terrain.status === 'ready') {
+        addToast({
+          type: 'success',
+          message: 'Сетка местности зоны готова',
+        });
+        setTerrainCards((prev) => {
+          const next = { ...prev };
+          delete next[terrain.map_id];
+          return next;
+        });
+      } else if (terrain.status === 'error') {
+        addToast({
+          type: 'error',
+          message: `${terrain.error || 'Ошибка сборки сетки'}. Бот будет ходить без сетки; панель попробует снова при следующей записи.`,
+        });
+        setTerrainCards((prev) => {
+          const next = { ...prev };
+          delete next[terrain.map_id];
+          return next;
+        });
+      } else if (terrain.status === 'building') {
+        // Show non-auto-dismissing card (one per map_id)
+        setTerrainCards((prev) => ({
+          ...prev,
+          [terrain.map_id]: { routeName, initialTerrain: terrain },
+        }));
+      }
+    },
+    [addToast]
+  );
 
   // Theme & Language Settings
   const [theme, setTheme] = useState<Theme>(() => {
@@ -192,6 +237,9 @@ export const App: React.FC = () => {
             type: 'success',
             message: `Запись остановилась сама (${reason}). Маршрут «${detail.route.name}» сохранён`,
           });
+          if (detail.terrain) {
+            handleTerrainResponse(detail.route.name, detail.terrain);
+          }
         } else {
           addToast({
             type: 'error',
@@ -205,7 +253,7 @@ export const App: React.FC = () => {
     return () => {
       window.removeEventListener('wowbot:route-record-stopped', handleRouteStopped);
     };
-  }, [addToast]);
+  }, [addToast, handleTerrainResponse]);
 
   // 2) Status polling: sync bot running and chat_running from get_status()
   useEffect(() => {
@@ -577,7 +625,7 @@ export const App: React.FC = () => {
               onClick={() => setActiveView('rotation')}
               className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-[10.5px] sm:text-[11px] font-mono font-bold tracking-wider transition-all duration-150 cursor-pointer select-none active:scale-95 ${
                 activeView === 'rotation'
-                  ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                  ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black tab-active-glow'
                   : 'text-zinc-400 hover:text-cyan-200 border border-transparent'
               }`}
             >
@@ -591,7 +639,7 @@ export const App: React.FC = () => {
               onClick={() => setActiveView('routes')}
               className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-[10.5px] sm:text-[11px] font-mono font-bold tracking-wider transition-all duration-150 cursor-pointer select-none active:scale-95 ${
                 activeView === 'routes'
-                  ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                  ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black tab-active-glow'
                   : 'text-zinc-400 hover:text-cyan-200 border border-transparent'
               }`}
             >
@@ -696,7 +744,7 @@ export const App: React.FC = () => {
               onClick={() => setActiveView((curr) => (curr === 'settings' ? 'rotation' : 'settings'))}
               className={`w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer select-none active:scale-95 ${
                 activeView === 'settings'
-                  ? 'bg-[#0c1626] border-cyan-400 text-cyan-200 shadow-[0_0_14px_rgba(6,182,212,0.7)] ring-1 ring-cyan-400'
+                  ? 'bg-[#0c1626] border-cyan-400 text-cyan-200 shadow-[0_0_14px_rgba(6,182,212,0.7)] ring-1 ring-cyan-400 tab-active-glow'
                   : 'bg-[#070b12] border-cyan-900/60 hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
               }`}
               title={t.settings}
@@ -742,46 +790,72 @@ export const App: React.FC = () => {
         )}
 
         {/* Main Content: Rotation Sequence OR Routes View OR Settings View */}
-        <main className="p-2 sm:p-3 w-full flex flex-col overflow-y-auto min-h-0 flex-1">
-          {activeView === 'settings' ? (
-            <SettingsView
-              settings={settings}
-              onSettingsChange={(newSettings) => {
-                setSettings(newSettings);
-                saveCurrentConfigToBackend(chains, newSettings);
-              }}
-              onBack={() => setActiveView('rotation')}
-              onNavigateToRoutes={() => setActiveView('routes')}
-              onExportJson={handleExportJson}
-              language={language}
-              onLanguageChange={setLanguage}
-              theme={theme}
-              onThemeChange={setTheme}
-              onToast={(msg) => addToast({ type: 'success', message: msg })}
-            />
-          ) : activeView === 'routes' ? (
-            <RoutesView
-              isBotRunning={isBotRunning}
-              onToast={addToast}
-              onError={(msg) => addToast({ type: 'error', message: msg })}
-            />
-          ) : (
-            <ComboSequence
-              chains={chains}
-              onChainsChange={setChains}
-              activeCasting={activeCasting}
-              isBotRunning={isBotRunning}
-              onToast={(msg) => addToast({ type: 'success', message: msg })}
-              onError={(msg) => addToast({ type: 'error', message: msg })}
-              language={language}
-              theme={theme}
-            />
-          )}
+        <main className="p-2 sm:p-3 w-full flex flex-col overflow-y-auto min-h-0 flex-1 relative">
+          <div
+            key={activeView}
+            className="animate-screen-assemble stagger-assemble w-full flex flex-col flex-1"
+          >
+            {activeView === 'settings' ? (
+              <SettingsView
+                settings={settings}
+                onSettingsChange={(newSettings) => {
+                  setSettings(newSettings);
+                  saveCurrentConfigToBackend(chains, newSettings);
+                }}
+                onBack={() => setActiveView('rotation')}
+                onNavigateToRoutes={() => setActiveView('routes')}
+                onExportJson={handleExportJson}
+                language={language}
+                onLanguageChange={setLanguage}
+                theme={theme}
+                onThemeChange={setTheme}
+                onToast={(msg) => addToast({ type: 'success', message: msg })}
+              />
+            ) : activeView === 'routes' ? (
+              <RoutesView
+                isBotRunning={isBotRunning}
+                onToast={addToast}
+                onError={(msg) => addToast({ type: 'error', message: msg })}
+                onTerrainStatus={handleTerrainResponse}
+              />
+            ) : (
+              <ComboSequence
+                chains={chains}
+                onChainsChange={setChains}
+                activeCasting={activeCasting}
+                isBotRunning={isBotRunning}
+                onToast={(msg) => addToast({ type: 'success', message: msg })}
+                onError={(msg) => addToast({ type: 'error', message: msg })}
+                language={language}
+                theme={theme}
+              />
+            )}
+          </div>
         </main>
       </div>
 
-      {/* Floating Toast Notifications in top-right corner (5s auto-dismiss, click to dismiss) */}
-      <div className="fixed top-3 right-3 z-50 flex flex-col gap-1.5 max-w-sm pointer-events-none select-none">
+      {/* Floating Notifications & Terrain Building Cards in top-right corner */}
+      <div className="fixed top-3 right-3 z-50 flex flex-col gap-2 max-w-sm pointer-events-none select-none">
+        {/* Terrain Building Status Cards (Non-dismissing automatically while building, deduplicated by map_id) */}
+        {Object.entries(terrainCards).map(([mapIdStr, item]) => {
+          const mapId = Number(mapIdStr);
+          return (
+            <TerrainNotificationCard
+              key={`terrain_${mapId}`}
+              routeName={item.routeName}
+              initialTerrain={item.initialTerrain}
+              onClose={() => {
+                setTerrainCards((prev) => {
+                  const next = { ...prev };
+                  delete next[mapId];
+                  return next;
+                });
+              }}
+            />
+          );
+        })}
+
+        {/* Regular Toast Notifications (5s auto-dismiss, click to dismiss) */}
         {toasts.map((toast) => (
           <div
             key={toast.id}

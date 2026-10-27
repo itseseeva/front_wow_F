@@ -1,4 +1,4 @@
-import { RouteInfo, RoutePoint, RoutePreview, RouteRecordStatus, RoutePath, MapImageResponse } from '../types';
+import { RouteInfo, RoutePoint, RoutePreview, RouteRecordStatus, RoutePath, MapImageResponse, TerrainStatus } from '../types';
 
 // Generate points along an ellipse
 const generateOvalPoints = (count: number, cx = 0.5, cy = 0.5, rx = 0.35, ry = 0.25): RoutePoint[] => {
@@ -147,7 +147,9 @@ export const mockGetRouteRecordStatus = async (): Promise<RouteRecordStatus> => 
 };
 
 // Mock stop_route_record(save)
-export const mockStopRouteRecord = async (save: boolean): Promise<{ ok: boolean; error?: string; route?: RouteInfo }> => {
+export const mockStopRouteRecord = async (
+  save: boolean
+): Promise<{ ok: boolean; error?: string; route?: RouteInfo; terrain?: TerrainStatus | null }> => {
   if (!activeRecordSession) {
     return { ok: false, error: 'Запись не была запущена' };
   }
@@ -177,7 +179,115 @@ export const mockStopRouteRecord = async (save: boolean): Promise<{ ok: boolean;
   storedRoutes.unshift(newRoute);
   saveStoredRoutes();
 
-  return { ok: true, route: newRoute };
+  const map_id = newRoute.map_id ?? 1436;
+  mockTerrainSessions[map_id] = { startedAt: Date.now() };
+
+  const initialTerrain: TerrainStatus = {
+    map_id,
+    status: 'building',
+    stage: 'tiles',
+    done: 0,
+    total: 24,
+    progress: 0,
+    elapsed_s: 0,
+    eta_s: 40,
+    error: null,
+    source: null,
+  };
+
+  return { ok: true, route: newRoute, terrain: initialTerrain };
+};
+
+// In-memory mock sessions for terrain building simulation (~40s)
+const mockTerrainSessions: Record<number, { startedAt: number; finishedEventFired?: boolean }> = {};
+
+export const mockGetTerrainStatus = async (
+  map_id: number
+): Promise<{ ok: boolean; error?: string } & Partial<TerrainStatus>> => {
+  let session = mockTerrainSessions[map_id];
+  if (!session) {
+    session = { startedAt: Date.now() };
+    mockTerrainSessions[map_id] = session;
+  }
+
+  const elapsed_s = Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000));
+  const total_s = 40;
+
+  if (elapsed_s < 4) {
+    // tiles 0..24 during first 4 s
+    const done = Math.min(24, Math.floor((elapsed_s / 4) * 24));
+    return {
+      ok: true,
+      map_id,
+      status: 'building',
+      stage: 'tiles',
+      done,
+      total: 24,
+      progress: Number((elapsed_s / total_s).toFixed(2)),
+      elapsed_s,
+      eta_s: Math.max(1, total_s - elapsed_s),
+      source: null,
+    };
+  } else if (elapsed_s < 36) {
+    // models 0..700 up to 36 s (32s window)
+    const modelSec = elapsed_s - 4;
+    const done = Math.min(700, Math.floor((modelSec / 32) * 700));
+    return {
+      ok: true,
+      map_id,
+      status: 'building',
+      stage: 'models',
+      done,
+      total: 700,
+      progress: Number((elapsed_s / total_s).toFixed(2)),
+      elapsed_s,
+      eta_s: Math.max(1, total_s - elapsed_s),
+      source: null,
+    };
+  } else if (elapsed_s < 40) {
+    // grid up to 40 s (4s window)
+    const gridSec = elapsed_s - 36;
+    const done = Math.min(100, Math.floor((gridSec / 4) * 100));
+    return {
+      ok: true,
+      map_id,
+      status: 'building',
+      stage: 'grid',
+      done,
+      total: 100,
+      progress: Number((elapsed_s / total_s).toFixed(2)),
+      elapsed_s,
+      eta_s: Math.max(1, total_s - elapsed_s),
+      source: null,
+    };
+  } else {
+    // ready with source «Retail (мок)»
+    const readyStatus: TerrainStatus = {
+      map_id,
+      status: 'ready',
+      stage: null,
+      done: 100,
+      total: 100,
+      progress: 1,
+      elapsed_s,
+      eta_s: 0,
+      error: null,
+      source: 'Retail (мок)',
+    };
+
+    if (!session.finishedEventFired && typeof window !== 'undefined') {
+      session.finishedEventFired = true;
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('wowbot:terrain-status', { detail: readyStatus }));
+      }, 0);
+    }
+
+    const { error: _err, ...readyFields } = readyStatus;
+    return {
+      ok: true,
+      ...readyFields,
+    };
+  }
 };
 
 // Mock get_map_image(map_id) for browser development

@@ -32,6 +32,19 @@ export interface BotStatusResponse {
   error?: string;
 }
 
+export interface TerrainStatus {
+  map_id: number;
+  status: 'ready' | 'building' | 'error' | 'none';
+  stage: 'tiles' | 'models' | 'grid' | null; // tiles — «Скачиваю карту зоны», models — «Скачиваю деревья и дома», grid — «Строю сетку»
+  done: number;            // сделано на этапе (например 120)
+  total: number;           // всего на этапе (например 765)
+  progress: number;        // 0..1 — общая доля, для полоски
+  elapsed_s: number | null;
+  eta_s: number | null;    // сколько примерно осталось, с; null — «оцениваю…»
+  error: string | null;    // при status='error' — текст для пользователя
+  source: string | null;   // при ready — например «Retail 12.1.5.70575», показать мелко
+}
+
 // Ответ get_map_image: картинка карты зоны WoW (та же, что карта мира в игре).
 // Координаты маршрута (доли 0..1) — это доли ЭТОЙ картинки: точка [x, y] лежит в пикселе (x * width, y * height).
 export interface MapImageResponse {
@@ -44,11 +57,12 @@ export interface MapImageResponse {
   error?: string;   // при error — понятный текст для пользователя
 }
 
-// Событие wowbot:route-record-stopped (запись остановилась САМА) — в detail теперь есть причина:
+// Событие wowbot:route-record-stopped (запись остановилась САМА) — в detail теперь есть причина и terrain:
 export interface RouteRecordStoppedDetail {
   route: RouteInfo | null; // сохранённый маршрут или null, если не сохранён
   error: string | null;    // почему не сохранён
   reason: string;          // почему запись остановилась: «сменилась карта», «данных аддона нет 30 с», «20 минут»
+  terrain?: TerrainStatus | null;
 }
 
 // Точка маршрута — доли карты зоны WoW: x, y от 0 до 1, y растёт ВНИЗ (как на карте мира).
@@ -116,15 +130,16 @@ declare global {
 
         // Routes API
         start_route_record?(name: string): Promise<{ ok: boolean; error?: string }>;
-        stop_route_record?(save: boolean): Promise<{ ok: boolean; error?: string; route?: RouteInfo }>;
+        stop_route_record?(save: boolean): Promise<{ ok: boolean; error?: string; route?: RouteInfo; terrain?: TerrainStatus | null }>;
         get_route_record_status?(): Promise<RouteRecordStatus>;
         list_routes?(): Promise<{ ok: boolean; error?: string; routes: RouteInfo[]; active_id: string | null }>;
         get_route_preview?(id: string): Promise<{ ok: boolean; error?: string; preview?: RoutePreview }>;
         delete_route?(id: string): Promise<{ ok: boolean; error?: string }>;
         set_active_route?(id: string | null): Promise<{ ok: boolean; error?: string }>;
 
-        // Map Image API
+        // Map Image & Terrain API
         get_map_image?(map_id: number): Promise<MapImageResponse>;
+        get_terrain_status?(map_id: number): Promise<{ ok: boolean; error?: string } & Partial<TerrainStatus>>;
       };
     };
   }

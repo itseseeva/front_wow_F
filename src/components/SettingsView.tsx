@@ -286,7 +286,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {/* Right Column: Active Category Content */}
-        <div className="flex-1 border border-zinc-800/80 rounded-xl bg-[#06080d] p-3 flex flex-col justify-between overflow-y-auto">
+        <div className="flex-1 border border-zinc-800/80 rounded-xl bg-[#06080d] p-3 flex flex-col justify-between overflow-y-auto relative">
+          <div key={activeCategory} className="animate-screen-assemble stagger-assemble flex-1 flex flex-col justify-between">
           {activeCategory === 'target' && (
             <div className="space-y-3 flex flex-col h-full justify-between">
               <div>
@@ -632,6 +633,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

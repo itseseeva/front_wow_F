@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { RouteInfo, RouteRecordStatus } from '../types';
+import { RouteInfo, RouteRecordStatus, TerrainStatus } from '../types';
 import { RouteCanvas } from './RouteCanvas';
 import { getPywebviewApi } from '../utils/pywebviewBridge';
 import {
@@ -12,7 +12,7 @@ import { Radio, AlertTriangle, Square, Check, X, Loader2 } from 'lucide-react';
 interface RouteRecordModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onRouteSaved: (route: RouteInfo) => void;
+  onRouteSaved: (route: RouteInfo, terrain?: TerrainStatus | null) => void;
   onToast: (toast: { type: 'success' | 'error' | 'info'; message: string }) => void;
 }
 
@@ -142,7 +142,7 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
           type: 'success',
           message: `Маршрут «${res.route.name}» сохранён: ${res.route.points} точек, ${routeType}, ≈${res.route.length_s} с бега`,
         });
-        onRouteSaved(res.route);
+        onRouteSaved(res.route, res.terrain);
         onClose();
       } else {
         onToast({

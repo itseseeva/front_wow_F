@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RouteInfo } from '../types';
+import { RouteInfo, TerrainStatus } from '../types';
 import { RouteCanvas } from './RouteCanvas';
 import { RouteRecordModal } from './RouteRecordModal';
 import { RoutePreviewModal } from './RoutePreviewModal';
@@ -23,12 +23,14 @@ interface RoutesViewProps {
   isBotRunning: boolean;
   onToast: (toast: { type: 'success' | 'error' | 'info'; message: string }) => void;
   onError: (msg: string) => void;
+  onTerrainStatus?: (routeName: string, terrain: TerrainStatus) => void;
 }
 
 export const RoutesView: React.FC<RoutesViewProps> = ({
   isBotRunning,
   onToast,
   onError,
+  onTerrainStatus,
 }) => {
   const [routes, setRoutes] = useState<RouteInfo[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -140,7 +142,7 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 w-full animate-fadeIn select-none">
+    <div className="flex-1 flex flex-col min-h-0 w-full select-none">
       {/* Top action bar */}
       <div className="flex items-center justify-between pb-2 mb-2 border-b border-zinc-800/60 shrink-0">
         <div className="flex items-center gap-1.5">
@@ -339,8 +341,11 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
       <RouteRecordModal
         isOpen={isRecordModalOpen}
         onClose={() => setIsRecordModalOpen(false)}
-        onRouteSaved={(newRoute) => {
+        onRouteSaved={(newRoute, terrain) => {
           fetchRoutes();
+          if (terrain && onTerrainStatus) {
+            onTerrainStatus(newRoute.name, terrain);
+          }
         }}
         onToast={onToast}
       />
