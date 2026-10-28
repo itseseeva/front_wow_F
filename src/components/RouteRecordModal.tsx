@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RouteInfo, RouteRecordStatus, TerrainStatus } from '../types';
-import { RouteCanvas } from './RouteCanvas';
+import { ThreeRouteRecordView } from './ThreeRouteRecordView';
+import { ThreeWaypointOrb } from './ThreeWaypointOrb';
 import { getPywebviewApi } from '../utils/pywebviewBridge';
 import {
   mockStartRouteRecord,
   mockStopRouteRecord,
   mockGetRouteRecordStatus,
 } from '../data/mockRoutes';
-import { Radio, AlertTriangle, Check, X, Loader2, Play } from 'lucide-react';
+import { AlertTriangle, Check, X, Loader2, Play, Footprints, Clock } from 'lucide-react';
 
 interface RouteRecordModalProps {
   isOpen: boolean;
@@ -142,7 +143,7 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
       } else {
         onToast({
           type: 'error',
-          message: `Маршрут не сохранён: ${res.error || 'маршрут слишком короткий'}`,
+          message: `Маршрут не сохранён: ${res.error || 'слишком короткий'}`,
         });
         setStatus(null);
         onClose();
@@ -177,72 +178,67 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-3 bg-black/80 backdrop-blur-xs animate-fadeIn select-none">
-      {/* Ultra-compact Cyber Capsule */}
-      <div className="w-full max-w-[340px] bg-[#06080d]/98 border border-cyan-500/40 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.98),0_0_25px_rgba(6,182,212,0.18)] overflow-hidden flex flex-col text-zinc-200 animate-screen-assemble relative">
-        {/* Top Animated Neon Accent Line */}
-        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-80" />
+  // Format seconds to mm:ss
+  const formatTimer = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
 
-        {/* Header */}
-        <div className="px-3 py-2.5 bg-[#04060a] border-b border-zinc-800/80 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            {status?.recording ? (
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-90" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,1)]" />
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-3 bg-black/80 backdrop-blur-xs animate-fadeIn select-none overflow-y-auto">
+      {/* =========================================================================
+          State 1: Before Recording Starts — Compact 3D Rectangular Strip
+         ========================================================================= */}
+      {!status?.recording ? (
+        <div className="w-[94%] max-w-[400px] sm:max-w-[420px] bg-[#040812]/98 border border-cyan-500/40 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.98),0_0_20px_rgba(6,182,212,0.18)] overflow-hidden flex flex-col text-zinc-200 animate-screen-assemble relative my-auto">
+          {/* Top Neon Glow Line */}
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-85 shadow-[0_0_8px_#22d3ee]" />
+
+          {/* Minimalist Header with 3D Holographic Waypoint Orb */}
+          <div className="px-3 py-1.5 bg-[#02050a] border-b border-zinc-800/80 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-1.5">
+              <ThreeWaypointOrb className="w-6 h-6" />
+              <span className="text-[11px] font-mono font-black uppercase tracking-wider text-zinc-100">
+                Запись маршрута
               </span>
-            ) : (
-              <Radio className="w-3.5 h-3.5 text-cyan-400" />
-            )}
-            <span className="text-[11px] font-mono font-black uppercase tracking-wider text-zinc-100">
-              {status?.recording ? 'Запись пути' : 'Новый маршрут'}
-            </span>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="w-5 h-5 rounded-md flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              title="Закрыть"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
 
-          <button
-            onClick={status?.recording ? handleCancelRecord : onClose}
-            className="w-5 h-5 rounded-md flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors cursor-pointer"
-            title="Закрыть"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* State 1: Before Recording Starts */}
-        {!status?.recording ? (
-          <form onSubmit={handleStart} className="p-3.5 space-y-3">
-            <div>
+          {/* Minimalist Horizontal Bar Layout: Input + Actions in a single sleek row */}
+          <form onSubmit={handleStart} className="p-2.5 flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5">
               <input
                 type="text"
                 value={routeName}
                 onChange={(e) => setRouteName(e.target.value)}
-                placeholder="Имя маршрута (напр. Маршрут 1)"
+                placeholder="Имя маршрута (напр. Круг 1)"
                 maxLength={40}
                 autoFocus
                 required
-                className="w-full h-9 px-3 bg-[#030508] border border-cyan-900/50 focus:border-cyan-400 rounded-xl text-xs font-mono text-cyan-200 placeholder-zinc-600 focus:outline-hidden focus:ring-1 focus:ring-cyan-400/40 transition-all shadow-inner"
+                className="flex-1 min-w-0 h-8 px-2.5 bg-[#020408] border border-cyan-900/60 focus:border-cyan-400 rounded-xl text-xs font-mono text-cyan-200 placeholder-zinc-600 focus:outline-hidden focus:ring-1 focus:ring-cyan-400/40 transition-all shadow-inner"
               />
-            </div>
 
-            {/* Micro hint */}
-            <p className="text-[10px] font-mono text-zinc-400 text-center leading-tight">
-              Пробегите круг в игре — бот запишет координаты сам
-            </p>
-
-            {/* Action buttons */}
-            <div className="flex items-center gap-2 pt-1">
               <button
                 type="button"
                 onClick={onClose}
-                className="w-1/3 py-2 rounded-xl text-xs font-mono text-zinc-400 hover:text-white hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                className="h-8 px-2.5 rounded-xl text-xs font-mono text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors cursor-pointer shrink-0"
               >
                 Отмена
               </button>
+
               <button
                 type="submit"
                 disabled={isStarting || !routeName.trim()}
-                className="w-2/3 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-black shadow-[0_0_15px_rgba(6,182,212,0.35)] disabled:opacity-50 transition-all cursor-pointer active:scale-95"
+                className="h-8 px-3.5 flex items-center justify-center gap-1.5 rounded-xl text-xs font-mono font-black uppercase tracking-wider bg-gradient-to-r from-cyan-600 to-cyan-400 hover:from-cyan-500 hover:to-cyan-300 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)] disabled:opacity-50 transition-all cursor-pointer active:scale-95 shrink-0"
               >
                 {isStarting ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -252,57 +248,94 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
                 <span>Начать</span>
               </button>
             </div>
+
+            <p className="text-[9px] font-mono text-zinc-500 pl-0.5 leading-none truncate">
+              Пробегите круг по месту фарма в игре — координаты запишутся сами.
+            </p>
           </form>
-        ) : (
-          /* State 2: Active Recording HUD */
-          <div className="p-3 space-y-2.5 flex flex-col">
-            {/* Live Canvas Preview */}
-            <div className="h-[155px] w-full bg-[#020407] border border-cyan-950/70 rounded-xl overflow-hidden relative shadow-inner">
-              <RouteCanvas
-                points={status.points || []}
-                mapId={status.map_id}
-                mode="live_record"
-                aspect={1.6}
-                loop={false}
-              />
-              {/* Subtle pulsing live badge in canvas */}
-              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-[#020407]/90 border border-rose-500/50 text-[9px] font-mono font-bold text-rose-300 flex items-center gap-1 shadow-[0_0_8px_rgba(244,63,94,0.4)]">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block" />
-                <span>REC</span>
-              </div>
+        </div>
+      ) : (
+        /* =========================================================================
+            State 2: Active Recording HUD — 3D Holographic Tactical Radar (100% Adaptive)
+           ========================================================================= */
+        <div className="w-[94%] max-w-[420px] sm:max-w-[440px] max-h-[90vh] bg-[#040812]/98 border border-cyan-500/40 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.98),0_0_20px_rgba(6,182,212,0.18)] overflow-hidden flex flex-col text-zinc-200 animate-screen-assemble relative my-auto">
+          {/* Top Neon Glow Line */}
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-90 shadow-[0_0_8px_#22d3ee]" />
+
+          {/* Header Bar */}
+          <div className="px-2.5 py-1.5 bg-[#02050a] border-b border-zinc-800/80 flex items-center justify-between shrink-0">
+            {/* Left: Live REC badge + Route Name */}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-90" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-[0_0_8px_#f43f5e]" />
+              </span>
+              <span className="text-[9.5px] font-mono font-black text-rose-300 uppercase tracking-widest shrink-0">
+                REC
+              </span>
+              <span className="text-zinc-600 font-mono text-xs">/</span>
+              <span className="text-xs font-mono font-bold text-zinc-100 truncate max-w-[90px] sm:max-w-[120px]">
+                {status.name || routeName}
+              </span>
             </div>
 
-            {/* Warning banner if character is standing still */}
+            {/* Right: Telemetry Badges + Close */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Digital Timer */}
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#020409] border border-cyan-950">
+                <Clock className="w-2.5 h-2.5 text-cyan-400" />
+                <span className="text-[11px] font-mono font-black text-cyan-300 tracking-wider">
+                  {formatTimer(status.seconds)}
+                </span>
+              </div>
+
+              {/* Points badge */}
+              <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#020409] border border-zinc-800 text-[9.5px] font-mono text-zinc-300">
+                <Footprints className="w-2.5 h-2.5 text-cyan-400" />
+                <span>{status.points?.length || 0}</span>
+              </div>
+
+              {/* Length badge */}
+              <div className="px-1.5 py-0.5 rounded-md bg-[#020409] border border-zinc-800 text-[9.5px] font-mono text-amber-300 font-bold">
+                ≈{status.length_s}с
+              </div>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={handleCancelRecord}
+                className="w-5 h-5 rounded-md flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                title="Отменить запись"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* 3D WebGL Holographic Tactical Radar (Sleek height: 110-120px) */}
+          <div className="p-2 flex flex-col gap-1.5">
+            <div className="h-[110px] sm:h-[125px] w-full bg-[#010307] border border-cyan-900/60 rounded-xl overflow-hidden relative shadow-[inset_0_0_20px_rgba(0,0,0,0.9)]">
+              <ThreeRouteRecordView
+                points={status.points || []}
+                mapId={status.map_id}
+              />
+            </div>
+
+            {/* Warning if character is standing still */}
             {status.warning && (
-              <div className="bg-amber-950/40 border border-amber-600/50 text-amber-300 px-2.5 py-1 rounded-lg text-[10px] font-mono flex items-center justify-center gap-1.5 animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+              <div className="bg-amber-950/40 border border-amber-600/50 text-amber-300 px-2 py-0.5 rounded-lg text-[9px] font-mono flex items-center justify-center gap-1.5 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.2)]">
                 <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
                 <span>{status.warning}</span>
               </div>
             )}
 
-            {/* Cyber Metrics HUD Bar */}
-            <div className="grid grid-cols-3 gap-1 py-1.5 px-2 rounded-xl bg-[#030508] border border-zinc-850 text-center font-mono">
-              <div className="flex flex-col">
-                <span className="text-[8.5px] text-zinc-500 uppercase tracking-wider">Точек</span>
-                <span className="text-xs font-bold text-cyan-300">{status.points?.length || 0}</span>
-              </div>
-              <div className="flex flex-col border-x border-zinc-850/80">
-                <span className="text-[8.5px] text-zinc-500 uppercase tracking-wider">Время</span>
-                <span className="text-xs font-bold text-zinc-200">{status.seconds} с</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[8.5px] text-zinc-500 uppercase tracking-wider">Бег</span>
-                <span className="text-xs font-bold text-amber-300">≈{status.length_s} с</span>
-              </div>
-            </div>
-
-            {/* Bottom Actions */}
-            <div className="flex items-center gap-2 pt-0.5">
+            {/* Bottom Actions Row */}
+            <div className="flex items-center justify-between gap-2 pt-0.5">
               <button
                 type="button"
                 onClick={handleCancelRecord}
                 disabled={isStopping}
-                className="w-1/3 py-2 rounded-xl text-xs font-mono text-zinc-400 hover:text-rose-400 hover:bg-rose-950/20 transition-colors cursor-pointer"
+                className="h-7.5 px-3 rounded-xl text-xs font-mono text-zinc-400 hover:text-rose-400 hover:bg-rose-950/20 transition-colors cursor-pointer"
               >
                 Отмена
               </button>
@@ -311,7 +344,7 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
                 type="button"
                 onClick={handleFinishAndSave}
                 disabled={isStopping || (status.points?.length || 0) < 2}
-                className="w-2/3 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-black shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-40 transition-all cursor-pointer active:scale-95"
+                className="h-7.5 px-3.5 flex items-center justify-center gap-1.5 rounded-xl text-xs font-mono font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 to-emerald-400 hover:from-emerald-500 hover:to-emerald-300 text-black shadow-[0_0_15px_rgba(16,185,129,0.45)] disabled:opacity-40 transition-all cursor-pointer active:scale-95"
               >
                 {isStopping ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -322,8 +355,8 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
               </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

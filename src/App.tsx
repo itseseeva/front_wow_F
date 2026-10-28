@@ -85,8 +85,10 @@ export const App: React.FC = () => {
   const handleTerrainResponse = useCallback(
     (routeName: string, terrain: TerrainStatus) => {
       setActiveTerrain(terrain);
-      if (terrain.status === 'building' || terrain.status === 'ready') {
+      if (terrain.status === 'building') {
         setActiveTerrainCard({ routeName, initialTerrain: terrain });
+      } else {
+        setActiveTerrainCard(null);
       }
     },
     []
@@ -684,7 +686,7 @@ export const App: React.FC = () => {
               onToggleCard={() => {
                 if (activeView !== 'routes') {
                   setActiveView('routes');
-                  if (!activeTerrainCard && activeTerrain) {
+                  if (!activeTerrainCard && activeTerrain && activeTerrain.status === 'building') {
                     setActiveTerrainCard({
                       routeName: 'Маршрут',
                       initialTerrain: activeTerrain,
@@ -694,7 +696,7 @@ export const App: React.FC = () => {
                 }
                 if (activeTerrainCard) {
                   setActiveTerrainCard(null);
-                } else if (activeTerrain) {
+                } else if (activeTerrain && activeTerrain.status === 'building') {
                   setActiveTerrainCard({
                     routeName: 'Маршрут',
                     initialTerrain: activeTerrain,
@@ -810,7 +812,7 @@ export const App: React.FC = () => {
         )}
 
         {/* Main Content: Rotation Sequence OR Routes View OR Settings View */}
-        <main className="p-2 sm:p-3 w-full flex flex-col overflow-y-auto min-h-0 flex-1 relative">
+        <main className={`p-1.5 sm:p-2.5 w-full flex flex-col min-h-0 flex-1 relative ${activeView === 'routes' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           <div
             key={activeView}
             className="animate-screen-assemble stagger-assemble w-full flex flex-col flex-1"

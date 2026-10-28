@@ -102,15 +102,11 @@ export const TerrainHeaderIndicator: React.FC<TerrainHeaderIndicatorProps> = ({
     return (
       <div
         onClick={() => {
-          if (onToggleCard) {
-            onToggleCard();
-          } else {
-            setShowReady(false);
-            if (onClear) onClear();
-          }
+          setShowReady(false);
+          if (onClear) onClear();
         }}
         className="flex items-center gap-1 px-1.5 py-1 rounded-md bg-[#061810] border border-emerald-500/70 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.4)] cursor-pointer select-none active:scale-95 animate-fadeIn hover:border-emerald-400"
-        title="Сетка местности зоны готова (нажмите для просмотра)"
+        title="Сетка местности зоны готова (нажмите, чтобы скрыть)"
       >
         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.9)]" />
       </div>

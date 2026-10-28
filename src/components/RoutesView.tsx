@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RouteInfo, TerrainStatus } from '../types';
+import { RouteInfo, TerrainStatus, RoutePreview } from '../types';
+import { RouteIslandThumbnail } from './RouteIslandThumbnail';
 import { RouteCanvas } from './RouteCanvas';
 import { RouteRecordModal } from './RouteRecordModal';
 import { TerrainNotificationCard } from './TerrainNotificationCard';
@@ -8,6 +9,7 @@ import {
   mockListRoutes,
   mockSetActiveRoute,
   mockDeleteRoute,
+  mockGetRoutePreview,
 } from '../data/mockRoutes';
 import {
   Plus,
@@ -16,6 +18,9 @@ import {
   Circle,
   Loader2,
   FolderOpen,
+  Eye,
+  EyeOff,
+  X,
 } from 'lucide-react';
 
 interface RoutesViewProps {
@@ -39,9 +44,12 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Modal state
+  // Modal & Preview state
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [dissolvingId, setDissolvingId] = useState<string | null>(null);
+  const [previewRouteId, setPreviewRouteId] = useState<string | null>(null);
+  const [previewData, setPreviewData] = useState<RoutePreview | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   // New route pending terrain generation before becoming available
   const [pendingRoute, setPendingRoute] = useState<{ id: string; name: string } | null>(null);
@@ -75,7 +83,7 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
     fetchRoutes();
   }, [fetchRoutes]);
 
-  // Listen for terrain readiness: ONLY after loading is ready, route appears in available list with animation!
+  // Listen for terrain readiness
   useEffect(() => {
     const handleTerrainEvent = (e: any) => {
       const detail: TerrainStatus = e?.detail;
@@ -98,8 +106,8 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
     };
   }, [fetchRoutes, pendingRoute]);
 
-  // Set active route (or null for auto)
-  const handleSetActive = async (id: string | null) => {
+  // Set active route
+  const handleSetActive = async (id: string) => {
     try {
       const api = await getPywebviewApi();
       let res;
@@ -114,12 +122,12 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
         setRoutes((prev) =>
           prev.map((r) => ({
             ...r,
-            active: id === null ? false : r.id === id,
+            active: r.id === id,
           }))
         );
         onToast({
           type: 'success',
-          message: id ? 'Маршрут выбран основным' : 'Включён автовыбор маршрута',
+          message: 'Маршрут выбран основным',
         });
       } else {
         onError(res.error || 'Ошибка выбора маршрута');
@@ -129,13 +137,47 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
     }
   };
 
-  // Immediate delete with 60 FPS GPU pillar curl & smooth grid height collapse
+  // Toggle route full preview
+  const handleTogglePreview = async (routeId: string) => {
+    if (previewRouteId === routeId) {
+      setPreviewRouteId(null);
+      setPreviewData(null);
+      return;
+    }
+
+    setPreviewRouteId(routeId);
+    setLoadingPreview(true);
+    try {
+      const api = await getPywebviewApi();
+      let res;
+      if (api?.get_route_preview) {
+        res = await api.get_route_preview(routeId);
+      } else {
+        res = await mockGetRoutePreview(routeId);
+      }
+
+      if (res.ok && res.preview) {
+        setPreviewData(res.preview);
+      } else {
+        onError(res.error || 'Не удалось загрузить предпросмотр маршрута');
+      }
+    } catch (err: any) {
+      onError(err?.message || 'Ошибка загрузки предпросмотра');
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  // Delete route
   const handleDeleteRoute = async (route: RouteInfo, e: React.MouseEvent) => {
     e.stopPropagation();
     if (dissolvingId === route.id) return;
 
-    // Instantly launch the GPU curl animation and slot height collapse
     setDissolvingId(route.id);
+    if (previewRouteId === route.id) {
+      setPreviewRouteId(null);
+      setPreviewData(null);
+    }
 
     try {
       const api = await getPywebviewApi();
@@ -146,7 +188,6 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
         res = await mockDeleteRoute(route.id);
       }
 
-      // Smoothly let the 360ms GPU roll & grid collapse finish before removing from list
       setTimeout(() => {
         setRoutes((prev) => prev.filter((r) => r.id !== route.id));
         setDissolvingId((curr) => (curr === route.id ? null : curr));
@@ -171,18 +212,18 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col sm:flex-row gap-3 min-h-0 w-full select-none text-zinc-300">
+    <div className="flex-1 flex flex-row gap-2.5 min-h-0 w-full h-full select-none text-zinc-300 overflow-hidden">
       {/* =========================================================================
-          Left Column (Sidebar) - matching image_483f0b48.png
+          Left Column (Compact Sidebar) - NO Auto-Select button, fits without scrolling
           ========================================================================= */}
-      <aside className="w-full sm:w-60 md:w-64 shrink-0 flex flex-col justify-between sm:border-r border-zinc-800/80 sm:pr-3.5 pb-2 sm:pb-0 gap-3">
-        <div className="flex flex-col gap-3">
+      <aside className="w-32 sm:w-36 md:w-40 shrink-0 flex flex-col justify-between border-r border-zinc-800/80 pr-2 pb-1 gap-2">
+        <div className="flex flex-col gap-2">
           {/* Header Title + Count Badge */}
-          <div className="flex items-center gap-2 pt-0.5">
-            <h3 className="text-xs sm:text-[13px] font-mono font-black uppercase tracking-wider text-zinc-100">
-              Маршруты фарма
+          <div className="flex items-center gap-1.5 pt-0.5">
+            <h3 className="text-xs font-mono font-black uppercase tracking-wider text-zinc-100 truncate">
+              Маршруты
             </h3>
-            <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-mono font-black bg-cyan-950/80 text-cyan-300 border border-cyan-500/50 shadow-[0_0_8px_rgba(6,182,212,0.3)]">
+            <span className="w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-mono font-black bg-cyan-950/80 text-cyan-300 border border-cyan-500/50 shadow-[0_0_8px_rgba(6,182,212,0.3)] shrink-0">
               {routes.length}
             </span>
           </div>
@@ -198,7 +239,7 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
               setIsRecordModalOpen(true);
             }}
             disabled={isBotRunning}
-            className={`w-full py-2 px-3 rounded-lg text-xs font-mono font-bold tracking-wide border flex items-center justify-center gap-2 transition-all cursor-pointer select-none active:scale-95 ${
+            className={`w-full py-2 px-2 rounded-lg text-[10.5px] font-mono font-bold tracking-wide border flex items-center justify-center gap-1.5 transition-all cursor-pointer select-none active:scale-95 ${
               isBotRunning
                 ? 'opacity-40 cursor-not-allowed bg-zinc-900 border-zinc-800 text-zinc-500'
                 : 'bg-gradient-to-r from-[#091522] via-[#0b1d30] to-[#091522] border-cyan-500/60 hover:border-cyan-400 text-cyan-300 hover:text-cyan-100 shadow-[0_0_15px_rgba(6,182,212,0.18)] hover:shadow-[0_0_22px_rgba(6,182,212,0.35)]'
@@ -206,49 +247,23 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
             title={isBotRunning ? 'Идёт сессия бота — сначала нажмите Стоп' : 'Записать новый маршрут в игре'}
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Записать маршрут</span>
-          </button>
-
-          {/* Auto-selection toggle button */}
-          <button
-            type="button"
-            onClick={() => handleSetActive(null)}
-            className={`w-full py-2 px-2.5 rounded-lg text-[11px] font-mono border flex items-center justify-between transition-all cursor-pointer select-none active:scale-95 ${
-              activeId === null
-                ? 'bg-[#091420] border-cyan-500/70 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.22)] font-bold'
-                : 'bg-[#06080d] border-zinc-800/90 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-            }`}
-            title="Автоматически выбирать ближайший маршрут текущей карты"
-          >
-            <div className="flex items-center gap-2">
-              {activeId === null ? (
-                <CheckCircle className="w-3.5 h-3.5 text-cyan-400 drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]" />
-              ) : (
-                <Circle className="w-3.5 h-3.5 text-zinc-600" />
-              )}
-              <span>Автовыбор</span>
-            </div>
-            {activeId === null && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-800/60 text-cyan-300 font-bold">
-                АКТИВЕН
-              </span>
-            )}
+            <span>Записать</span>
           </button>
         </div>
 
         {/* Minimal info note at bottom of sidebar */}
-        <div className="p-2 rounded-lg bg-[#05070c] border border-zinc-850 text-[9.5px] font-mono text-zinc-500 leading-relaxed">
-          Бот выбирает ближайший маршрут зоны или указанный вручную.
+        <div className="p-1.5 rounded-lg bg-[#05070c] border border-zinc-850 text-[8.5px] font-mono text-zinc-500 leading-tight">
+          Выбранный маршрут используется ботом при старте.
         </div>
       </aside>
 
       {/* =========================================================================
           Right Column (Route list + In-App Terrain Visualizer)
           ========================================================================= */}
-      <main className="flex-1 min-w-0 flex flex-col gap-2.5 overflow-hidden">
-        {/* In-App 60 FPS Terrain Mesh Visualizer (embedded directly above the list!) */}
+      <main className="flex-1 min-w-0 flex flex-col gap-2 overflow-hidden h-full">
+        {/* In-App 3D Terrain Mesh Visualizer (compact, zero scroll force) */}
         {activeTerrainCard && (
-          <div className="animate-screen-assemble mb-1 shrink-0">
+          <div className="animate-screen-assemble shrink-0">
             <TerrainNotificationCard
               routeName={activeTerrainCard.routeName}
               initialTerrain={activeTerrainCard.initialTerrain}
@@ -257,19 +272,54 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
           </div>
         )}
 
+        {/* Full Route Preview Panel (when eye icon is toggled) */}
+        {previewRouteId && (
+          <div className="shrink-0 p-2 rounded-xl bg-[#040812] border border-cyan-700/60 relative overflow-hidden animate-fadeIn">
+            <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800/80 mb-1.5">
+              <span className="text-[10px] font-mono font-bold text-cyan-300 flex items-center gap-1.5">
+                <Eye className="w-3 h-3 text-cyan-400" />
+                Карта обхода маршрута
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreviewRouteId(null)}
+                className="text-zinc-400 hover:text-white p-0.5"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+            {loadingPreview ? (
+              <div className="h-28 flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
+                <span className="text-[10px] font-mono text-zinc-400">Загрузка траектории...</span>
+              </div>
+            ) : previewData ? (
+              <div className="h-28 w-full rounded-lg overflow-hidden border border-cyan-950">
+                <RouteCanvas
+                  points={previewData.points}
+                  paths={previewData.paths}
+                  aspect={previewData.aspect || 1.6}
+                  mode="preview"
+                  loop={previewData.route.loop}
+                />
+              </div>
+            ) : null}
+          </div>
+        )}
+
         {/* Route list */}
-        <div className="flex-1 overflow-y-auto pr-0.5 min-h-0 space-y-2" style={{ perspective: '1000px' }}>
+        <div className="flex-1 overflow-y-auto pr-0.5 min-h-0 space-y-2">
           {loading ? (
-            <div className="h-40 flex flex-col items-center justify-center gap-2">
+            <div className="h-32 flex flex-col items-center justify-center gap-2">
               <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
               <span className="text-xs font-mono text-zinc-400">Загрузка маршрутов...</span>
             </div>
           ) : routes.length === 0 ? (
-            <div className="p-6 text-center rounded-xl bg-[#06080d] border border-zinc-800/70 space-y-2 my-auto">
-              <FolderOpen className="w-7 h-7 text-zinc-600 mx-auto" />
+            <div className="p-4 text-center rounded-xl bg-[#06080d] border border-zinc-800/70 space-y-1.5 my-auto">
+              <FolderOpen className="w-6 h-6 text-zinc-600 mx-auto" />
               <p className="text-xs font-mono font-bold text-zinc-300">Маршруты пока не созданы</p>
-              <p className="text-[10px] text-zinc-500 max-w-xs mx-auto">
-                Нажмите «Записать маршрут», чтобы записать траекторию фарма в игре.
+              <p className="text-[9.5px] text-zinc-500 max-w-xs mx-auto">
+                Нажмите «Записать», чтобы записать траекторию фарма в игре.
               </p>
             </div>
           ) : (
@@ -277,6 +327,7 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
               const isSelected = activeId === route.id;
               const isDissolving = dissolvingId === route.id;
               const isJustAdded = justAddedId === route.id;
+              const isPreviewing = previewRouteId === route.id;
 
               return (
                 <div
@@ -289,7 +340,7 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                 >
                   <div className="route-slot-inner">
                     <div
-                      className={`p-2.5 rounded-xl border flex items-center justify-between gap-3 transition-all relative ${
+                      className={`p-2 rounded-xl border flex items-center justify-between gap-2.5 transition-all relative ${
                         isDissolving
                           ? 'route-curl-exit'
                           : isSelected
@@ -297,36 +348,33 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                           : 'bg-[#06080d] border-zinc-800/90 hover:border-zinc-750 hover:bg-[#070a10]'
                       }`}
                     >
-                      {/* Left: Square Thumbnail (aspect 1:1, purely visual without eye overlay) */}
-                      <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-lg bg-[#030508] border border-cyan-950/60 overflow-hidden shrink-0 relative">
-                        <RouteCanvas
+                      {/* Left: 3D Isometric Terrain Island Thumbnail (matching image_a5e4115a.png) */}
+                      <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-xl bg-[#03060c] border border-cyan-950/60 overflow-hidden shrink-0 relative shadow-inner">
+                        <RouteIslandThumbnail
                           points={route.thumb && route.thumb.length > 0 ? route.thumb : []}
-                          mapId={route.map_id}
-                          mode="thumb"
                           loop={route.loop}
-                          aspect={1}
                         />
                       </div>
 
-                      {/* Middle: Details */}
-                      <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 py-0.5">
+                      {/* Middle: Details (matching image_a5e4115a.png) */}
+                      <div className="flex-1 min-w-0 flex flex-col justify-center gap-1 py-0.5">
                         <div className="flex items-center gap-2">
                           <h4 className="text-xs sm:text-sm font-mono font-bold text-zinc-100 truncate">
                             {route.name}
                           </h4>
                           {route.loop ? (
-                            <span className="text-[8.5px] px-1.5 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-700/50 font-bold shrink-0">
+                            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-700/50 font-bold shrink-0">
                               КРУГ
                             </span>
                           ) : (
-                            <span className="text-[8.5px] px-1.5 py-0.5 rounded-full bg-purple-950/70 text-purple-300 border border-purple-700/50 font-bold shrink-0">
+                            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-purple-950/70 text-purple-300 border border-purple-700/50 font-bold shrink-0">
                               ТУДА-ОБРАТНО
                             </span>
                           )}
                         </div>
 
-                        {/* Minimalist running stats with icons - NO noisy map_id */}
-                        <div className="flex items-center gap-2.5 text-[10px] font-mono text-zinc-400">
+                        {/* Telemetry subtitle (matching image_a5e4115a.png) */}
+                        <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400">
                           <span className="text-cyan-300 font-bold">
                             ≈{route.length_s} с бега
                           </span>
@@ -337,12 +385,12 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                         </div>
                       </div>
 
-                      {/* Right: Actions (✓ Основной + Delete) - NO EYE ICON */}
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Right: Actions [✓ Основной] [🗑] [👁] (matching image_a5e4115a.png) */}
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
                           onClick={() => handleSetActive(route.id)}
-                          className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-[10.5px] font-mono font-bold border transition-all cursor-pointer select-none active:scale-95 flex items-center gap-1.5 ${
+                          className={`px-2 sm:px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold border transition-all cursor-pointer select-none active:scale-95 flex items-center gap-1 ${
                             isSelected
                               ? 'bg-cyan-950/80 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
                               : 'bg-[#080b12] border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
@@ -357,17 +405,36 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                           <span>{isSelected ? 'Основной' : 'Выбрать'}</span>
                         </button>
 
+                        {/* Delete button */}
                         <button
                           type="button"
                           onClick={(e) => handleDeleteRoute(route, e)}
                           disabled={isDissolving}
-                          className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#080b12] border border-zinc-800 hover:border-rose-500/70 text-zinc-400 hover:text-rose-400 flex items-center justify-center transition-all cursor-pointer active:scale-90 disabled:opacity-50"
+                          className="w-7 h-7 rounded-lg bg-[#080b12] border border-zinc-800 hover:border-rose-500/70 text-zinc-400 hover:text-rose-400 flex items-center justify-center transition-all cursor-pointer active:scale-90 disabled:opacity-50"
                           title="Удалить маршрут"
                         >
                           {isDissolving ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                            <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
                           ) : (
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3 h-3" />
+                          )}
+                        </button>
+
+                        {/* Preview Eye button (matching image_a5e4115a.png) */}
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePreview(route.id)}
+                          className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all cursor-pointer active:scale-90 ${
+                            isPreviewing
+                              ? 'bg-[#091522] border-cyan-400 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.4)]'
+                              : 'bg-[#080b12] border-zinc-800 text-zinc-400 hover:text-cyan-300 hover:border-cyan-800'
+                          }`}
+                          title={isPreviewing ? 'Скрыть карту обхода' : 'Показать карту обхода'}
+                        >
+                          {isPreviewing ? (
+                            <EyeOff className="w-3 h-3" />
+                          ) : (
+                            <Eye className="w-3 h-3" />
                           )}
                         </button>
                       </div>
@@ -386,13 +453,11 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
         onClose={() => setIsRecordModalOpen(false)}
         onRouteSaved={(newRoute, terrain) => {
           if (terrain && terrain.status === 'building') {
-            // Hold until terrain is ready: route will appear only after building completes!
             setPendingRoute({ id: newRoute.id, name: newRoute.name });
             if (onTerrainStatus) {
               onTerrainStatus(newRoute.name, terrain);
             }
           } else {
-            // Instant / already ready
             fetchRoutes().then(() => {
               setJustAddedId(newRoute.id);
               setTimeout(() => setJustAddedId(null), 3500);
