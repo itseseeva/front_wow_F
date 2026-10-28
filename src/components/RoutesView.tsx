@@ -22,6 +22,7 @@ import {
   EyeOff,
   X,
 } from 'lucide-react';
+import { Language, Theme, translations } from '../utils/i18n';
 
 interface RoutesViewProps {
   isBotRunning: boolean;
@@ -30,6 +31,8 @@ interface RoutesViewProps {
   onTerrainStatus?: (routeName: string, terrain: TerrainStatus) => void;
   activeTerrainCard?: { routeName: string; initialTerrain: TerrainStatus } | null;
   onCloseTerrainCard?: () => void;
+  language?: Language;
+  theme?: Theme;
 }
 
 export const RoutesView: React.FC<RoutesViewProps> = ({
@@ -39,7 +42,12 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
   onTerrainStatus,
   activeTerrainCard,
   onCloseTerrainCard,
+  language = 'ru',
+  theme = 'dark',
 }) => {
+  const t = translations[language];
+  const isDark = theme === 'dark';
+
   const [routes, setRoutes] = useState<RouteInfo[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,14 +78,14 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
         setRoutes(res.routes || []);
         setActiveId(res.active_id ?? null);
       } else {
-        onError(res.error || 'Не удалось загрузить список маршрутов');
+        onError(res.error || t.routesLoadError);
       }
     } catch (err: any) {
-      onError(err?.message || 'Ошибка загрузки маршрутов');
+      onError(err?.message || t.routesErrorGeneric);
     } finally {
       setLoading(false);
     }
-  }, [onError]);
+  }, [onError, t]);
 
   useEffect(() => {
     fetchRoutes();
@@ -100,14 +108,14 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
       }
     };
 
-    window.addEventListener('wowbot:terrain-status', handleTerrainEvent);
+    window.addEventListener('wowbot:terrain', handleTerrainEvent);
     return () => {
-      window.removeEventListener('wowbot:terrain-status', handleTerrainEvent);
+      window.removeEventListener('wowbot:terrain', handleTerrainEvent);
     };
   }, [fetchRoutes, pendingRoute]);
 
-  // Set active route
   const handleSetActive = async (id: string) => {
+    if (activeId === id) return;
     try {
       const api = await getPywebviewApi();
       let res;
@@ -119,25 +127,19 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
 
       if (res.ok) {
         setActiveId(id);
-        setRoutes((prev) =>
-          prev.map((r) => ({
-            ...r,
-            active: r.id === id,
-          }))
-        );
+        const activeRoute = routes.find((r) => r.id === id);
         onToast({
           type: 'success',
-          message: 'Маршрут выбран основным',
+          message: `${t.routesActiveBadge}: «${activeRoute?.name || id}»`,
         });
       } else {
-        onError(res.error || 'Ошибка выбора маршрута');
+        onError(res.error || 'Failed to set route');
       }
     } catch (err: any) {
-      onError(err?.message || 'Ошибка выбора маршрута');
+      onError(err?.message || 'Error activating route');
     }
   };
 
-  // Toggle route full preview
   const handleTogglePreview = async (routeId: string) => {
     if (previewRouteId === routeId) {
       setPreviewRouteId(null);
@@ -147,9 +149,10 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
 
     setPreviewRouteId(routeId);
     setLoadingPreview(true);
+
     try {
       const api = await getPywebviewApi();
-      let res;
+      let res: { ok: boolean; error?: string; preview?: RoutePreview };
       if (api?.get_route_preview) {
         res = await api.get_route_preview(routeId);
       } else {
@@ -159,71 +162,88 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
       if (res.ok && res.preview) {
         setPreviewData(res.preview);
       } else {
-        onError(res.error || 'Не удалось загрузить предпросмотр маршрута');
+        onError(res.error || 'Failed to load route preview');
+        setPreviewRouteId(null);
       }
     } catch (err: any) {
-      onError(err?.message || 'Ошибка загрузки предпросмотра');
+      onError(err?.message || 'Error loading preview');
+      setPreviewRouteId(null);
     } finally {
       setLoadingPreview(false);
     }
   };
 
-  // Delete route
   const handleDeleteRoute = async (route: RouteInfo, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (dissolvingId === route.id) return;
-
-    setDissolvingId(route.id);
-    if (previewRouteId === route.id) {
-      setPreviewRouteId(null);
-      setPreviewData(null);
+    if (activeId === route.id && routes.length > 1) {
+      const confirmDelete = window.confirm(
+        `${t.routesDeleteConfirm} «${route.name}»?`
+      );
+      if (!confirmDelete) return;
     }
 
+    setDissolvingId(route.id);
+
     try {
-      const api = await getPywebviewApi();
-      let res;
-      if (api?.delete_route) {
-        res = await api.delete_route(route.id);
-      } else {
-        res = await mockDeleteRoute(route.id);
-      }
+      setTimeout(async () => {
+        const api = await getPywebviewApi();
+        let res;
+        if (api?.delete_route) {
+          res = await api.delete_route(route.id);
+        } else {
+          res = await mockDeleteRoute(route.id);
+        }
 
-      setTimeout(() => {
-        setRoutes((prev) => prev.filter((r) => r.id !== route.id));
-        setDissolvingId((curr) => (curr === route.id ? null : curr));
-
-        if (res?.ok) {
+        if (res.ok) {
+          setRoutes((prev) => prev.filter((r) => r.id !== route.id));
+          if (activeId === route.id) {
+            setActiveId(null);
+          }
+          if (previewRouteId === route.id) {
+            setPreviewRouteId(null);
+            setPreviewData(null);
+          }
           onToast({
             type: 'info',
-            message: `Маршрут «${route.name}» удалён`,
+            message: `${route.name} removed`,
           });
         } else {
-          onError(res?.error || 'Не удалось удалить маршрут');
+          onError(res?.error || 'Failed to delete route');
           fetchRoutes();
         }
       }, 360);
     } catch (err: any) {
       setTimeout(() => {
         setDissolvingId(null);
-        onError(err?.message || 'Ошибка при удалении маршрута');
+        onError(err?.message || 'Error deleting route');
         fetchRoutes();
       }, 360);
     }
   };
 
   return (
-    <div className="flex-1 flex flex-row gap-2.5 min-h-0 w-full h-full select-none text-zinc-300 overflow-hidden">
+    <div className={`flex-1 flex flex-row gap-2.5 min-h-0 w-full h-full select-none overflow-hidden ${
+      isDark ? 'text-zinc-300' : 'text-slate-700'
+    }`}>
       {/* =========================================================================
-          Left Column (Compact Sidebar) - NO Auto-Select button, fits without scrolling
+          Left Column (Compact Sidebar)
           ========================================================================= */}
-      <aside className="w-32 sm:w-36 md:w-40 shrink-0 flex flex-col justify-between border-r border-zinc-800/80 pr-2 pb-1 gap-2">
+      <aside className={`w-32 sm:w-36 md:w-40 shrink-0 flex flex-col justify-between border-r pr-2 pb-1 gap-2 ${
+        isDark ? 'border-zinc-800/80' : 'border-slate-200'
+      }`}>
         <div className="flex flex-col gap-2">
           {/* Header Title + Count Badge */}
           <div className="flex items-center gap-1.5 pt-0.5">
-            <h3 className="text-xs font-mono font-black uppercase tracking-wider text-zinc-100 truncate">
-              Маршруты
+            <h3 className={`text-xs font-mono font-black uppercase tracking-wider truncate ${
+              isDark ? 'text-zinc-100' : 'text-slate-900'
+            }`}>
+              {t.navRoutes}
             </h3>
-            <span className="w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-mono font-black bg-cyan-950/80 text-cyan-300 border border-cyan-500/50 shadow-[0_0_8px_rgba(6,182,212,0.3)] shrink-0">
+            <span className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-mono font-black border shrink-0 ${
+              isDark
+                ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50 shadow-[0_0_8px_rgba(6,182,212,0.3)]'
+                : 'bg-cyan-50 text-cyan-800 border-cyan-300'
+            }`}>
               {routes.length}
             </span>
           </div>
@@ -233,7 +253,7 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
             type="button"
             onClick={() => {
               if (isBotRunning) {
-                onError('Идёт сессия бота — сначала нажмите Стоп');
+                onError(t.routesRecordDisabledBotRunning);
                 return;
               }
               setIsRecordModalOpen(true);
@@ -241,19 +261,27 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
             disabled={isBotRunning}
             className={`w-full py-2 px-2 rounded-lg text-[10.5px] font-mono font-bold tracking-wide border flex items-center justify-center gap-1.5 transition-all cursor-pointer select-none active:scale-95 ${
               isBotRunning
-                ? 'opacity-40 cursor-not-allowed bg-zinc-900 border-zinc-800 text-zinc-500'
-                : 'bg-gradient-to-r from-[#091522] via-[#0b1d30] to-[#091522] border-cyan-500/60 hover:border-cyan-400 text-cyan-300 hover:text-cyan-100 shadow-[0_0_15px_rgba(6,182,212,0.18)] hover:shadow-[0_0_22px_rgba(6,182,212,0.35)]'
+                ? isDark
+                  ? 'opacity-40 cursor-not-allowed bg-zinc-900 border-zinc-800 text-zinc-500'
+                  : 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400'
+                : isDark
+                ? 'bg-gradient-to-r from-[#091522] via-[#0b1d30] to-[#091522] border-cyan-500/60 hover:border-cyan-400 text-cyan-300 hover:text-cyan-100 shadow-[0_0_15px_rgba(6,182,212,0.18)] hover:shadow-[0_0_22px_rgba(6,182,212,0.35)]'
+                : 'bg-white border-cyan-600/50 hover:border-cyan-500 text-cyan-800 hover:bg-cyan-50 shadow-xs'
             }`}
-            title={isBotRunning ? 'Идёт сессия бота — сначала нажмите Стоп' : 'Записать новый маршрут в игре'}
+            title={isBotRunning ? t.routesRecordDisabledBotRunning : t.routesRecordTooltip}
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Записать</span>
+            <span>{t.routesRecordBtn}</span>
           </button>
         </div>
 
         {/* Minimal info note at bottom of sidebar */}
-        <div className="p-1.5 rounded-lg bg-[#05070c] border border-zinc-850 text-[8.5px] font-mono text-zinc-500 leading-tight">
-          Выбранный маршрут используется ботом при старте.
+        <div className={`p-1.5 rounded-lg border text-[8.5px] font-mono leading-tight ${
+          isDark
+            ? 'bg-[#05070c] border-zinc-850 text-zinc-500'
+            : 'bg-slate-50 border-slate-200 text-slate-500'
+        }`}>
+          {t.routesActiveHint}
         </div>
       </aside>
 
@@ -268,33 +296,49 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
               routeName={activeTerrainCard.routeName}
               initialTerrain={activeTerrainCard.initialTerrain}
               onClose={onCloseTerrainCard || (() => {})}
+              language={language}
+              theme={theme}
             />
           </div>
         )}
 
         {/* Full Route Preview Panel (when eye icon is toggled) */}
         {previewRouteId && (
-          <div className="shrink-0 p-2 rounded-xl bg-[#040812] border border-cyan-700/60 relative overflow-hidden animate-fadeIn">
-            <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800/80 mb-1.5">
-              <span className="text-[10px] font-mono font-bold text-cyan-300 flex items-center gap-1.5">
-                <Eye className="w-3 h-3 text-cyan-400" />
-                Карта обхода маршрута
+          <div className={`shrink-0 p-2 rounded-xl border relative overflow-hidden animate-fadeIn ${
+            isDark
+              ? 'bg-[#040812] border-cyan-700/60'
+              : 'bg-slate-50 border-cyan-300 shadow-sm'
+          }`}>
+            <div className={`flex items-center justify-between pb-1.5 border-b mb-1.5 ${
+              isDark ? 'border-zinc-800/80' : 'border-slate-200'
+            }`}>
+              <span className={`text-[10px] font-mono font-bold flex items-center gap-1.5 ${
+                isDark ? 'text-cyan-300' : 'text-cyan-800'
+              }`}>
+                <Eye className="w-3 h-3 text-cyan-500" />
+                {t.routesMapPreview}
               </span>
               <button
                 type="button"
                 onClick={() => setPreviewRouteId(null)}
-                className="text-zinc-400 hover:text-white p-0.5"
+                className={`p-0.5 transition-colors ${
+                  isDark ? 'text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-800'
+                }`}
               >
                 <X className="w-3 h-3" />
               </button>
             </div>
             {loadingPreview ? (
               <div className="h-28 flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
-                <span className="text-[10px] font-mono text-zinc-400">Загрузка траектории...</span>
+                <Loader2 className="w-4 h-4 text-cyan-500 animate-spin" />
+                <span className={`text-[10px] font-mono ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>
+                  {t.routesTrajectoryLoading}
+                </span>
               </div>
             ) : previewData ? (
-              <div className="h-28 w-full rounded-lg overflow-hidden border border-cyan-950">
+              <div className={`h-28 w-full rounded-lg overflow-hidden border ${
+                isDark ? 'border-cyan-950' : 'border-slate-200 bg-white'
+              }`}>
                 <RouteCanvas
                   points={previewData.points}
                   paths={previewData.paths}
@@ -311,15 +355,23 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
         <div className="flex-1 overflow-y-auto pr-0.5 min-h-0 space-y-2">
           {loading ? (
             <div className="h-32 flex flex-col items-center justify-center gap-2">
-              <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
-              <span className="text-xs font-mono text-zinc-400">Загрузка маршрутов...</span>
+              <Loader2 className="w-5 h-5 text-cyan-500 animate-spin" />
+              <span className={`text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>
+                {t.routesListLoading}
+              </span>
             </div>
           ) : routes.length === 0 ? (
-            <div className="p-4 text-center rounded-xl bg-[#06080d] border border-zinc-800/70 space-y-1.5 my-auto">
-              <FolderOpen className="w-6 h-6 text-zinc-600 mx-auto" />
-              <p className="text-xs font-mono font-bold text-zinc-300">Маршруты пока не созданы</p>
-              <p className="text-[9.5px] text-zinc-500 max-w-xs mx-auto">
-                Нажмите «Записать», чтобы записать траекторию фарма в игре.
+            <div className={`p-4 text-center rounded-xl border space-y-1.5 my-auto ${
+              isDark
+                ? 'bg-[#06080d] border-zinc-800/70'
+                : 'bg-white border-slate-200 shadow-sm'
+            }`}>
+              <FolderOpen className={`w-6 h-6 mx-auto ${isDark ? 'text-zinc-600' : 'text-slate-400'}`} />
+              <p className={`text-xs font-mono font-bold ${isDark ? 'text-zinc-300' : 'text-slate-800'}`}>
+                {t.routesEmptyTitle}
+              </p>
+              <p className={`text-[9.5px] max-w-xs mx-auto ${isDark ? 'text-zinc-500' : 'text-slate-500'}`}>
+                {t.routesEmptyDesc}
               </p>
             </div>
           ) : (
@@ -344,65 +396,90 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                         isDissolving
                           ? 'route-curl-exit'
                           : isSelected
-                          ? 'bg-[#090d16] border-cyan-500/70 shadow-[0_0_18px_rgba(6,182,212,0.18)] ring-1 ring-cyan-500/30'
-                          : 'bg-[#06080d] border-zinc-800/90 hover:border-zinc-750 hover:bg-[#070a10]'
+                          ? isDark
+                            ? 'bg-[#090d16] border-cyan-500/70 shadow-[0_0_18px_rgba(6,182,212,0.18)] ring-1 ring-cyan-500/30'
+                            : 'bg-cyan-50/50 border-cyan-500 shadow-xs ring-1 ring-cyan-400/30'
+                          : isDark
+                          ? 'bg-[#06080d] border-zinc-800/90 hover:border-zinc-750 hover:bg-[#070a10]'
+                          : 'bg-white border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/60 shadow-xs'
                       }`}
                     >
-                      {/* Left: 3D Isometric Terrain Island Thumbnail (matching image_a5e4115a.png) */}
-                      <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-xl bg-[#03060c] border border-cyan-950/60 overflow-hidden shrink-0 relative shadow-inner">
+                      {/* Left: 3D Isometric Terrain Island Thumbnail */}
+                      <div className={`w-16 h-16 sm:w-18 sm:h-18 rounded-xl border overflow-hidden shrink-0 relative shadow-inner ${
+                        isDark ? 'bg-[#03060c] border-cyan-950/60' : 'bg-slate-100 border-slate-200'
+                      }`}>
                         <RouteIslandThumbnail
                           points={route.thumb && route.thumb.length > 0 ? route.thumb : []}
                           loop={route.loop}
                         />
                       </div>
 
-                      {/* Middle: Details (matching image_a5e4115a.png) */}
+                      {/* Middle: Details */}
                       <div className="flex-1 min-w-0 flex flex-col justify-center gap-1 py-0.5">
                         <div className="flex items-center gap-2">
-                          <h4 className="text-xs sm:text-sm font-mono font-bold text-zinc-100 truncate">
+                          <h4 className={`text-xs sm:text-sm font-mono font-bold truncate ${
+                            isDark ? 'text-zinc-100' : 'text-slate-900'
+                          }`}>
                             {route.name}
                           </h4>
                           {route.loop ? (
-                            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-700/50 font-bold shrink-0">
-                              КРУГ
+                            <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold shrink-0 border ${
+                              isDark
+                                ? 'bg-cyan-950/80 text-cyan-300 border-cyan-700/50'
+                                : 'bg-cyan-50 text-cyan-800 border-cyan-300'
+                            }`}>
+                              {t.routesLoop}
                             </span>
                           ) : (
-                            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-purple-950/70 text-purple-300 border border-purple-700/50 font-bold shrink-0">
-                              ТУДА-ОБРАТНО
+                            <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold shrink-0 border ${
+                              isDark
+                                ? 'bg-purple-950/70 text-purple-300 border-purple-700/50'
+                                : 'bg-purple-50 text-purple-800 border-purple-300'
+                            }`}>
+                              {t.routesBackForth}
                             </span>
                           )}
                         </div>
 
-                        {/* Telemetry subtitle (matching image_a5e4115a.png) */}
-                        <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400">
-                          <span className="text-cyan-300 font-bold">
-                            ≈{route.length_s} с бега
+                        {/* Telemetry subtitle */}
+                        <div className={`flex items-center gap-2 text-[10px] font-mono ${
+                          isDark ? 'text-zinc-400' : 'text-slate-500'
+                        }`}>
+                          <span className={`font-bold ${isDark ? 'text-cyan-300' : 'text-cyan-700'}`}>
+                            ≈{route.length_s} {t.routesRunSeconds}
                           </span>
-                          <span className="text-zinc-650">•</span>
+                          <span className={isDark ? 'text-zinc-600' : 'text-slate-300'}>•</span>
                           <span>
-                            <strong className="text-zinc-200">{route.points}</strong> точки
+                            <strong className={isDark ? 'text-zinc-200' : 'text-slate-800'}>
+                              {route.points}
+                            </strong>{' '}
+                            {t.routesPoints}
                           </span>
                         </div>
                       </div>
 
-                      {/* Right: Actions [✓ Основной] [🗑] [👁] (matching image_a5e4115a.png) */}
+                      {/* Right: Actions [✓ Основной] [🗑] [👁] */}
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
                           onClick={() => handleSetActive(route.id)}
                           className={`px-2 sm:px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold border transition-all cursor-pointer select-none active:scale-95 flex items-center gap-1 ${
                             isSelected
-                              ? 'bg-cyan-950/80 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
-                              : 'bg-[#080b12] border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                              ? isDark
+                                ? 'bg-cyan-950/80 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
+                                : 'bg-cyan-600 text-white border-cyan-600 shadow-xs'
+                              : isDark
+                              ? 'bg-[#080b12] border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                              : 'bg-white border-slate-300 text-slate-600 hover:text-slate-900 hover:border-slate-400 shadow-xs'
                           }`}
-                          title="Сделать этот маршрут основным"
+                          title={t.routesActiveBadge}
                         >
                           {isSelected ? (
-                            <CheckCircle className="w-3 h-3 text-cyan-400" />
+                            <CheckCircle className="w-3 h-3 text-cyan-400 fill-current" />
                           ) : (
                             <Circle className="w-3 h-3" />
                           )}
-                          <span>{isSelected ? 'Основной' : 'Выбрать'}</span>
+                          <span>{isSelected ? t.routesActiveBadge : t.routesSetActive}</span>
                         </button>
 
                         {/* Delete button */}
@@ -410,26 +487,34 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                           type="button"
                           onClick={(e) => handleDeleteRoute(route, e)}
                           disabled={isDissolving}
-                          className="w-7 h-7 rounded-lg bg-[#080b12] border border-zinc-800 hover:border-rose-500/70 text-zinc-400 hover:text-rose-400 flex items-center justify-center transition-all cursor-pointer active:scale-90 disabled:opacity-50"
-                          title="Удалить маршрут"
+                          className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all cursor-pointer active:scale-90 disabled:opacity-50 ${
+                            isDark
+                              ? 'bg-[#080b12] border-zinc-800 text-zinc-400 hover:border-rose-500/70 hover:text-rose-400'
+                              : 'bg-white border-slate-300 text-slate-400 hover:border-rose-300 hover:text-rose-600 hover:bg-rose-50 shadow-xs'
+                          }`}
+                          title={t.routesDeleteTooltip}
                         >
                           {isDissolving ? (
-                            <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
+                            <Loader2 className="w-3 h-3 animate-spin text-rose-500" />
                           ) : (
                             <Trash2 className="w-3 h-3" />
                           )}
                         </button>
 
-                        {/* Preview Eye button (matching image_a5e4115a.png) */}
+                        {/* Preview Eye button */}
                         <button
                           type="button"
                           onClick={() => handleTogglePreview(route.id)}
                           className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all cursor-pointer active:scale-90 ${
                             isPreviewing
-                              ? 'bg-[#091522] border-cyan-400 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.4)]'
-                              : 'bg-[#080b12] border-zinc-800 text-zinc-400 hover:text-cyan-300 hover:border-cyan-800'
+                              ? isDark
+                                ? 'bg-[#091522] border-cyan-400 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.4)]'
+                                : 'bg-cyan-100 border-cyan-500 text-cyan-800 shadow-xs'
+                              : isDark
+                              ? 'bg-[#080b12] border-zinc-800 text-zinc-400 hover:text-cyan-300 hover:border-cyan-800'
+                              : 'bg-white border-slate-300 text-slate-500 hover:text-cyan-700 hover:border-cyan-400 shadow-xs'
                           }`}
-                          title={isPreviewing ? 'Скрыть карту обхода' : 'Показать карту обхода'}
+                          title={t.routesPreviewTooltip}
                         >
                           {isPreviewing ? (
                             <EyeOff className="w-3 h-3" />
@@ -451,21 +536,22 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
       <RouteRecordModal
         isOpen={isRecordModalOpen}
         onClose={() => setIsRecordModalOpen(false)}
+        language={language}
+        theme={theme}
         onRouteSaved={(newRoute, terrain) => {
-          if (terrain && terrain.status === 'building') {
-            setPendingRoute({ id: newRoute.id, name: newRoute.name });
-            if (onTerrainStatus) {
-              onTerrainStatus(newRoute.name, terrain);
-            }
-          } else {
-            fetchRoutes().then(() => {
-              setJustAddedId(newRoute.id);
-              setTimeout(() => setJustAddedId(null), 3500);
-            });
-            if (terrain && onTerrainStatus) {
-              onTerrainStatus(newRoute.name, terrain);
-            }
+          setIsRecordModalOpen(false);
+          setPendingRoute({ id: newRoute.id, name: newRoute.name });
+
+          if (terrain && onTerrainStatus) {
+            onTerrainStatus(newRoute.name, terrain);
           }
+
+          onToast({
+            type: 'success',
+            message: `${newRoute.name}: ${t.keySaved}`,
+          });
+
+          fetchRoutes();
         }}
         onToast={onToast}
       />

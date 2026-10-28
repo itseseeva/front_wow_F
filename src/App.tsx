@@ -24,6 +24,9 @@ import {
   Compass,
   Swords,
   Pickaxe,
+  Globe,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { Language, Theme, translations } from './utils/i18n';
 
@@ -587,34 +590,48 @@ export const App: React.FC = () => {
         }`}
       >
         {/* Compact & Responsive Header: strictly single-row without wrapping */}
-        <header className="px-2.5 sm:px-3 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-2 rounded-t-xl shrink-0 border-b border-zinc-800/80 bg-[#06080d] select-none flex-nowrap min-w-0">
+        <header className={`px-2.5 sm:px-3 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-2 rounded-t-xl shrink-0 border-b select-none flex-nowrap min-w-0 transition-colors ${
+          isDark
+            ? 'border-zinc-800/80 bg-[#06080d] text-zinc-100'
+            : 'border-slate-200/90 bg-white/95 text-slate-800 shadow-xs'
+        }`}>
           {/* Left: Animated Logo */}
           <div className="flex items-center shrink-0">
             <span className="logo-shimmer font-mono text-sm sm:text-base font-black tracking-[0.18em] sm:tracking-[0.22em] uppercase select-none cursor-default text-cyan-400">
               EZF
             </span>
-            <span className="hidden md:inline-block ml-2 text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-bold">
-              WOW FOREVER
+            <span className={`hidden md:inline-block ml-2 text-[10px] font-mono uppercase tracking-wider font-bold ${
+              isDark ? 'text-zinc-500' : 'text-slate-400'
+            }`}>
+              {t.logoSubtitle}
             </span>
           </div>
 
           {/* Center: Morphing Navigation Icons [ ⊞ ] [ 🧭 ] [ ⚔️ ] [ ⛏️ ] + Minimalist Terrain Dot/Check Indicator */}
           <div className="flex items-center gap-1.5 shrink-0">
-            <div className="p-0.5 rounded-lg border border-cyan-900/60 bg-[#070b12] flex items-center shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] shrink-0">
+            <div className={`p-0.5 rounded-lg border flex items-center shrink-0 ${
+              isDark
+                ? 'border-cyan-900/60 bg-[#070b12] shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]'
+                : 'border-slate-200 bg-slate-100/90 shadow-inner'
+            }`}>
               {/* Ротация */}
               <button
                 type="button"
                 onClick={() => setActiveView('rotation')}
                 className={`group flex items-center h-7 px-2 rounded-md transition-all duration-200 cursor-pointer select-none active:scale-95 ${
                   activeView === 'rotation'
-                    ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black tab-active-glow'
-                    : 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
+                    ? isDark
+                      ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black tab-active-glow'
+                      : 'bg-white text-cyan-800 border border-cyan-500 font-black shadow-xs'
+                    : isDark
+                    ? 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
+                    : 'text-slate-600 hover:text-cyan-800 border border-transparent hover:bg-white/80'
                 }`}
-                title="Ротация"
+                title={t.navRotation}
               >
-                <Layers className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <Layers className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
                 <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[75px] group-hover:opacity-100 group-hover:ml-1.5 text-[10.5px] font-mono font-bold tracking-wider">
-                  Ротация
+                  {t.navRotation}
                 </span>
               </button>
 
@@ -624,14 +641,18 @@ export const App: React.FC = () => {
                 onClick={() => setActiveView('routes')}
                 className={`group flex items-center h-7 px-2 rounded-md transition-all duration-200 cursor-pointer select-none active:scale-95 ${
                   activeView === 'routes'
-                    ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black tab-active-glow'
-                    : 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
+                    ? isDark
+                      ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black tab-active-glow'
+                      : 'bg-white text-cyan-800 border border-cyan-500 font-black shadow-xs'
+                    : isDark
+                    ? 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
+                    : 'text-slate-600 hover:text-cyan-800 border border-transparent hover:bg-white/80'
                 }`}
-                title="Маршруты"
+                title={t.navRoutes}
               >
-                <Compass className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <Compass className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
                 <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[75px] group-hover:opacity-100 group-hover:ml-1.5 text-[10.5px] font-mono font-bold tracking-wider">
-                  Маршруты
+                  {t.navRoutes}
                 </span>
               </button>
 
@@ -644,14 +665,18 @@ export const App: React.FC = () => {
                   isBotRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-95'
                 } ${
                   settings.mode === 'grind'
-                    ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
-                    : 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
+                    ? isDark
+                      ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                      : 'bg-white text-cyan-800 border border-cyan-500 font-black shadow-xs'
+                    : isDark
+                    ? 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
+                    : 'text-slate-600 hover:text-cyan-800 border border-transparent hover:bg-white/80'
                 }`}
-                title={isBotRunning ? 'Режим применяется при старте' : 'Гринд'}
+                title={isBotRunning ? t.modeLockedWhileRunning : t.modeGrindTitle}
               >
-                <Swords className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <Swords className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
                 <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[75px] group-hover:opacity-100 group-hover:ml-1.5 text-[10.5px] font-mono font-bold tracking-wider">
-                  Гринд
+                  {t.modeGrind}
                 </span>
               </button>
 
@@ -664,14 +689,18 @@ export const App: React.FC = () => {
                   isBotRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-95'
                 } ${
                   settings.mode === 'gather'
-                    ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
-                    : 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
+                    ? isDark
+                      ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                      : 'bg-white text-cyan-800 border border-cyan-500 font-black shadow-xs'
+                    : isDark
+                    ? 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
+                    : 'text-slate-600 hover:text-cyan-800 border border-transparent hover:bg-white/80'
                 }`}
-                title={isBotRunning ? 'Режим применяется при старте' : 'Сбор'}
+                title={isBotRunning ? t.modeLockedWhileRunning : t.modeGatherTitle}
               >
-                <Pickaxe className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <Pickaxe className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
                 <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[75px] group-hover:opacity-100 group-hover:ml-1.5 text-[10.5px] font-mono font-bold tracking-wider">
-                  Сбор
+                  {t.modeGather}
                 </span>
               </button>
             </div>
@@ -679,6 +708,8 @@ export const App: React.FC = () => {
             {/* Minimalist Terrain Dot / Checkmark Beacon */}
             <TerrainHeaderIndicator
               initialTerrain={activeTerrain}
+              language={language}
+              theme={theme}
               onClear={() => {
                 setActiveTerrain(null);
                 setActiveTerrainCard(null);
@@ -706,47 +737,100 @@ export const App: React.FC = () => {
             />
           </div>
 
-          {/* Right Action Controls: [ • ▶ СТАРТ ] [ ⤓ ] [ ⚙ ] */}
+          {/* Right Action Controls: [ 🌐 RU ] [ ☼/☾ ] [ ▶ СТАРТ ] [ ⤓ ] [ ⚙ ] */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            {/* Start / Stop Button with F5 Keybind */}
+            {/* Language Switcher Button (RU / EN) */}
+            <button
+              type="button"
+              onClick={() => setLanguage((prev) => (prev === 'ru' ? 'en' : 'ru'))}
+              className={`group flex items-center h-7 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none active:scale-95 ${
+                isDark
+                  ? 'border-cyan-900/60 bg-[#070b12] hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
+                  : 'border-slate-300 bg-white hover:border-cyan-500 hover:bg-slate-50 text-slate-700 shadow-xs'
+              }`}
+              title={t.langToggle}
+            >
+              <Globe className="w-3.5 h-3.5 text-cyan-500 shrink-0 drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]" />
+              <span className={`text-[10px] font-mono font-black ml-1 ${isDark ? 'text-cyan-300' : 'text-slate-800'}`}>
+                {language.toUpperCase()}
+              </span>
+              <span className={`max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[70px] group-hover:opacity-100 group-hover:ml-1 text-[9px] font-mono ${
+                isDark ? 'text-zinc-400' : 'text-slate-500'
+              }`}>
+                {language === 'ru' ? '→ EN' : '→ RU'}
+              </span>
+            </button>
+
+            {/* Dark / Light Theme Toggle */}
+            <button
+              type="button"
+              onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+              className={`group flex items-center h-7 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none active:scale-95 ${
+                isDark
+                  ? 'border-cyan-900/60 bg-[#070b12] hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
+                  : 'border-slate-300 bg-white hover:border-cyan-500 hover:bg-slate-50 text-slate-700 shadow-xs'
+              }`}
+              title={theme === 'dark' ? t.themeLight : t.themeDark}
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-3.5 h-3.5 text-amber-400 shrink-0 drop-shadow-[0_0_6px_rgba(251,191,36,0.6)]" />
+              ) : (
+                <Moon className="w-3.5 h-3.5 text-cyan-600 shrink-0 drop-shadow-[0_0_6px_rgba(6,182,212,0.6)]" />
+              )}
+              <span className={`max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[65px] group-hover:opacity-100 group-hover:ml-1.5 text-[9.5px] font-mono font-bold tracking-wider ${
+                isDark ? 'text-zinc-300' : 'text-slate-800'
+              }`}>
+                {t.theme}
+              </span>
+            </button>
+
+            {/* Minimalist Start / Stop Button with Status Ping and Hover Text */}
             {isBotRunning ? (
               <button
                 onClick={handleStopBot}
                 disabled={isStopping}
-                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-mono font-bold tracking-wider transition-all duration-200 cursor-pointer border select-none disabled:opacity-50 active:scale-95 bg-gradient-to-r from-[#190a12] via-[#240e1b] to-[#190a12] text-rose-300 border-rose-500/80 hover:border-rose-400 hover:text-rose-100 hover:shadow-[0_0_18px_rgba(244,63,94,0.45)] shadow-[0_0_10px_rgba(244,63,94,0.25)] animate-pulse"
+                className={`group flex items-center h-7 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none disabled:opacity-50 active:scale-95 ${
+                  isDark
+                    ? 'border-rose-500/80 bg-gradient-to-r from-[#190a12] via-[#240e1b] to-[#190a12] text-rose-300 hover:border-rose-400 hover:text-rose-100 hover:shadow-[0_0_16px_rgba(244,63,94,0.45)] shadow-[0_0_8px_rgba(244,63,94,0.25)] animate-pulse'
+                    : 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 shadow-xs'
+                }`}
                 title={t.stopTitle}
               >
-                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                <span className="relative flex h-1.5 w-1.5 shrink-0 mr-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
                 </span>
                 {isStopping ? (
-                  <Loader2 className="w-3 h-3 text-rose-200 animate-spin" />
+                  <Loader2 className="w-3 h-3 text-rose-400 animate-spin shrink-0" />
                 ) : (
-                  <Square className="w-2.5 h-2.5 fill-current" />
+                  <Square className="w-2.5 h-2.5 fill-current shrink-0" />
                 )}
-                <span className="text-[10.5px] sm:text-[11px] font-black uppercase tracking-wider">
-                  {isStopping ? t.stopping : t.stop}
+                <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[85px] group-hover:opacity-100 group-hover:ml-1.5 text-[10px] font-mono font-black uppercase tracking-wider">
+                  {isStopping ? t.stopping : `${t.stop} (F5)`}
                 </span>
               </button>
             ) : (
               <button
                 onClick={handleStartBot}
                 disabled={isStarting}
-                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-mono font-bold tracking-wider transition-all duration-200 cursor-pointer border select-none disabled:opacity-50 active:scale-95 bg-gradient-to-r from-[#061019] via-[#091b2c] to-[#061019] text-cyan-300 border-cyan-400/80 hover:border-cyan-300 hover:text-cyan-100 hover:shadow-[0_0_18px_rgba(6,182,212,0.5)] shadow-[0_0_10px_rgba(6,182,212,0.3)]"
+                className={`group flex items-center h-7 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none disabled:opacity-50 active:scale-95 ${
+                  isDark
+                    ? 'border-cyan-400/80 bg-gradient-to-r from-[#061019] via-[#091b2c] to-[#061019] text-cyan-300 hover:border-cyan-300 hover:text-cyan-100 hover:shadow-[0_0_16px_rgba(6,182,212,0.5)] shadow-[0_0_8px_rgba(6,182,212,0.3)]'
+                    : 'border-cyan-500 bg-cyan-50 text-cyan-800 hover:bg-cyan-100 shadow-xs'
+                }`}
                 title={t.startTitle}
               >
-                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                <span className="relative flex h-1.5 w-1.5 shrink-0 mr-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-80"></span>
                   <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.9)]"></span>
                 </span>
                 {isStarting ? (
-                  <Loader2 className="w-3 h-3 text-cyan-200 animate-spin" />
+                  <Loader2 className="w-3 h-3 text-cyan-500 animate-spin shrink-0" />
                 ) : (
-                  <Play className="w-2.5 h-2.5 fill-current drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]" />
+                  <Play className="w-2.5 h-2.5 fill-current drop-shadow-[0_0_6px_rgba(6,182,212,0.8)] shrink-0" />
                 )}
-                <span className="text-[10.5px] sm:text-[11px] font-black uppercase tracking-wider">
-                  {isStarting ? t.starting : t.start}
+                <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[85px] group-hover:opacity-100 group-hover:ml-1.5 text-[10px] font-mono font-black uppercase tracking-wider">
+                  {isStarting ? t.starting : `${t.start} (F5)`}
                 </span>
               </button>
             )}
@@ -754,28 +838,46 @@ export const App: React.FC = () => {
             {/* Download JSON backup */}
             <button
               onClick={handleExportJson}
-              className="w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-lg border border-cyan-900/60 bg-[#070b12] hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300 flex items-center justify-center transition-all duration-200 cursor-pointer select-none active:scale-95"
+              className={`group flex items-center h-7 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none active:scale-95 ${
+                isDark
+                  ? 'border-cyan-900/60 bg-[#070b12] hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
+                  : 'border-slate-300 bg-white hover:border-cyan-500 hover:bg-slate-50 text-slate-700 shadow-xs'
+              }`}
               title={t.exportJson}
             >
-              <Download className="w-3.5 h-3.5 drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]" />
+              <Download className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
+              <span className={`max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[65px] group-hover:opacity-100 group-hover:ml-1.5 text-[10px] font-mono font-bold tracking-wider ${
+                isDark ? 'text-cyan-300' : 'text-slate-800'
+              }`}>
+                {t.exportJsonShort}
+              </span>
             </button>
 
             {/* Settings Tab Button */}
             <button
               type="button"
               onClick={() => setActiveView((curr) => (curr === 'settings' ? 'rotation' : 'settings'))}
-              className={`w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer select-none active:scale-95 ${
+              className={`group flex items-center h-7 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none active:scale-95 ${
                 activeView === 'settings'
-                  ? 'bg-[#0c1626] border-cyan-400 text-cyan-200 shadow-[0_0_14px_rgba(6,182,212,0.7)] ring-1 ring-cyan-400 tab-active-glow'
-                  : 'bg-[#070b12] border-cyan-900/60 hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
+                  ? isDark
+                    ? 'bg-[#0c1626] border-cyan-400 text-cyan-200 shadow-[0_0_14px_rgba(6,182,212,0.7)] ring-1 ring-cyan-400 tab-active-glow'
+                    : 'bg-cyan-50 border-cyan-500 text-cyan-800 shadow-sm ring-1 ring-cyan-400'
+                  : isDark
+                  ? 'bg-[#070b12] border-cyan-900/60 hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
+                  : 'bg-white border-slate-300 hover:border-cyan-500 hover:bg-slate-50 text-slate-700 shadow-xs'
               }`}
               title={t.settings}
             >
               <Settings
-                className={`w-3.5 h-3.5 transition-transform duration-300 ${
-                  activeView === 'settings' ? 'rotate-90 text-cyan-200' : ''
-                } drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]`}
+                className={`w-3.5 h-3.5 transition-transform duration-300 shrink-0 text-cyan-500 ${
+                  activeView === 'settings' ? 'rotate-90' : ''
+                }`}
               />
+              <span className={`max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[65px] group-hover:opacity-100 group-hover:ml-1.5 text-[10px] font-mono font-bold tracking-wider ${
+                isDark ? 'text-cyan-300' : 'text-slate-800'
+              }`}>
+                {t.settingsBinds}
+              </span>
             </button>
           </div>
         </header>
@@ -812,7 +914,7 @@ export const App: React.FC = () => {
         )}
 
         {/* Main Content: Rotation Sequence OR Routes View OR Settings View */}
-        <main className={`p-1.5 sm:p-2.5 w-full flex flex-col min-h-0 flex-1 relative ${activeView === 'routes' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+        <main className={`p-1.5 sm:p-2.5 w-full flex flex-col min-h-0 flex-1 relative ${activeView === 'routes' || activeView === 'settings' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           <div
             key={activeView}
             className="animate-screen-assemble stagger-assemble w-full flex flex-col flex-1"
@@ -841,6 +943,8 @@ export const App: React.FC = () => {
                 onTerrainStatus={handleTerrainResponse}
                 activeTerrainCard={activeTerrainCard}
                 onCloseTerrainCard={() => setActiveTerrainCard(null)}
+                language={language}
+                theme={theme}
               />
             ) : (
               <ComboSequence

@@ -22,6 +22,10 @@ export interface AppSettings {
   mode: 'grind' | 'gather';
   minimapZoomInKey: string;
   minimapZoomOutKey: string;
+  startStopKey?: string;
+  interactKey?: string;
+  clearTargetKey?: string;
+  pauseKey?: string;
 }
 
 
