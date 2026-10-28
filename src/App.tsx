@@ -4,7 +4,7 @@ import { ComboSequence } from './components/ComboSequence';
 import { SettingsView } from './components/SettingsView';
 import { RoutesView } from './components/RoutesView';
 import { SessionSummaryModal } from './components/SessionSummaryModal';
-import { TerrainNotificationCard } from './components/TerrainNotificationCard';
+import { TerrainHeaderIndicator } from './components/TerrainHeaderIndicator';
 import {
   SessionSummaryData,
   AppSettings,
@@ -75,42 +75,21 @@ export const App: React.FC = () => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Terrain mesh generation notifications (deduplicated by map_id)
-  const [terrainCards, setTerrainCards] = useState<
-    Record<number, { routeName: string; initialTerrain: TerrainStatus }>
-  >({});
+  // Terrain mesh generation status (minimalist header indicator + interactive visualizer card)
+  const [activeTerrain, setActiveTerrain] = useState<TerrainStatus | null>(null);
+  const [activeTerrainCard, setActiveTerrainCard] = useState<{
+    routeName: string;
+    initialTerrain: TerrainStatus;
+  } | null>(null);
 
   const handleTerrainResponse = useCallback(
     (routeName: string, terrain: TerrainStatus) => {
-      if (terrain.status === 'ready') {
-        addToast({
-          type: 'success',
-          message: 'Сетка местности зоны готова',
-        });
-        setTerrainCards((prev) => {
-          const next = { ...prev };
-          delete next[terrain.map_id];
-          return next;
-        });
-      } else if (terrain.status === 'error') {
-        addToast({
-          type: 'error',
-          message: `${terrain.error || 'Ошибка сборки сетки'}. Бот будет ходить без сетки; панель попробует снова при следующей записи.`,
-        });
-        setTerrainCards((prev) => {
-          const next = { ...prev };
-          delete next[terrain.map_id];
-          return next;
-        });
-      } else if (terrain.status === 'building') {
-        // Show non-auto-dismissing card (one per map_id)
-        setTerrainCards((prev) => ({
-          ...prev,
-          [terrain.map_id]: { routeName, initialTerrain: terrain },
-        }));
+      setActiveTerrain(terrain);
+      if (terrain.status === 'building' || terrain.status === 'ready') {
+        setActiveTerrainCard({ routeName, initialTerrain: terrain });
       }
     },
-    [addToast]
+    []
   );
 
   // Theme & Language Settings
@@ -605,83 +584,124 @@ export const App: React.FC = () => {
             : 'bg-white border-zinc-200/90 shadow-[0_10px_35px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.05)]'
         }`}
       >
-        {/* Compact & Responsive Header matching image_ba356a08.png */}
-        <header className="px-2.5 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 rounded-t-xl sm:rounded-t-2xl shrink-0 border-b border-zinc-800/80 bg-[#06080d] transition-colors flex-wrap sm:flex-nowrap">
+        {/* Compact & Responsive Header: strictly single-row without wrapping */}
+        <header className="px-2.5 sm:px-3 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-2 rounded-t-xl shrink-0 border-b border-zinc-800/80 bg-[#06080d] select-none flex-nowrap min-w-0">
           {/* Left: Animated Logo */}
-          <div className="flex items-center shrink-0 pl-0.5 sm:pl-1">
-            <span className="logo-shimmer font-mono text-sm sm:text-base font-black tracking-[0.2em] sm:tracking-[0.24em] uppercase select-none cursor-default text-cyan-400">
+          <div className="flex items-center shrink-0">
+            <span className="logo-shimmer font-mono text-sm sm:text-base font-black tracking-[0.18em] sm:tracking-[0.22em] uppercase select-none cursor-default text-cyan-400">
               EZF
             </span>
-            <span className="ml-2 text-[10px] sm:text-[11px] font-mono text-zinc-500 uppercase tracking-wider font-bold">
+            <span className="hidden md:inline-block ml-2 text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-bold">
               WOW FOREVER
             </span>
           </div>
 
-          {/* Center: Single Continuous Segmented Control [ ⊞ Ротация ] [ 🧭 Маршруты ] [ ⚔️ Гринд ] [ ⛏️ Сбор ] */}
-          <div className="p-0.5 rounded-lg border border-cyan-900/60 bg-[#070b12] flex items-center shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] shrink-0">
-            {/* Ротация */}
-            <button
-              type="button"
-              onClick={() => setActiveView('rotation')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-[10.5px] sm:text-[11px] font-mono font-bold tracking-wider transition-all duration-150 cursor-pointer select-none active:scale-95 ${
-                activeView === 'rotation'
-                  ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black tab-active-glow'
-                  : 'text-zinc-400 hover:text-cyan-200 border border-transparent'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Ротация</span>
-            </button>
+          {/* Center: Morphing Navigation Icons [ ⊞ ] [ 🧭 ] [ ⚔️ ] [ ⛏️ ] + Minimalist Terrain Dot/Check Indicator */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="p-0.5 rounded-lg border border-cyan-900/60 bg-[#070b12] flex items-center shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] shrink-0">
+              {/* Ротация */}
+              <button
+                type="button"
+                onClick={() => setActiveView('rotation')}
+                className={`group flex items-center h-7 px-2 rounded-md transition-all duration-200 cursor-pointer select-none active:scale-95 ${
+                  activeView === 'rotation'
+                    ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black tab-active-glow'
+                    : 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
+                }`}
+                title="Ротация"
+              >
+                <Layers className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[75px] group-hover:opacity-100 group-hover:ml-1.5 text-[10.5px] font-mono font-bold tracking-wider">
+                  Ротация
+                </span>
+              </button>
 
-            {/* Маршруты */}
-            <button
-              type="button"
-              onClick={() => setActiveView('routes')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-[10.5px] sm:text-[11px] font-mono font-bold tracking-wider transition-all duration-150 cursor-pointer select-none active:scale-95 ${
-                activeView === 'routes'
-                  ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black tab-active-glow'
-                  : 'text-zinc-400 hover:text-cyan-200 border border-transparent'
-              }`}
-            >
-              <Compass className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Маршруты</span>
-            </button>
+              {/* Маршруты */}
+              <button
+                type="button"
+                onClick={() => setActiveView('routes')}
+                className={`group flex items-center h-7 px-2 rounded-md transition-all duration-200 cursor-pointer select-none active:scale-95 ${
+                  activeView === 'routes'
+                    ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black tab-active-glow'
+                    : 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
+                }`}
+                title="Маршруты"
+              >
+                <Compass className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[75px] group-hover:opacity-100 group-hover:ml-1.5 text-[10.5px] font-mono font-bold tracking-wider">
+                  Маршруты
+                </span>
+              </button>
 
-            {/* Гринд */}
-            <button
-              type="button"
-              disabled={isBotRunning}
-              onClick={() => handleModeChange('grind')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-[10.5px] sm:text-[11px] font-mono font-bold tracking-wider transition-all duration-150 select-none ${
-                isBotRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-95'
-              } ${
-                settings.mode === 'grind'
-                  ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
-                  : 'text-zinc-400 hover:text-cyan-200 border border-transparent'
-              }`}
-              title={isBotRunning ? 'Режим применяется при старте' : undefined}
-            >
-              <Swords className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Гринд</span>
-            </button>
+              {/* Гринд */}
+              <button
+                type="button"
+                disabled={isBotRunning}
+                onClick={() => handleModeChange('grind')}
+                className={`group flex items-center h-7 px-2 rounded-md transition-all duration-200 select-none ${
+                  isBotRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-95'
+                } ${
+                  settings.mode === 'grind'
+                    ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                    : 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
+                }`}
+                title={isBotRunning ? 'Режим применяется при старте' : 'Гринд'}
+              >
+                <Swords className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[75px] group-hover:opacity-100 group-hover:ml-1.5 text-[10.5px] font-mono font-bold tracking-wider">
+                  Гринд
+                </span>
+              </button>
 
-            {/* Сбор */}
-            <button
-              type="button"
-              disabled={isBotRunning}
-              onClick={() => handleModeChange('gather')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-[10.5px] sm:text-[11px] font-mono font-bold tracking-wider transition-all duration-150 select-none ${
-                isBotRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-95'
-              } ${
-                settings.mode === 'gather'
-                  ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
-                  : 'text-zinc-400 hover:text-cyan-200 border border-transparent'
-              }`}
-              title={isBotRunning ? 'Режим применяется при старте' : undefined}
-            >
-              <Pickaxe className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Сбор</span>
-            </button>
+              {/* Сбор */}
+              <button
+                type="button"
+                disabled={isBotRunning}
+                onClick={() => handleModeChange('gather')}
+                className={`group flex items-center h-7 px-2 rounded-md transition-all duration-200 select-none ${
+                  isBotRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-95'
+                } ${
+                  settings.mode === 'gather'
+                    ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
+                    : 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
+                }`}
+                title={isBotRunning ? 'Режим применяется при старте' : 'Сбор'}
+              >
+                <Pickaxe className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[75px] group-hover:opacity-100 group-hover:ml-1.5 text-[10.5px] font-mono font-bold tracking-wider">
+                  Сбор
+                </span>
+              </button>
+            </div>
+
+            {/* Minimalist Terrain Dot / Checkmark Beacon */}
+            <TerrainHeaderIndicator
+              initialTerrain={activeTerrain}
+              onClear={() => {
+                setActiveTerrain(null);
+                setActiveTerrainCard(null);
+              }}
+              onToggleCard={() => {
+                if (activeView !== 'routes') {
+                  setActiveView('routes');
+                  if (!activeTerrainCard && activeTerrain) {
+                    setActiveTerrainCard({
+                      routeName: 'Маршрут',
+                      initialTerrain: activeTerrain,
+                    });
+                  }
+                  return;
+                }
+                if (activeTerrainCard) {
+                  setActiveTerrainCard(null);
+                } else if (activeTerrain) {
+                  setActiveTerrainCard({
+                    routeName: 'Маршрут',
+                    initialTerrain: activeTerrain,
+                  });
+                }
+              }}
+            />
           </div>
 
           {/* Right Action Controls: [ • ▶ СТАРТ ] [ ⤓ ] [ ⚙ ] */}
@@ -817,6 +837,8 @@ export const App: React.FC = () => {
                 onToast={addToast}
                 onError={(msg) => addToast({ type: 'error', message: msg })}
                 onTerrainStatus={handleTerrainResponse}
+                activeTerrainCard={activeTerrainCard}
+                onCloseTerrainCard={() => setActiveTerrainCard(null)}
               />
             ) : (
               <ComboSequence
@@ -834,27 +856,8 @@ export const App: React.FC = () => {
         </main>
       </div>
 
-      {/* Floating Notifications & Terrain Building Cards in top-right corner */}
+      {/* Floating Notifications in top-right corner */}
       <div className="fixed top-3 right-3 z-50 flex flex-col gap-2 max-w-sm pointer-events-none select-none">
-        {/* Terrain Building Status Cards (Non-dismissing automatically while building, deduplicated by map_id) */}
-        {Object.entries(terrainCards).map(([mapIdStr, item]) => {
-          const mapId = Number(mapIdStr);
-          return (
-            <TerrainNotificationCard
-              key={`terrain_${mapId}`}
-              routeName={item.routeName}
-              initialTerrain={item.initialTerrain}
-              onClose={() => {
-                setTerrainCards((prev) => {
-                  const next = { ...prev };
-                  delete next[mapId];
-                  return next;
-                });
-              }}
-            />
-          );
-        })}
-
         {/* Regular Toast Notifications (5s auto-dismiss, click to dismiss) */}
         {toasts.map((toast) => (
           <div

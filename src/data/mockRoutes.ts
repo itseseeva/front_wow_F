@@ -146,6 +146,9 @@ export const mockGetRouteRecordStatus = async (): Promise<RouteRecordStatus> => 
   };
 };
 
+// Route waiting for terrain generation to complete before appearing in available routes
+let pendingMockRouteCommit: RouteInfo | null = null;
+
 // Mock stop_route_record(save)
 export const mockStopRouteRecord = async (
   save: boolean
@@ -175,9 +178,8 @@ export const mockStopRouteRecord = async (
     thumb: points.filter((_, idx) => idx % Math.max(1, Math.floor(points.length / 35))),
   };
 
-  storedRoutes = storedRoutes.map(r => ({ ...r, active: false }));
-  storedRoutes.unshift(newRoute);
-  saveStoredRoutes();
+  // Hold route until terrain build is completed!
+  pendingMockRouteCommit = newRoute;
 
   const map_id = newRoute.map_id ?? 1436;
   mockTerrainSessions[map_id] = { startedAt: Date.now() };
@@ -274,6 +276,15 @@ export const mockGetTerrainStatus = async (
       error: null,
       source: 'Retail (мок)',
     };
+
+    // Commit pending route now that terrain is ready!
+    if (pendingMockRouteCommit) {
+      const r = pendingMockRouteCommit;
+      pendingMockRouteCommit = null;
+      storedRoutes = storedRoutes.map(item => ({ ...item, active: false }));
+      storedRoutes.unshift(r);
+      saveStoredRoutes();
+    }
 
     if (!session.finishedEventFired && typeof window !== 'undefined') {
       session.finishedEventFired = true;

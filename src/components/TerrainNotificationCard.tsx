@@ -596,7 +596,7 @@ export const TerrainNotificationCard: React.FC<TerrainNotificationCardProps> = (
 
   return (
     <div
-      className={`w-80 sm:w-86 p-3 rounded-xl border text-xs font-mono shadow-[0_4px_30px_rgba(0,0,0,0.95)] pointer-events-auto select-none transition-all duration-300 animate-fadeIn relative ${
+      className={`w-full p-2.5 sm:p-3 rounded-xl border text-xs font-mono shadow-[0_4px_25px_rgba(0,0,0,0.85)] pointer-events-auto select-none transition-all duration-300 animate-fadeIn relative ${
         isReady
           ? 'bg-[#061810] border-emerald-500/70 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
           : isError

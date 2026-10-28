@@ -7,7 +7,7 @@ import {
   mockStopRouteRecord,
   mockGetRouteRecordStatus,
 } from '../data/mockRoutes';
-import { Radio, AlertTriangle, Square, Check, X, Loader2 } from 'lucide-react';
+import { Radio, AlertTriangle, Check, X, Loader2, Play } from 'lucide-react';
 
 interface RouteRecordModalProps {
   isOpen: boolean;
@@ -137,11 +137,6 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
     try {
       const res = await stopRecordApi(true);
       if (res.ok && res.route) {
-        const routeType = res.route.loop ? 'круг' : 'туда-обратно';
-        onToast({
-          type: 'success',
-          message: `Маршрут «${res.route.name}» сохранён: ${res.route.points} точек, ${routeType}, ≈${res.route.length_s} с бега`,
-        });
         onRouteSaved(res.route, res.terrain);
         onClose();
       } else {
@@ -183,139 +178,147 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-3 bg-black/85 backdrop-blur-xs animate-fadeIn select-none">
-      <div className="w-full max-w-[500px] bg-[#090b10] border border-cyan-900/60 rounded-xl shadow-[0_0_35px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col text-zinc-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-3 bg-black/80 backdrop-blur-xs animate-fadeIn select-none">
+      {/* Ultra-compact Cyber Capsule */}
+      <div className="w-full max-w-[340px] bg-[#06080d]/98 border border-cyan-500/40 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.98),0_0_25px_rgba(6,182,212,0.18)] overflow-hidden flex flex-col text-zinc-200 animate-screen-assemble relative">
+        {/* Top Animated Neon Accent Line */}
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-80" />
+
         {/* Header */}
-        <div className="px-3.5 py-2.5 bg-[#06080d] border-b border-zinc-800/80 flex items-center justify-between shrink-0">
+        <div className="px-3 py-2.5 bg-[#04060a] border-b border-zinc-800/80 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
-            <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
-            <span className="text-xs font-mono font-black uppercase tracking-wider text-zinc-100">
-              {status?.recording ? 'ИДЁТ ЗАПИСЬ МАРШРУТА' : 'ЗАПИСАТЬ МАРШРУТ ФАРМА'}
+            {status?.recording ? (
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-90" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,1)]" />
+              </span>
+            ) : (
+              <Radio className="w-3.5 h-3.5 text-cyan-400" />
+            )}
+            <span className="text-[11px] font-mono font-black uppercase tracking-wider text-zinc-100">
+              {status?.recording ? 'Запись пути' : 'Новый маршрут'}
             </span>
           </div>
 
           <button
             onClick={status?.recording ? handleCancelRecord : onClose}
-            className="w-6 h-6 rounded flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors"
+            className="w-5 h-5 rounded-md flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors cursor-pointer"
+            title="Закрыть"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Start dialog if not currently recording */}
+        {/* State 1: Before Recording Starts */}
         {!status?.recording ? (
-          <form onSubmit={handleStart} className="p-4 space-y-3.5">
-            <div className="text-[11px] text-zinc-300 leading-relaxed bg-[#0c1018] p-3 rounded-lg border border-zinc-800/60">
-              <p className="font-semibold text-cyan-300 mb-1">Как записать маршрут:</p>
-              <ul className="list-disc list-inside space-y-0.5 text-zinc-400">
-                <li>Зайдите в игру за персонажа в зоне фарма.</li>
-                <li>Нажмите «Начать запись» и пробегите желаемый круг или линию.</li>
-                <li>Бот будет считывать координаты с карты автоматически.</li>
-                <li>По окончании круга нажмите «Закончить и сохранить».</li>
-              </ul>
-            </div>
-
+          <form onSubmit={handleStart} className="p-3.5 space-y-3">
             <div>
-              <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1 tracking-wider">
-                Название маршрута
-              </label>
               <input
                 type="text"
                 value={routeName}
                 onChange={(e) => setRouteName(e.target.value)}
-                placeholder="Например: Побережье мурлоков"
+                placeholder="Имя маршрута (напр. Маршрут 1)"
                 maxLength={40}
+                autoFocus
                 required
-                className="w-full h-8 px-2.5 bg-[#05070a] border border-cyan-900/60 rounded-md text-xs font-mono text-cyan-200 placeholder-zinc-600 focus:outline-hidden focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40"
+                className="w-full h-9 px-3 bg-[#030508] border border-cyan-900/50 focus:border-cyan-400 rounded-xl text-xs font-mono text-cyan-200 placeholder-zinc-600 focus:outline-hidden focus:ring-1 focus:ring-cyan-400/40 transition-all shadow-inner"
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-1 border-t border-zinc-800/60">
+            {/* Micro hint */}
+            <p className="text-[10px] font-mono text-zinc-400 text-center leading-tight">
+              Пробегите круг в игре — бот запишет координаты сам
+            </p>
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-2 pt-1">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3 py-1.5 rounded-md text-xs font-mono text-zinc-400 hover:text-white hover:bg-zinc-800/50 transition-colors"
+                className="w-1/3 py-2 rounded-xl text-xs font-mono text-zinc-400 hover:text-white hover:bg-zinc-800/50 transition-colors cursor-pointer"
               >
                 Отмена
               </button>
               <button
                 type="submit"
                 disabled={isStarting || !routeName.trim()}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-mono font-black uppercase tracking-wider bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)] disabled:opacity-50 transition-all cursor-pointer active:scale-95"
+                className="w-2/3 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-black shadow-[0_0_15px_rgba(6,182,212,0.35)] disabled:opacity-50 transition-all cursor-pointer active:scale-95"
               >
-                {isStarting && <Loader2 className="w-3 h-3 animate-spin" />}
-                <span>Начать запись</span>
+                {isStarting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Play className="w-3 h-3 fill-current" />
+                )}
+                <span>Начать</span>
               </button>
             </div>
           </form>
         ) : (
-          /* Active Recording HUD */
-          <div className="p-3 space-y-2 flex flex-col">
-            {/* Top Status Line: «Карта {map_id} · Точек {N} · {секунды записи} с · ≈{length_s} с бега» */}
-            <div className="flex items-center justify-between text-[10.5px] font-mono bg-[#05070a] px-3 py-1.5 rounded-lg border border-zinc-800/80 text-zinc-300">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping inline-block" />
-                <span className="text-rose-400 font-bold">REC</span>
-                <span className="text-zinc-500">·</span>
-                <span>Карта {status.map_id ?? '—'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span>Точек <strong className="text-cyan-300">{status.points?.length || 0}</strong></span>
-                <span className="text-zinc-500">·</span>
-                <span>{status.seconds} с</span>
-                <span className="text-zinc-500">·</span>
-                <span className="text-amber-300 font-bold">≈{status.length_s} с бега</span>
-              </div>
-            </div>
-
-            {/* Warning banner if any */}
-            {status.warning && (
-              <div className="bg-amber-950/40 border border-amber-600/70 text-amber-300 px-2.5 py-1.5 rounded-md text-[11px] font-mono flex items-center gap-1.5 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span>{status.warning}</span>
-              </div>
-            )}
-
-            {/* Canvas: full width, height ~220px */}
-            <div className="h-[220px] w-full bg-[#05070b] border border-cyan-900/40 rounded-lg overflow-hidden relative shadow-inner">
+          /* State 2: Active Recording HUD */
+          <div className="p-3 space-y-2.5 flex flex-col">
+            {/* Live Canvas Preview */}
+            <div className="h-[155px] w-full bg-[#020407] border border-cyan-950/70 rounded-xl overflow-hidden relative shadow-inner">
               <RouteCanvas
                 points={status.points || []}
                 mapId={status.map_id}
                 mode="live_record"
-                aspect={1.5}
+                aspect={1.6}
                 loop={false}
               />
+              {/* Subtle pulsing live badge in canvas */}
+              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-[#020407]/90 border border-rose-500/50 text-[9px] font-mono font-bold text-rose-300 flex items-center gap-1 shadow-[0_0_8px_rgba(244,63,94,0.4)]">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block" />
+                <span>REC</span>
+              </div>
             </div>
 
-            {/* Caption below canvas */}
-            <p className="text-[9.5px] font-mono text-zinc-500 text-center select-none">
-              Запись идёт сама. Бот ничего не нажимает. Вернись к старту — получится круг.
-            </p>
+            {/* Warning banner if character is standing still */}
+            {status.warning && (
+              <div className="bg-amber-950/40 border border-amber-600/50 text-amber-300 px-2.5 py-1 rounded-lg text-[10px] font-mono flex items-center justify-center gap-1.5 animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+                <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                <span>{status.warning}</span>
+              </div>
+            )}
+
+            {/* Cyber Metrics HUD Bar */}
+            <div className="grid grid-cols-3 gap-1 py-1.5 px-2 rounded-xl bg-[#030508] border border-zinc-850 text-center font-mono">
+              <div className="flex flex-col">
+                <span className="text-[8.5px] text-zinc-500 uppercase tracking-wider">Точек</span>
+                <span className="text-xs font-bold text-cyan-300">{status.points?.length || 0}</span>
+              </div>
+              <div className="flex flex-col border-x border-zinc-850/80">
+                <span className="text-[8.5px] text-zinc-500 uppercase tracking-wider">Время</span>
+                <span className="text-xs font-bold text-zinc-200">{status.seconds} с</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[8.5px] text-zinc-500 uppercase tracking-wider">Бег</span>
+                <span className="text-xs font-bold text-amber-300">≈{status.length_s} с</span>
+              </div>
+            </div>
 
             {/* Bottom Actions */}
-            <div className="flex items-center justify-between pt-1 border-t border-zinc-800/60">
+            <div className="flex items-center gap-2 pt-0.5">
               <button
                 type="button"
                 onClick={handleCancelRecord}
                 disabled={isStopping}
-                className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-mono text-zinc-400 hover:text-rose-400 hover:bg-rose-950/20 border border-transparent hover:border-rose-900/60 transition-colors cursor-pointer"
+                className="w-1/3 py-2 rounded-xl text-xs font-mono text-zinc-400 hover:text-rose-400 hover:bg-rose-950/20 transition-colors cursor-pointer"
               >
-                <Square className="w-3 h-3 text-rose-500 fill-rose-500" />
-                <span>Отменить запись</span>
+                Отмена
               </button>
 
               <button
                 type="button"
                 onClick={handleFinishAndSave}
                 disabled={isStopping || (status.points?.length || 0) < 2}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-mono font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-black shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50 transition-all cursor-pointer active:scale-95"
+                className="w-2/3 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-black shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-40 transition-all cursor-pointer active:scale-95"
               >
                 {isStopping ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
                   <Check className="w-3.5 h-3.5 stroke-[3]" />
                 )}
-                <span>Закончить и сохранить</span>
+                <span>Сохранить</span>
               </button>
             </div>
           </div>
