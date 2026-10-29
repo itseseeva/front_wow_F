@@ -148,7 +148,7 @@ export const TerrainHeaderIndicator: React.FC<TerrainHeaderIndicatorProps> = ({
     );
   }
 
-  // 3. Building state: small cyan pulsing dot + micro percent (click toggles visualizer card)
+  // 3. Building state: Horde Ruby Red pulsing beacon + micro percent in gold (click toggles visualizer card)
   const percent = Math.min(100, Math.max(1, Math.round((terrain.progress || 0) * 100)));
   const etaText = terrain.eta_s != null ? `≈${terrain.eta_s}${t.castSecondsUnit}` : '...';
 
@@ -157,18 +157,18 @@ export const TerrainHeaderIndicator: React.FC<TerrainHeaderIndicatorProps> = ({
       onClick={() => {
         if (onToggleCard) onToggleCard();
       }}
-      className={`flex items-center gap-1 px-1.5 py-1 rounded-md border select-none animate-fadeIn cursor-pointer active:scale-95 transition-all ${
+      className={`flex items-center gap-1.5 px-2 py-1 rounded-md border-2 select-none animate-fadeIn cursor-pointer active:scale-95 transition-all ${
         isDark
-          ? 'bg-[#071320] border-cyan-500/70 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.3)] hover:border-cyan-400 hover:shadow-[0_0_14px_rgba(6,182,212,0.45)]'
-          : 'bg-cyan-50 border-cyan-400 text-cyan-800 shadow-xs hover:border-cyan-500'
+          ? 'bg-gradient-to-r from-[#3f1418] to-[#250a0e] border-red-700/80 text-[#fca5a5] shadow-[0_0_10px_rgba(220,38,38,0.5)] hover:border-red-500 hover:shadow-[0_0_14px_rgba(239,68,68,0.6)]'
+          : 'bg-[#fcf3ee] border-red-700/80 text-[#7f1d1d] shadow-xs hover:border-red-600'
       }`}
       title={`${t.terrainBuildingTitle}: ${terrain.done}/${terrain.total} (${etaText}).`}
     >
       <span className="relative flex h-2 w-2 shrink-0">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-80" />
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,1)]" />
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-90" />
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600 shadow-[0_0_8px_#ef4444]" />
       </span>
-      <span className="text-[9.5px] font-mono font-bold">{percent}%</span>
+      <span className="text-[10px] font-fantasy font-black tracking-wide text-wow-gold">{percent}%</span>
     </div>
   );
 };

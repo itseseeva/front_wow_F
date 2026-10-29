@@ -120,6 +120,8 @@ export const translations = {
     routesLoadError: 'Не удалось загрузить список маршрутов',
     routesErrorGeneric: 'Ошибка загрузки маршрутов',
     routesDeleteConfirm: 'Удалить маршрут',
+    scrollUp: 'Прокрутить вверх',
+    scrollDown: 'Прокрутить вниз',
 
     // Route Record Modal
     recordModalTitle: 'Запись маршрута',
@@ -276,6 +278,8 @@ export const translations = {
     routesLoadError: 'Failed to load route list',
     routesErrorGeneric: 'Error loading routes',
     routesDeleteConfirm: 'Delete route',
+    scrollUp: 'Scroll up',
+    scrollDown: 'Scroll down',
 
     // Route Record Modal
     recordModalTitle: 'Record Route',

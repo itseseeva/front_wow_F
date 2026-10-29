@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RouteInfo, TerrainStatus, RoutePreview } from '../types';
 import { RouteIslandThumbnail } from './RouteIslandThumbnail';
 import { RouteCanvas } from './RouteCanvas';
@@ -21,6 +21,8 @@ import {
   Eye,
   EyeOff,
   X,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { Language, Theme, translations } from '../utils/i18n';
 
@@ -63,6 +65,73 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
   const [pendingRoute, setPendingRoute] = useState<{ id: string; name: string } | null>(null);
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
 
+  // Scroll and pagination state for max 2 visible routes
+  const [startIndex, setStartIndex] = useState(0);
+  const [scrollDirection, setScrollDirection] = useState<'down' | 'up' | null>(null);
+  const [animKey, setAnimKey] = useState(0);
+  const lastWheelTime = useRef<number>(0);
+  const touchStartY = useRef<number | null>(null);
+
+  const canScrollUp = startIndex > 0;
+  const canScrollDown = routes.length > 2 && startIndex < routes.length - 2;
+
+  const handleScrollUp = useCallback(() => {
+    setStartIndex((prev) => {
+      if (prev <= 0) return 0;
+      setScrollDirection('up');
+      setAnimKey((k) => k + 1);
+      return prev - 1;
+    });
+  }, []);
+
+  const handleScrollDown = useCallback(() => {
+    setStartIndex((prev) => {
+      if (prev >= routes.length - 2) return prev;
+      setScrollDirection('down');
+      setAnimKey((k) => k + 1);
+      return prev + 1;
+    });
+  }, [routes.length]);
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (routes.length <= 2) return;
+    const now = Date.now();
+    // 1 physical scroll tick advances 1 route with direction animation
+    if (now - lastWheelTime.current < 280) {
+      return;
+    }
+    if (Math.abs(e.deltaY) < 12) return;
+
+    if (e.deltaY > 0) {
+      if (startIndex < routes.length - 2) {
+        handleScrollDown();
+        lastWheelTime.current = now;
+      }
+    } else if (e.deltaY < 0) {
+      if (startIndex > 0) {
+        handleScrollUp();
+        lastWheelTime.current = now;
+      }
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartY.current === null || routes.length <= 2) return;
+    const diff = touchStartY.current - e.changedTouches[0].clientY;
+    if (Math.abs(diff) > 28) {
+      if (diff > 0) {
+        handleScrollDown();
+      } else {
+        handleScrollUp();
+      }
+    }
+    touchStartY.current = null;
+  };
+
   // Fetch routes from pywebview or mock
   const fetchRoutes = useCallback(async () => {
     try {
@@ -90,6 +159,29 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
   useEffect(() => {
     fetchRoutes();
   }, [fetchRoutes]);
+
+  // Clamp startIndex when routes change
+  useEffect(() => {
+    if (routes.length <= 2) {
+      setStartIndex(0);
+    } else if (startIndex > routes.length - 2) {
+      setStartIndex(Math.max(0, routes.length - 2));
+    }
+  }, [routes.length, startIndex]);
+
+  // Bring active route into view if it is currently off-screen
+  useEffect(() => {
+    if (activeId && routes.length > 2) {
+      const activeIdx = routes.findIndex((r) => r.id === activeId);
+      if (activeIdx !== -1) {
+        if (activeIdx < startIndex) {
+          setStartIndex(activeIdx);
+        } else if (activeIdx > startIndex + 1) {
+          setStartIndex(Math.min(activeIdx, routes.length - 2));
+        }
+      }
+    }
+  }, [activeId, routes, startIndex]);
 
   // Listen for terrain readiness
   useEffect(() => {
@@ -229,26 +321,24 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
           Left Column (Compact Sidebar)
           ========================================================================= */}
       <aside className={`w-32 sm:w-36 md:w-40 shrink-0 flex flex-col justify-between border-r pr-2 pb-1 gap-2 ${
-        isDark ? 'border-zinc-800/80' : 'border-slate-200'
+        isDark ? 'border-[#5a4422]' : 'border-[#bfa57a]'
       }`}>
         <div className="flex flex-col gap-2">
           {/* Header Title + Count Badge */}
           <div className="flex items-center gap-1.5 pt-0.5">
-            <h3 className={`text-xs font-mono font-black uppercase tracking-wider truncate ${
-              isDark ? 'text-zinc-100' : 'text-slate-900'
-            }`}>
+            <h3 className={`text-xs font-fantasy font-black uppercase tracking-wider truncate text-wow-gold`}>
               {t.navRoutes}
             </h3>
-            <span className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-mono font-black border shrink-0 ${
+            <span className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-fantasy font-black border shrink-0 ${
               isDark
-                ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50 shadow-[0_0_8px_rgba(6,182,212,0.3)]'
-                : 'bg-cyan-50 text-cyan-800 border-cyan-300'
+                ? 'bg-[#2b1a1d] text-[#f5d17f] border-[#c89b3c] shadow-inner'
+                : 'bg-[#ebdcc0] text-[#785a28] border-[#785a28]'
             }`}>
               {routes.length}
             </span>
           </div>
 
-          {/* Record Route Button */}
+          {/* Record Route Button: Ruby Red Action Button */}
           <button
             type="button"
             onClick={() => {
@@ -259,27 +349,23 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
               setIsRecordModalOpen(true);
             }}
             disabled={isBotRunning}
-            className={`w-full py-2 px-2 rounded-lg text-[10.5px] font-mono font-bold tracking-wide border flex items-center justify-center gap-1.5 transition-all cursor-pointer select-none active:scale-95 ${
+            className={`btn-wow-ruby w-full py-2 px-2 rounded-lg text-[10.5px] font-fantasy font-bold tracking-wider border-2 border-[#c89b3c] flex items-center justify-center gap-1.5 transition-all cursor-pointer select-none active:scale-95 ${
               isBotRunning
-                ? isDark
-                  ? 'opacity-40 cursor-not-allowed bg-zinc-900 border-zinc-800 text-zinc-500'
-                  : 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400'
-                : isDark
-                ? 'bg-gradient-to-r from-[#091522] via-[#0b1d30] to-[#091522] border-cyan-500/60 hover:border-cyan-400 text-cyan-300 hover:text-cyan-100 shadow-[0_0_15px_rgba(6,182,212,0.18)] hover:shadow-[0_0_22px_rgba(6,182,212,0.35)]'
-                : 'bg-white border-cyan-600/50 hover:border-cyan-500 text-cyan-800 hover:bg-cyan-50 shadow-xs'
+                ? 'opacity-40 cursor-not-allowed filter grayscale'
+                : 'hover:border-[#f0b232] shadow-[0_2px_8px_rgba(0,0,0,0.8)]'
             }`}
             title={isBotRunning ? t.routesRecordDisabledBotRunning : t.routesRecordTooltip}
           >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <Plus className="w-3.5 h-3.5 stroke-[2.5] text-[#fef08a]" />
             <span>{t.routesRecordBtn}</span>
           </button>
         </div>
 
-        {/* Minimal info note at bottom of sidebar */}
-        <div className={`p-1.5 rounded-lg border text-[8.5px] font-mono leading-tight ${
+        {/* Parchment info scroll at bottom of sidebar */}
+        <div className={`p-2 rounded-lg border text-[9px] font-fantasy leading-snug shadow-md ${
           isDark
-            ? 'bg-[#05070c] border-zinc-850 text-zinc-500'
-            : 'bg-slate-50 border-slate-200 text-slate-500'
+            ? 'bg-wow-parchment border-[#785a28] text-[#2c1708]'
+            : 'bg-[#f5ecdc] border-[#c7b28a] text-[#3d240f]'
         }`}>
           {t.routesActiveHint}
         </div>
@@ -304,40 +390,40 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
 
         {/* Full Route Preview Panel (when eye icon is toggled) */}
         {previewRouteId && (
-          <div className={`shrink-0 p-2 rounded-xl border relative overflow-hidden animate-fadeIn ${
+          <div className={`shrink-0 p-2.5 rounded-xl border-2 relative overflow-hidden animate-fadeIn ${
             isDark
-              ? 'bg-[#040812] border-cyan-700/60'
-              : 'bg-slate-50 border-cyan-300 shadow-sm'
+              ? 'bg-[#141115] border-[#785a28] shadow-[inset_0_0_20px_rgba(0,0,0,0.95),0_4px_12px_rgba(0,0,0,0.6)]'
+              : 'bg-[#faf4ea] border-[#bfa57a] shadow-md'
           }`}>
             <div className={`flex items-center justify-between pb-1.5 border-b mb-1.5 ${
-              isDark ? 'border-zinc-800/80' : 'border-slate-200'
+              isDark ? 'border-[#5a4422]' : 'border-[#d9c8a9]'
             }`}>
-              <span className={`text-[10px] font-mono font-bold flex items-center gap-1.5 ${
-                isDark ? 'text-cyan-300' : 'text-cyan-800'
+              <span className={`text-[11px] font-fantasy font-bold flex items-center gap-1.5 tracking-wide ${
+                isDark ? 'text-wow-gold' : 'text-[#785a28]'
               }`}>
-                <Eye className="w-3 h-3 text-cyan-500" />
+                <Eye className="w-3.5 h-3.5 text-[#c89b3c]" />
                 {t.routesMapPreview}
               </span>
               <button
                 type="button"
                 onClick={() => setPreviewRouteId(null)}
-                className={`p-0.5 transition-colors ${
-                  isDark ? 'text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-800'
+                className={`p-0.5 rounded transition-colors ${
+                  isDark ? 'text-[#a89274] hover:text-[#f5d17f] hover:bg-[#241a1f]' : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
             {loadingPreview ? (
               <div className="h-28 flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 text-cyan-500 animate-spin" />
-                <span className={`text-[10px] font-mono ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>
+                <Loader2 className="w-4 h-4 text-[#c89b3c] animate-spin" />
+                <span className={`text-[10px] font-fantasy ${isDark ? 'text-wow-parchment' : 'text-slate-600'}`}>
                   {t.routesTrajectoryLoading}
                 </span>
               </div>
             ) : previewData ? (
-              <div className={`h-28 w-full rounded-lg overflow-hidden border ${
-                isDark ? 'border-cyan-950' : 'border-slate-200 bg-white'
+              <div className={`h-28 w-full rounded-lg overflow-hidden border-2 ${
+                isDark ? 'border-[#5a4422] bg-[#0c090c]' : 'border-[#d9c8a9] bg-white'
               }`}>
                 <RouteCanvas
                   points={previewData.points}
@@ -351,62 +437,107 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
           </div>
         )}
 
-        {/* Route list */}
-        <div className="flex-1 overflow-y-auto pr-0.5 min-h-0 space-y-2">
+        {/* Scroll Up Button - Warcraft Chiseled Bracket without rounding */}
+        {routes.length > 2 && (
+          <div className="flex items-center justify-center my-2 shrink-0 z-10 select-none animate-fadeIn">
+            <button
+              type="button"
+              onClick={handleScrollUp}
+              disabled={!canScrollUp}
+              className={`group w-full max-w-[260px] h-5 flex items-center justify-center gap-2 border transition-all duration-200 cursor-pointer ${
+                canScrollUp
+                  ? isDark
+                    ? 'border-[#5a4422]/70 hover:border-[#c89b3c] bg-[#181216]/70 hover:bg-[#25181e] text-[#c7b28a] hover:text-[#f5d17f] hover:shadow-[0_0_10px_rgba(200,155,60,0.35)] active:translate-y-[-1px]'
+                    : 'border-[#bfa57a]/80 hover:border-[#785a28] bg-[#f8f2e6]/80 hover:bg-[#f1e5cf] text-[#785a28] hover:text-[#422206] shadow-xs active:translate-y-[-1px]'
+                  : isDark
+                  ? 'border-[#3d2c18]/25 bg-[#120f13]/30 text-[#5a4422]/30 cursor-not-allowed opacity-30 pointer-events-none'
+                  : 'border-[#d9c8a9]/30 bg-slate-100/40 text-slate-300 cursor-not-allowed opacity-30 pointer-events-none'
+              }`}
+              title={t.scrollUp}
+            >
+              <span className="h-px flex-1 bg-gradient-to-r from-transparent via-[#785a28]/40 to-[#c89b3c]/60 group-hover:via-[#c89b3c]/80" />
+              <div className="flex items-center gap-1.5 px-2">
+                <ChevronUp className="w-3.5 h-3.5 stroke-[2.5] transition-transform group-hover:-translate-y-0.5" />
+                <span className="text-[8.5px] uppercase tracking-widest font-fantasy opacity-70 group-hover:opacity-100">
+                  ▲
+                </span>
+              </div>
+              <span className="h-px flex-1 bg-gradient-to-l from-transparent via-[#785a28]/40 to-[#c89b3c]/60 group-hover:via-[#c89b3c]/80" />
+            </button>
+          </div>
+        )}
+
+        {/* Route list (Max 2 visible at once, wheel/touch/click triggers directional 60fps animations) */}
+        <div
+          onWheel={handleWheel}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          className="space-y-2 select-none min-h-[174px] sm:min-h-[190px] overflow-hidden"
+        >
           {loading ? (
             <div className="h-32 flex flex-col items-center justify-center gap-2">
-              <Loader2 className="w-5 h-5 text-cyan-500 animate-spin" />
-              <span className={`text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>
+              <Loader2 className="w-5 h-5 text-[#c89b3c] animate-spin" />
+              <span className={`text-xs font-fantasy ${isDark ? 'text-wow-parchment' : 'text-slate-600'}`}>
                 {t.routesListLoading}
               </span>
             </div>
           ) : routes.length === 0 ? (
-            <div className={`p-4 text-center rounded-xl border space-y-1.5 my-auto ${
+            <div className={`p-4 text-center rounded-xl border-2 space-y-1.5 my-auto ${
               isDark
-                ? 'bg-[#06080d] border-zinc-800/70'
-                : 'bg-white border-slate-200 shadow-sm'
+                ? 'bg-[#181316] border-[#5a4422] shadow-[inset_0_0_15px_rgba(0,0,0,0.8)]'
+                : 'bg-white border-[#d9c8a9] shadow-sm'
             }`}>
-              <FolderOpen className={`w-6 h-6 mx-auto ${isDark ? 'text-zinc-600' : 'text-slate-400'}`} />
-              <p className={`text-xs font-mono font-bold ${isDark ? 'text-zinc-300' : 'text-slate-800'}`}>
+              <FolderOpen className={`w-6 h-6 mx-auto ${isDark ? 'text-[#a89274]' : 'text-slate-400'}`} />
+              <p className={`text-xs font-fantasy font-bold tracking-wide ${isDark ? 'text-wow-gold' : 'text-slate-800'}`}>
                 {t.routesEmptyTitle}
               </p>
-              <p className={`text-[9.5px] max-w-xs mx-auto ${isDark ? 'text-zinc-500' : 'text-slate-500'}`}>
+              <p className={`text-[9.5px] max-w-xs mx-auto font-fantasy ${isDark ? 'text-wow-parchment' : 'text-slate-600'}`}>
                 {t.routesEmptyDesc}
               </p>
             </div>
           ) : (
-            routes.map((route) => {
+            (routes.length > 2 ? routes.slice(startIndex, startIndex + 2) : routes).map((route, idxInVisible) => {
               const isSelected = activeId === route.id;
               const isDissolving = dissolvingId === route.id;
               const isJustAdded = justAddedId === route.id;
               const isPreviewing = previewRouteId === route.id;
 
+              // Directional cool appearance animation when scrolling:
+              // Scrolling DOWN: newly revealed bottom card (idxInVisible === 1) enters from bottom to top
+              // Scrolling UP: newly revealed top card (idxInVisible === 0) enters from top to bottom
+              const isNewlyAppearedFromBottom = scrollDirection === 'down' && idxInVisible === 1;
+              const isNewlyAppearedFromTop = scrollDirection === 'up' && idxInVisible === 0;
+
+              const animClass = isJustAdded
+                ? 'animate-route-materialize ring-2 ring-[#f0b232] shadow-[0_0_25px_rgba(240,178,50,0.5)]'
+                : isNewlyAppearedFromBottom
+                ? 'animate-route-slide-from-bottom'
+                : isNewlyAppearedFromTop
+                ? 'animate-route-slide-from-top'
+                : '';
+
               return (
                 <div
-                  key={route.id}
-                  className={`route-slot ${isDissolving ? 'is-dissolving' : ''} ${
-                    isJustAdded
-                      ? 'animate-route-materialize ring-1 ring-cyan-400/80 shadow-[0_0_25px_rgba(6,182,212,0.45)]'
-                      : ''
-                  }`}
+                  key={`${route.id}-${animKey}`}
+                  className={`route-slot ${isDissolving ? 'is-dissolving' : ''} ${animClass}`}
                 >
                   <div className="route-slot-inner">
                     <div
-                      className={`p-2 rounded-xl border flex items-center justify-between gap-2.5 transition-all relative ${
+                      className={`p-2.5 rounded-xl border-2 flex items-center justify-between gap-2.5 transition-all relative ${
                         isDissolving
                           ? 'route-curl-exit'
                           : isSelected
                           ? isDark
-                            ? 'bg-[#090d16] border-cyan-500/70 shadow-[0_0_18px_rgba(6,182,212,0.18)] ring-1 ring-cyan-500/30'
-                            : 'bg-cyan-50/50 border-cyan-500 shadow-xs ring-1 ring-cyan-400/30'
+                            ? 'bg-gradient-to-r from-[#2a1818] via-[#231a20] to-[#201518] border-[#c89b3c] shadow-[inset_0_0_15px_rgba(0,0,0,0.9),0_0_18px_rgba(200,155,60,0.35)] ring-1 ring-[#f0b232]/50'
+                            : 'bg-[#faf0df] border-[#c89b3c] shadow-sm ring-1 ring-[#c89b3c]/40'
                           : isDark
-                          ? 'bg-[#06080d] border-zinc-800/90 hover:border-zinc-750 hover:bg-[#070a10]'
-                          : 'bg-white border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/60 shadow-xs'
+                          ? 'bg-gradient-to-r from-[#1c1619] via-[#1a1417] to-[#181215] border-[#5a4422] hover:border-[#785a28] hover:bg-[#221a1e] shadow-[inset_0_0_15px_rgba(0,0,0,0.85)]'
+                          : 'bg-white border-[#d9c8a9] hover:border-[#bfa57a] hover:bg-slate-50/60 shadow-xs'
                       }`}
                     >
-                      {/* Left: 3D Isometric Terrain Island Thumbnail */}
-                      <div className={`w-16 h-16 sm:w-18 sm:h-18 rounded-xl border overflow-hidden shrink-0 relative shadow-inner ${
-                        isDark ? 'bg-[#03060c] border-cyan-950/60' : 'bg-slate-100 border-slate-200'
+                      {/* Left: 3D Isometric Terrain Island Thumbnail in Spell Slot Frame */}
+                      <div className={`slot-wow-spell w-16 h-16 sm:w-18 sm:h-18 rounded-lg overflow-hidden shrink-0 relative ${
+                        isDark ? 'bg-[#0c090c] border-[#5a4422]' : 'bg-[#e2d8c3] border-[#785a28]'
                       }`}>
                         <RouteIslandThumbnail
                           points={route.thumb && route.thumb.length > 0 ? route.thumb : []}
@@ -417,24 +548,24 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                       {/* Middle: Details */}
                       <div className="flex-1 min-w-0 flex flex-col justify-center gap-1 py-0.5">
                         <div className="flex items-center gap-2">
-                          <h4 className={`text-xs sm:text-sm font-mono font-bold truncate ${
-                            isDark ? 'text-zinc-100' : 'text-slate-900'
+                          <h4 className={`text-xs sm:text-sm font-fantasy font-black tracking-wide truncate ${
+                            isDark ? 'text-[#f5d17f] drop-shadow-sm' : 'text-[#422206]'
                           }`}>
                             {route.name}
                           </h4>
                           {route.loop ? (
-                            <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold shrink-0 border ${
+                            <span className={`text-[8.5px] px-2 py-0.5 rounded font-fantasy font-bold shrink-0 border ${
                               isDark
-                                ? 'bg-cyan-950/80 text-cyan-300 border-cyan-700/50'
-                                : 'bg-cyan-50 text-cyan-800 border-cyan-300'
+                                ? 'bg-[#15321d] text-[#86efac] border-[#2ecc71]/60 shadow-[0_0_6px_rgba(46,204,113,0.3)]'
+                                : 'bg-[#e6f7ec] text-[#166534] border-[#22c55e]'
                             }`}>
                               {t.routesLoop}
                             </span>
                           ) : (
-                            <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold shrink-0 border ${
+                            <span className={`text-[8.5px] px-2 py-0.5 rounded font-fantasy font-bold shrink-0 border ${
                               isDark
-                                ? 'bg-purple-950/70 text-purple-300 border-purple-700/50'
-                                : 'bg-purple-50 text-purple-800 border-purple-300'
+                                ? 'bg-[#2e153b] text-[#e9d5ff] border-[#9333ea]/60'
+                                : 'bg-purple-50 text-purple-900 border-purple-300'
                             }`}>
                               {t.routesBackForth}
                             </span>
@@ -442,15 +573,15 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                         </div>
 
                         {/* Telemetry subtitle */}
-                        <div className={`flex items-center gap-2 text-[10px] font-mono ${
-                          isDark ? 'text-zinc-400' : 'text-slate-500'
+                        <div className={`flex items-center gap-2 text-[10.5px] font-fantasy ${
+                          isDark ? 'text-wow-parchment' : 'text-slate-600'
                         }`}>
-                          <span className={`font-bold ${isDark ? 'text-cyan-300' : 'text-cyan-700'}`}>
+                          <span className={`font-bold ${isDark ? 'text-wow-gold' : 'text-[#785a28]'}`}>
                             ≈{route.length_s} {t.routesRunSeconds}
                           </span>
-                          <span className={isDark ? 'text-zinc-600' : 'text-slate-300'}>•</span>
+                          <span className={isDark ? 'text-[#785a28]' : 'text-slate-300'}>•</span>
                           <span>
-                            <strong className={isDark ? 'text-zinc-200' : 'text-slate-800'}>
+                            <strong className={isDark ? 'text-[#f5d17f]' : 'text-slate-800'}>
                               {route.points}
                             </strong>{' '}
                             {t.routesPoints}
@@ -459,25 +590,25 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                       </div>
 
                       {/* Right: Actions [✓ Основной] [🗑] [👁] */}
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
                           onClick={() => handleSetActive(route.id)}
-                          className={`px-2 sm:px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold border transition-all cursor-pointer select-none active:scale-95 flex items-center gap-1 ${
+                          className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[10.5px] font-fantasy font-bold border-2 transition-all cursor-pointer select-none active:scale-95 flex items-center gap-1.5 ${
                             isSelected
                               ? isDark
-                                ? 'bg-cyan-950/80 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
-                                : 'bg-cyan-600 text-white border-cyan-600 shadow-xs'
+                                ? 'bg-gradient-to-b from-[#1c4b26] to-[#0e2714] border-[#2ecc71] text-[#a7f3d0] shadow-[0_0_12px_rgba(46,204,113,0.45)]'
+                                : 'bg-[#1b6b33] text-white border-[#2ecc71] shadow-xs'
                               : isDark
-                              ? 'bg-[#080b12] border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                              : 'bg-white border-slate-300 text-slate-600 hover:text-slate-900 hover:border-slate-400 shadow-xs'
+                              ? 'bg-[#1a1418] border-[#5a4422] text-[#d9c8a9] hover:text-[#f5d17f] hover:border-[#c89b3c] shadow-inner'
+                              : 'bg-white border-[#bfa57a] text-slate-700 hover:text-slate-900 hover:border-[#785a28] shadow-xs'
                           }`}
                           title={t.routesActiveBadge}
                         >
                           {isSelected ? (
-                            <CheckCircle className="w-3 h-3 text-cyan-400 fill-current" />
+                            <CheckCircle className="w-3.5 h-3.5 text-[#2ecc71] fill-current" />
                           ) : (
-                            <Circle className="w-3 h-3" />
+                            <Circle className="w-3.5 h-3.5 text-[#c89b3c]" />
                           )}
                           <span>{isSelected ? t.routesActiveBadge : t.routesSetActive}</span>
                         </button>
@@ -487,17 +618,17 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                           type="button"
                           onClick={(e) => handleDeleteRoute(route, e)}
                           disabled={isDissolving}
-                          className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all cursor-pointer active:scale-90 disabled:opacity-50 ${
+                          className={`w-7.5 h-7.5 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer active:scale-90 disabled:opacity-50 ${
                             isDark
-                              ? 'bg-[#080b12] border-zinc-800 text-zinc-400 hover:border-rose-500/70 hover:text-rose-400'
-                              : 'bg-white border-slate-300 text-slate-400 hover:border-rose-300 hover:text-rose-600 hover:bg-rose-50 shadow-xs'
+                              ? 'bg-[#161114] border-[#5a4422] text-[#a89274] hover:border-red-600 hover:text-red-300 hover:bg-[#2b1014] shadow-inner'
+                              : 'bg-white border-[#d9c8a9] text-slate-500 hover:border-rose-400 hover:text-rose-600 hover:bg-rose-50 shadow-xs'
                           }`}
                           title={t.routesDeleteTooltip}
                         >
                           {isDissolving ? (
-                            <Loader2 className="w-3 h-3 animate-spin text-rose-500" />
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-red-400" />
                           ) : (
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           )}
                         </button>
 
@@ -505,21 +636,21 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleTogglePreview(route.id)}
-                          className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all cursor-pointer active:scale-90 ${
+                          className={`w-7.5 h-7.5 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer active:scale-90 ${
                             isPreviewing
                               ? isDark
-                                ? 'bg-[#091522] border-cyan-400 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.4)]'
-                                : 'bg-cyan-100 border-cyan-500 text-cyan-800 shadow-xs'
+                                ? 'bg-gradient-to-b from-[#382315] to-[#1e130c] border-[#f0b232] text-[#fef08a] shadow-[0_0_10px_rgba(240,178,50,0.5)]'
+                                : 'bg-[#faebd7] border-[#c89b3c] text-[#785a28] shadow-xs'
                               : isDark
-                              ? 'bg-[#080b12] border-zinc-800 text-zinc-400 hover:text-cyan-300 hover:border-cyan-800'
-                              : 'bg-white border-slate-300 text-slate-500 hover:text-cyan-700 hover:border-cyan-400 shadow-xs'
+                              ? 'bg-[#161114] border-[#5a4422] text-[#a89274] hover:text-[#f5d17f] hover:border-[#c89b3c] shadow-inner'
+                              : 'bg-white border-[#d9c8a9] text-slate-500 hover:text-[#785a28] hover:border-[#bfa57a] shadow-xs'
                           }`}
                           title={t.routesPreviewTooltip}
                         >
                           {isPreviewing ? (
-                            <EyeOff className="w-3 h-3" />
+                            <EyeOff className="w-3.5 h-3.5" />
                           ) : (
-                            <Eye className="w-3 h-3" />
+                            <Eye className="w-3.5 h-3.5" />
                           )}
                         </button>
                       </div>
@@ -530,6 +661,36 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
             })
           )}
         </div>
+
+        {/* Scroll Down Button - Warcraft Chiseled Bracket without rounding */}
+        {routes.length > 2 && (
+          <div className="flex items-center justify-center my-2 shrink-0 z-10 select-none animate-fadeIn">
+            <button
+              type="button"
+              onClick={handleScrollDown}
+              disabled={!canScrollDown}
+              className={`group w-full max-w-[260px] h-5 flex items-center justify-center gap-2 border transition-all duration-200 cursor-pointer ${
+                canScrollDown
+                  ? isDark
+                    ? 'border-[#5a4422]/70 hover:border-[#c89b3c] bg-[#181216]/70 hover:bg-[#25181e] text-[#c7b28a] hover:text-[#f5d17f] hover:shadow-[0_0_10px_rgba(200,155,60,0.35)] active:translate-y-[1px]'
+                    : 'border-[#bfa57a]/80 hover:border-[#785a28] bg-[#f8f2e6]/80 hover:bg-[#f1e5cf] text-[#785a28] hover:text-[#422206] shadow-xs active:translate-y-[1px]'
+                  : isDark
+                  ? 'border-[#3d2c18]/25 bg-[#120f13]/30 text-[#5a4422]/30 cursor-not-allowed opacity-30 pointer-events-none'
+                  : 'border-[#d9c8a9]/30 bg-slate-100/40 text-slate-300 cursor-not-allowed opacity-30 pointer-events-none'
+              }`}
+              title={t.scrollDown}
+            >
+              <span className="h-px flex-1 bg-gradient-to-r from-transparent via-[#785a28]/40 to-[#c89b3c]/60 group-hover:via-[#c89b3c]/80" />
+              <div className="flex items-center gap-1.5 px-2">
+                <ChevronDown className="w-3.5 h-3.5 stroke-[2.5] transition-transform group-hover:translate-y-0.5" />
+                <span className="text-[8.5px] uppercase tracking-widest font-fantasy opacity-70 group-hover:opacity-100">
+                  ▼
+                </span>
+              </div>
+              <span className="h-px flex-1 bg-gradient-to-l from-transparent via-[#785a28]/40 to-[#c89b3c]/60 group-hover:via-[#c89b3c]/80" />
+            </button>
+          </div>
+        )}
       </main>
 
       {/* Record Modal */}

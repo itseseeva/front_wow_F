@@ -28,6 +28,8 @@ const generateLinearPoints = (count: number): RoutePoint[] => {
 
 const INITIAL_MURLOC_POINTS = generateOvalPoints(52);
 const INITIAL_DUROTAR_POINTS = generateLinearPoints(38);
+const INITIAL_BARRENS_POINTS = generateOvalPoints(44, 0.45, 0.52, 0.38, 0.22);
+const INITIAL_ASHENVALE_POINTS = generateLinearPoints(46);
 
 export const MOCK_ROUTES: RouteInfo[] = [
   {
@@ -52,11 +54,33 @@ export const MOCK_ROUTES: RouteInfo[] = [
     active: false,
     thumb: INITIAL_DUROTAR_POINTS.filter((_, idx) => idx % 2 === 0).slice(0, 30),
   },
+  {
+    id: 'barrens_oasis',
+    name: 'Степи - Оазис Слез (Круг)',
+    map_id: 1413,
+    points: 44,
+    length_s: 148,
+    loop: true,
+    created_ms: Date.now() - 3600000 * 96,
+    active: false,
+    thumb: INITIAL_BARRENS_POINTS.filter((_, idx) => idx % 2 === 0).slice(0, 32),
+  },
+  {
+    id: 'ashenvale_patrol',
+    name: 'Ясеневый лес - Застава (Линейный)',
+    map_id: 1440,
+    points: 46,
+    length_s: 162,
+    loop: false,
+    created_ms: Date.now() - 3600000 * 120,
+    active: false,
+    thumb: INITIAL_ASHENVALE_POINTS.filter((_, idx) => idx % 2 === 0).slice(0, 34),
+  },
 ];
 
 // Persistent state in memory/localStorage for browser preview
 let storedRoutes: RouteInfo[] = (() => {
-  const saved = localStorage.getItem('wowbot_routes_v2');
+  const saved = localStorage.getItem('wowbot_routes_v3');
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
@@ -67,7 +91,7 @@ let storedRoutes: RouteInfo[] = (() => {
 })();
 
 const saveStoredRoutes = () => {
-  localStorage.setItem('wowbot_routes_v2', JSON.stringify(storedRoutes));
+  localStorage.setItem('wowbot_routes_v3', JSON.stringify(storedRoutes));
 };
 
 let activeRecordSession: {

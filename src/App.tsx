@@ -1,37 +1,128 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ComboChain, DEFAULT_COMBO_CHAINS } from './data/skillsLibrary';
-import { ComboSequence } from './components/ComboSequence';
+import { LineSidebarRouteList } from './components/LineSidebarRouteList';
+import { StealthHUDLeftSidebar, NavTab, RouteItem, ResourceFilterItem } from './components/StealthHUDLeftSidebar';
+import { StealthHUDTopToolbar } from './components/StealthHUDTopToolbar';
+import { CompactStatsBar } from './components/CompactStatsBar';
+import { RouteRecordModal } from './components/RouteRecordModal';
 import { SettingsView } from './components/SettingsView';
-import { RoutesView } from './components/RoutesView';
+import { ComboSequence } from './components/ComboSequence';
 import { SessionSummaryModal } from './components/SessionSummaryModal';
-import { TerrainHeaderIndicator } from './components/TerrainHeaderIndicator';
-import {
-  SessionSummaryData,
-  AppSettings,
-  RouteRecordStoppedDetail,
-  ALLOWED_MINIMAP_ZOOM_KEYS,
-  TerrainStatus,
-} from './types';
-import {
-  Play,
-  Square,
-  Download,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  Settings,
-  Layers,
-  Compass,
-  Swords,
-  Pickaxe,
-  Globe,
-  Sun,
-  Moon,
-} from 'lucide-react';
-import { Language, Theme, translations } from './utils/i18n';
+import { ComboChain, DEFAULT_COMBO_CHAINS } from './data/skillsLibrary';
+import { AppSettings, SessionSummaryData } from './types';
+import { soundFx } from './utils/audio';
+import { SpecularCard, SpecularButton } from './components/ui/Specular';
+import { Crosshair, Layers, Check } from 'lucide-react';
 
 export const App: React.FC = () => {
-  // Combo Chains (Dynamic rotation & customizable steps)
+  // Navigation: 'routes' | 'rotation' | 'gather' | 'settings'
+  const [activeTab, setActiveTab] = useState<NavTab>('routes');
+  const [language, setLanguage] = useState<'ru' | 'en'>(() => {
+    const saved = localStorage.getItem('wowbot_lang');
+    return saved === 'en' || saved === 'ru' ? saved : 'ru';
+  });
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [isRouteVisible, setIsRouteVisible] = useState<boolean>(true);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+
+  // Bot Execution State
+  const [isBotRunning, setIsBotRunning] = useState<boolean>(false);
+  const [speedMultiplier, setSpeedMultiplier] = useState<number>(1);
+  const [sessionSeconds, setSessionSeconds] = useState<number>(149);
+
+  // Farming Telemetry Counters
+  const [khoriumCount] = useState<number>(790);
+  const [adamantiteCount] = useState<number>(1297);
+  const [felIronCount] = useState<number>(98);
+  const [goldEstimate] = useState<number>(56875);
+
+  // Routes Management
+  const [routes, setRoutes] = useState<RouteItem[]>(() => {
+    const saved = localStorage.getItem('wowbot_routes');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {}
+    }
+    return [
+      {
+        id: 'route_1',
+        name: 'Маршрут 1',
+        type: 'КРУГ',
+        duration: '≈132 с бега • 44 точки',
+        points: 44,
+        active: true,
+      },
+      {
+        id: 'route_2',
+        name: 'Маршрут 2',
+        type: 'КРУГ',
+        duration: '≈145 с бега • 52 точки',
+        points: 52,
+        active: false,
+      },
+      {
+        id: 'route_3',
+        name: 'Маршрут 3',
+        type: 'ТОЧКА-ТОЧКА',
+        duration: '≈98 с бега • 32 точки',
+        points: 32,
+        active: false,
+      },
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('wowbot_routes', JSON.stringify(routes));
+  }, [routes]);
+
+  // Resource Filters State (monochrome palette)
+  const [resourceFilters, setResourceFilters] = useState<ResourceFilterItem[]>([
+    {
+      id: 'khorium',
+      name: 'Кориумная жила (Khorium)',
+      nameEn: 'Khorium Vein',
+      color: '#ffffff',
+      enabled: true,
+    },
+    {
+      id: 'adamantite',
+      name: 'Залежи адамантита (Adamantite)',
+      nameEn: 'Adamantite Deposit',
+      color: '#d4d4d8',
+      enabled: true,
+    },
+    {
+      id: 'fel_iron',
+      name: 'Оскверненное железо (Fel Iron)',
+      nameEn: 'Fel Iron Deposit',
+      color: '#a1a1aa',
+      enabled: true,
+    },
+    {
+      id: 'netherbloom',
+      name: 'Пустоцвет (Netherbloom)',
+      nameEn: 'Netherbloom',
+      color: '#71717a',
+      enabled: true,
+    },
+    {
+      id: 'dreamfoil',
+      name: 'Грозовой мак (Dreamfoil)',
+      nameEn: 'Dreamfoil',
+      color: '#52525b',
+      enabled: true,
+    },
+  ]);
+
+  const handleToggleResource = (id: string) => {
+    soundFx.playClick();
+    setResourceFilters((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r))
+    );
+  };
+
+  // Combo Chains
   const [chains, setChains] = useState<ComboChain[]>(() => {
     const saved = localStorage.getItem('wowbot_rotation');
     if (saved) {
@@ -47,8 +138,9 @@ export const App: React.FC = () => {
               repeatCount: s.repeatCount ?? 1,
               independent: Boolean(s.independent),
               skillCooldownSeconds: s.skillCooldownSeconds != null ? Number(s.skillCooldownSeconds) : 0,
+              hpBelowPercent: s.hpBelowPercent != null ? Number(s.hpBelowPercent) : null,
               actionType: 'press' as const,
-            }))
+            })),
           }));
         }
       } catch (e) {}
@@ -56,939 +148,453 @@ export const App: React.FC = () => {
     return DEFAULT_COMBO_CHAINS;
   });
 
-  // Bot execution and bridge states
-  const [isBotRunning, setIsBotRunning] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
-  const [isStopping, setIsStopping] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  // Floating Toast Notifications (top right corner, 5s timeout, dismiss on click)
-  const [toasts, setToasts] = useState<{ id: string; type: 'success' | 'error' | 'info'; message: string }[]>([]);
-
-  const addToast = useCallback((toast: { type: 'success' | 'error' | 'info'; message: string }) => {
-    const id = `toast_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    setToasts((prev) => [...prev, { id, ...toast }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 5000);
-  }, []);
-
-  const removeToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  // Terrain mesh generation status (minimalist header indicator + interactive visualizer card)
-  const [activeTerrain, setActiveTerrain] = useState<TerrainStatus | null>(null);
-  const [activeTerrainCard, setActiveTerrainCard] = useState<{
-    routeName: string;
-    initialTerrain: TerrainStatus;
-  } | null>(null);
-
-  const handleTerrainResponse = useCallback(
-    (routeName: string, terrain: TerrainStatus) => {
-      setActiveTerrain(terrain);
-      if (terrain.status === 'building') {
-        setActiveTerrainCard({ routeName, initialTerrain: terrain });
-      } else {
-        setActiveTerrainCard(null);
-      }
-    },
-    []
-  );
-
-  // Theme & Language Settings
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('wowbot_theme');
-    return (saved === 'light' || saved === 'dark') ? saved : 'dark';
-  });
-
-  const [language, setLanguage] = useState<Language>(() => {
-    const saved = localStorage.getItem('wowbot_lang');
-    return (saved === 'en' || saved === 'ru') ? saved : 'ru';
-  });
-
-  // Active View: 'rotation' | 'routes' | 'settings'
-  const [activeView, setActiveView] = useState<'rotation' | 'routes' | 'settings'>('rotation');
-
-  // Исходный объект settings из бэкенда (сохраняем неизвестные фронту поля)
-  const rawLoadedSettingsRef = useRef<Record<string, any>>({});
-
-  // App Settings (default previousTargetKey: 'H', mode: 'grind', minimapZoomInKey: 'PAGEUP', minimapZoomOutKey: 'PAGEDOWN')
+  // App Settings: Default mode is always 'gather'
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('wowbot_settings');
     let prevKey = 'H';
-    let mode: 'grind' | 'gather' = 'grind';
     let zoomIn = 'PAGEUP';
     let zoomOut = 'PAGEDOWN';
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.previousTargetKey !== undefined && typeof parsed.previousTargetKey === 'string') {
-          prevKey = parsed.previousTargetKey;
-        }
-        if (parsed.mode === 'grind' || parsed.mode === 'gather') {
-          mode = parsed.mode;
-        }
-        if (typeof parsed.minimapZoomInKey === 'string') {
-          zoomIn = parsed.minimapZoomInKey;
-        }
-        if (typeof parsed.minimapZoomOutKey === 'string') {
-          zoomOut = parsed.minimapZoomOutKey;
-        }
+        if (parsed.previousTargetKey) prevKey = parsed.previousTargetKey;
+        if (parsed.minimapZoomInKey) zoomIn = parsed.minimapZoomInKey;
+        if (parsed.minimapZoomOutKey) zoomOut = parsed.minimapZoomOutKey;
       } catch (e) {}
     }
     return {
       previousTargetKey: prevKey,
-      mode,
+      mode: 'gather',
       minimapZoomInKey: zoomIn,
       minimapZoomOutKey: zoomOut,
     };
   });
 
+  const rawLoadedSettingsRef = useRef<Record<string, any>>({});
+  const isInitialMount = useRef<boolean>(true);
+  const [activeCasting] = useState<{ chainId: string; stepId: string } | null>(null);
+  const [sessionSummary, setSessionSummary] = useState<SessionSummaryData | null>(null);
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState<boolean>(false);
+
+  // Sync to localStorage
   useEffect(() => {
     localStorage.setItem('wowbot_settings', JSON.stringify(settings));
   }, [settings]);
 
   useEffect(() => {
-    localStorage.setItem('wowbot_theme', theme);
-    if (typeof document !== 'undefined') {
-      document.documentElement.classList.toggle('dark', theme === 'dark');
-      document.documentElement.classList.toggle('light', theme === 'light');
-    }
-  }, [theme]);
+    localStorage.setItem('wowbot_rotation', JSON.stringify(chains));
+  }, [chains]);
 
   useEffect(() => {
     localStorage.setItem('wowbot_lang', language);
   }, [language]);
 
-  const t = translations[language];
-  const isDark = theme === 'dark';
-
-  // Session Summary
-  const [sessionSummary, setSessionSummary] = useState<SessionSummaryData | null>(null);
-  const lastShownStoppedAtMsRef = useRef<number | null>(null);
-
-  const [activeCasting, setActiveCasting] = useState<{ chainId: string; stepId: string } | null>(null);
-  const isInitialMount = useRef<boolean>(true);
-
-  // 1) Session Summary: listener for "wowbot:session-summary" and initial get_last_session()
-  useEffect(() => {
-    const handleSummaryEvent = (e: any) => {
-      const data: SessionSummaryData = e?.detail;
-      if (data && data.stopped_at_ms !== lastShownStoppedAtMsRef.current) {
-        lastShownStoppedAtMsRef.current = data.stopped_at_ms;
-        setSessionSummary(data);
-      }
-    };
-
-    window.addEventListener('wowbot:session-summary', handleSummaryEvent);
-
-    const checkLastSession = async () => {
-      if (typeof window !== 'undefined' && window.pywebview?.api?.get_last_session) {
-        try {
-          const last = await window.pywebview.api.get_last_session();
-          if (last && last.stopped_at_ms !== lastShownStoppedAtMsRef.current) {
-            lastShownStoppedAtMsRef.current = last.stopped_at_ms;
-            setSessionSummary(last);
-          }
-        } catch (err) {
-          console.warn('get_last_session check warning:', err);
-        }
-      }
-    };
-
-    if (typeof window !== 'undefined' && window.pywebview?.api?.get_last_session) {
-      checkLastSession();
-    } else {
-      window.addEventListener('pywebviewready', checkLastSession, { once: true });
-    }
-
-    return () => {
-      window.removeEventListener('wowbot:session-summary', handleSummaryEvent);
-      window.removeEventListener('pywebviewready', checkLastSession);
-    };
-  }, []);
-
-  // Route record auto-stopped listener: "wowbot:route-record-stopped"
-  useEffect(() => {
-    const handleRouteStopped = (e: any) => {
-      const detail: RouteRecordStoppedDetail = e?.detail;
-      if (detail) {
-        const reason = detail.reason || 'авто';
-        if (detail.route) {
-          addToast({
-            type: 'success',
-            message: `Запись остановилась сама (${reason}). Маршрут «${detail.route.name}» сохранён`,
-          });
-          if (detail.terrain) {
-            handleTerrainResponse(detail.route.name, detail.terrain);
-          }
-        } else {
-          addToast({
-            type: 'error',
-            message: `Запись остановилась (${reason}). ${detail.error || 'Маршрут не сохранён'}`,
-          });
-        }
-      }
-    };
-
-    window.addEventListener('wowbot:route-record-stopped', handleRouteStopped);
-    return () => {
-      window.removeEventListener('wowbot:route-record-stopped', handleRouteStopped);
-    };
-  }, [addToast, handleTerrainResponse]);
-
-  // 2) Status polling: sync bot running and chat_running from get_status()
-  useEffect(() => {
-    let isCancelled = false;
-
-    const pollStatus = async () => {
-      if (typeof window !== 'undefined' && window.pywebview?.api?.get_status) {
-        try {
-          const res = await window.pywebview.api.get_status();
-          if (!isCancelled && res) {
-            if (typeof res.running === 'boolean' && !isStarting && !isStopping) {
-              setIsBotRunning(res.running);
-            }
-          }
-        } catch (err) {
-          console.warn('get_status poll error:', err);
-        }
-      }
-    };
-
-    pollStatus();
-    window.addEventListener('pywebviewready', pollStatus, { once: true });
-    const interval = setInterval(pollStatus, 2000);
-    return () => {
-      isCancelled = true;
-      window.removeEventListener('pywebviewready', pollStatus);
-      clearInterval(interval);
-    };
-  }, [isStarting, isStopping]);
-
-  // Восстанавливаем цепочки из бэкенда через load_config()
-  useEffect(() => {
-    const fetchConfig = () => {
-      if (!window.pywebview?.api?.load_config) return;
-      window.pywebview.api.load_config().then((res) => {
-        if (!res.ok || !res.config) return;
-        const cfg = res.config;
-
-        if (Array.isArray(cfg.chains) && cfg.chains.length > 0 && Array.isArray(cfg.chains[0]?.steps)) {
-          setChains([
-            {
-              id: 'chain_1',
-              name: 'Ротация умений',
-              order: 1,
-              cooldown: 0,
-              triggerAfterChainId: 'always',
-              steps: cfg.chains[0].steps.map((s: any, idx: number) => ({
-                id: `step_${idx + 1}`,
-                key: s.key || '',
-                castTimeSeconds: s.castTimeSeconds ?? 1.5,
-                repeatCount: s.repeatCount ?? 1,
-                independent: Boolean(s.independent),
-                skillCooldownSeconds: s.skillCooldownSeconds != null ? Number(s.skillCooldownSeconds) : 0,
-                hpBelowPercent: s.hpBelowPercent != null ? Number(s.hpBelowPercent) : null,
-                actionType: 'press' as const,
-              })),
-            }
-          ]);
-        }
-
-        if (cfg.settings && typeof cfg.settings === 'object') {
-          rawLoadedSettingsRef.current = { ...cfg.settings };
-          const loadedMode = (cfg.settings.mode === 'grind' || cfg.settings.mode === 'gather')
-            ? cfg.settings.mode
-            : undefined;
-          const loadedPrevKey = typeof cfg.settings.previousTargetKey === 'string'
-            ? cfg.settings.previousTargetKey
-            : undefined;
-          const loadedZoomIn = typeof cfg.settings.minimapZoomInKey === 'string'
-            ? cfg.settings.minimapZoomInKey
-            : undefined;
-          const loadedZoomOut = typeof cfg.settings.minimapZoomOutKey === 'string'
-            ? cfg.settings.minimapZoomOutKey
-            : undefined;
-
-          setSettings(curr => ({
-            ...curr,
-            ...(loadedPrevKey !== undefined ? { previousTargetKey: loadedPrevKey } : {}),
-            ...(loadedMode !== undefined ? { mode: loadedMode } : {}),
-            ...(loadedZoomIn !== undefined ? { minimapZoomInKey: loadedZoomIn } : {}),
-            ...(loadedZoomOut !== undefined ? { minimapZoomOutKey: loadedZoomOut } : {}),
-          }));
-        }
-      }).catch((err) => {
-        console.warn('load_config: не удалось восстановить конфигурацию', err);
-      });
-    };
-
-    if (window.pywebview?.api?.load_config) {
-      fetchConfig();
-    } else {
-      const handleReady = () => fetchConfig();
-      window.addEventListener('pywebviewready', handleReady, { once: true });
-      return () => window.removeEventListener('pywebviewready', handleReady);
-    }
-  }, []);
-
-  // Auto-dismiss notifications
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => setSuccessMessage(null), 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage]);
-
-  useEffect(() => {
-    if (errorMessage) {
-      const timer = setTimeout(() => setErrorMessage(null), 6000);
-      return () => clearTimeout(timer);
-    }
-  }, [errorMessage]);
-
-  // Save changes to localStorage
-  useEffect(() => {
-    localStorage.setItem('wowbot_rotation', JSON.stringify(chains));
-  }, [chains]);
-
-  // Backend config format: {settings: {...rawLoadedSettings, previousTargetKey, mode, minimapZoomInKey, minimapZoomOutKey}, chains: [{steps: [...]}]}
-  const generateConfigObject = useCallback((customChains = chains, customSettings = settings) => {
-    const mainChain = customChains[0] || { steps: [] };
-    const safeMode = (customSettings.mode === 'grind' || customSettings.mode === 'gather')
-      ? customSettings.mode
-      : 'grind';
-    return {
-      settings: {
-        ...rawLoadedSettingsRef.current,
-        previousTargetKey: customSettings.previousTargetKey || 'H',
-        mode: safeMode,
-        minimapZoomInKey: customSettings.minimapZoomInKey !== undefined ? customSettings.minimapZoomInKey : 'PAGEUP',
-        minimapZoomOutKey: customSettings.minimapZoomOutKey !== undefined ? customSettings.minimapZoomOutKey : 'PAGEDOWN',
-      },
-      chains: [
-        {
-          steps: (mainChain.steps || []).map((s) => ({
-            key: s.key || '',
-            castTimeSeconds: s.castTimeSeconds ?? 1.5,
-            skillCooldownSeconds: s.skillCooldownSeconds ?? 0,
-            repeatCount: s.repeatCount ?? 1,
-            independent: Boolean(s.independent),
-            hpBelowPercent: s.hpBelowPercent != null ? Number(s.hpBelowPercent) : null,
-          })),
+  // Backend Bridge: autosave config
+  const saveCurrentConfigToBackend = useCallback(
+    async (customChains = chains, customSettings = settings) => {
+      const mainChain = customChains[0] || { steps: [] };
+      const configObj = {
+        settings: {
+          ...rawLoadedSettingsRef.current,
+          previousTargetKey: customSettings.previousTargetKey || 'H',
+          mode: 'gather',
+          minimapZoomInKey: customSettings.minimapZoomInKey || 'PAGEUP',
+          minimapZoomOutKey: customSettings.minimapZoomOutKey || 'PAGEDOWN',
         },
-      ],
-    };
-  }, [chains, settings]);
+        chains: [
+          {
+            steps: (mainChain.steps || []).map((s) => ({
+              key: s.key || '',
+              castTimeSeconds: s.castTimeSeconds ?? 1.5,
+              skillCooldownSeconds: s.skillCooldownSeconds ?? 0,
+              repeatCount: s.repeatCount ?? 1,
+              independent: Boolean(s.independent),
+              hpBelowPercent: s.hpBelowPercent != null ? Number(s.hpBelowPercent) : null,
+            })),
+          },
+        ],
+      };
 
-  // Backend Bridge: save_config(jsonString) autosave safeguard
-  const saveCurrentConfigToBackend = async (customChains = chains, customSettings = settings) => {
-    const safeMode = (customSettings.mode === 'grind' || customSettings.mode === 'gather')
-      ? customSettings.mode
-      : 'grind';
-    rawLoadedSettingsRef.current = {
-      ...rawLoadedSettingsRef.current,
-      previousTargetKey: customSettings.previousTargetKey || 'H',
-      mode: safeMode,
-      minimapZoomInKey: customSettings.minimapZoomInKey !== undefined ? customSettings.minimapZoomInKey : 'PAGEUP',
-      minimapZoomOutKey: customSettings.minimapZoomOutKey !== undefined ? customSettings.minimapZoomOutKey : 'PAGEDOWN',
-    };
-    const configObj = generateConfigObject(customChains, customSettings);
-    const configJson = JSON.stringify(configObj, null, 2);
-    if (window.pywebview?.api?.save_config) {
-      try {
-        await window.pywebview.api.save_config(configJson);
-      } catch (err: any) {
-        console.warn('save_config auto-save warning:', err);
+      if (window.pywebview?.api?.save_config) {
+        try {
+          await window.pywebview.api.save_config(JSON.stringify(configObj, null, 2));
+        } catch (err) {
+          console.warn('save_config auto-save warning:', err);
+        }
       }
-    } else {
-      localStorage.setItem('wowbot_rotation', JSON.stringify(customChains));
-      localStorage.setItem('wowbot_settings', JSON.stringify(customSettings));
-    }
-  };
+    },
+    [chains, settings]
+  );
 
-  // Переключение режима «Гринд» / «Сбор» с мгновенным сохранением в save_config
-  const handleModeChange = (newMode: 'grind' | 'gather') => {
-    if (isBotRunning || settings.mode === newMode) return;
-    const updatedSettings: AppSettings = {
-      ...settings,
-      mode: newMode,
-    };
-    setSettings(updatedSettings);
-    saveCurrentConfigToBackend(chains, updatedSettings);
-  };
-
-  // Автосохранение [chains] на диск с debounce ~600мс
+  // Debounced autosave on chain edit
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
-
     const timer = setTimeout(() => {
       saveCurrentConfigToBackend();
     }, 600);
-
     return () => clearTimeout(timer);
-  }, [chains]);
+  }, [chains, saveCurrentConfigToBackend]);
 
-  // Backend Bridge: start_bot() with autosave safeguard
-  const handleStartBot = async () => {
-    if (isBotRunning || isStarting) return;
-    setErrorMessage(null);
-    setIsStarting(true);
+  // Route Handlers
+  const handleAddRoute = (name: string, isLoop: boolean) => {
+    const pointCount = 38 + Math.floor(Math.random() * 16);
+    const durationSec = 120 + Math.floor(Math.random() * 30);
+    const newRoute: RouteItem = {
+      id: `route_${Date.now()}`,
+      name: name || `Маршрут ${routes.length + 1}`,
+      type: isLoop ? 'КРУГ' : 'ТОЧКА-ТОЧКА',
+      duration: `≈${durationSec} с бега • ${pointCount} точек`,
+      points: pointCount,
+      active: true,
+    };
 
-    await saveCurrentConfigToBackend();
+    setRoutes((prev) => [
+      ...prev.map((r) => ({ ...r, active: false })),
+      newRoute,
+    ]);
+    soundFx.playClick();
+  };
 
-    if (window.pywebview?.api?.start_bot) {
-      try {
-        const result = await window.pywebview.api.start_bot();
-        if (result.ok || result.error === "already_running") {
-          setIsBotRunning(true);
-        } else {
-          setErrorMessage(result.error || "Не удалось запустить бота");
+  const handleSelectRoute = (id: string) => {
+    setRoutes((prev) =>
+      prev.map((r) => ({ ...r, active: r.id === id }))
+    );
+    soundFx.playClick();
+  };
+
+  const handleDeleteRoute = (id: string) => {
+    if (routes.length <= 1) return;
+    setRoutes((prev) => {
+      const filtered = prev.filter((r) => r.id !== id);
+      if (!filtered.some((r) => r.active) && filtered.length > 0) {
+        filtered[0].active = true;
+      }
+      return filtered;
+    });
+    soundFx.playClick();
+  };
+
+  // Bot Start / Stop
+  const handleToggleBot = async () => {
+    if (isBotRunning) {
+      soundFx.playStop();
+      setIsBotRunning(false);
+      if (window.pywebview?.api?.stop_bot) {
+        try {
+          await window.pywebview.api.stop_bot();
+        } catch (err) {
+          console.warn('stop_bot error:', err);
         }
-      } catch (err: any) {
-        setErrorMessage(err?.message || "Ошибка связи с backend-мостом");
-      } finally {
-        setIsStarting(false);
       }
     } else {
-      console.warn("pywebview API недоступен в превью браузера");
-      setTimeout(() => {
-        setIsBotRunning(true);
-        setIsStarting(false);
-      }, 250);
+      soundFx.playStart();
+      setIsBotRunning(true);
+      await saveCurrentConfigToBackend();
+      if (window.pywebview?.api?.start_bot) {
+        try {
+          await window.pywebview.api.start_bot();
+        } catch (err) {
+          console.warn('start_bot error:', err);
+        }
+      }
     }
   };
 
-  // Backend Bridge: stop_bot()
-  const handleStopBot = async () => {
-    if (!isBotRunning || isStopping) return;
-    setErrorMessage(null);
-    setIsStopping(true);
-
-    if (window.pywebview?.api?.stop_bot) {
-      try {
-        const result = await window.pywebview.api.stop_bot();
-        if (result.ok) {
-          setIsBotRunning(false);
-          setActiveCasting(null);
-        } else {
-          setErrorMessage(result.error || "Не удалось остановить бота");
-        }
-      } catch (err: any) {
-        setErrorMessage(err?.message || "Ошибка связи с backend-мостом");
-      } finally {
-        setIsStopping(false);
-      }
-    } else {
-      setTimeout(() => {
-        setIsBotRunning(false);
-        setActiveCasting(null);
-        setIsStopping(false);
-        // Preview session summary test event
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('wowbot:session-summary', {
-              detail: {
-                started_at_ms: Date.now() - 3600000,
-                stopped_at_ms: Date.now(),
-                duration_s: 3600,
-                kills: 142,
-                kills_per_hour: 142,
-                avg_kill_gap_s: 18.2,
-                lost: 2,
-                stop_reason: 'user',
-              },
-            })
-          );
-        }
-      }, 250);
+  // Session timer ticker
+  useEffect(() => {
+    let interval: any = null;
+    if (isBotRunning) {
+      interval = setInterval(() => {
+        setSessionSeconds((prev) => prev + 1);
+      }, 1000);
     }
-  };
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isBotRunning]);
 
-  // Export JSON file download (wowbot_rotation.json)
+  // Global F5 key shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F5') {
+        e.preventDefault();
+        handleToggleBot();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isBotRunning, handleToggleBot]);
+
+  // Export JSON file download
   const handleExportJson = () => {
-    saveCurrentConfigToBackend();
-    const output = generateConfigObject();
+    soundFx.playClick();
+    const output = {
+      settings,
+      chains,
+      routes,
+    };
     const jsonStr = JSON.stringify(output, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'wowbot_rotation.json';
+    a.download = 'wowbot_config.json';
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  // Global F5 key shortcut for Start / Stop
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F5') {
-        e.preventDefault();
-        if (isBotRunning) {
-          handleStopBot();
-        } else {
-          handleStartBot();
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isBotRunning, isStarting, isStopping]);
-
-  // Visual casting rotation simulation in preview while bot is running
-  useEffect(() => {
-    if (!isBotRunning || chains.length === 0) {
-      setActiveCasting(null);
-      return;
-    }
-
-    let isCancelled = false;
-
-    const runSimulationLoop = async () => {
-      while (!isCancelled) {
-        for (const chain of chains) {
-          if (isCancelled) break;
-          for (const step of chain.steps) {
-            if (isCancelled) break;
-            const holdMs = Math.max(350, (step.castTimeSeconds ?? 1.5) * 600);
-
-            setActiveCasting({ chainId: chain.id, stepId: step.id });
-            await new Promise((res) => setTimeout(res, holdMs));
-            if (isCancelled) break;
-            setActiveCasting(null);
-            await new Promise((res) => setTimeout(res, 150));
-          }
-        }
-      }
-    };
-
-    runSimulationLoop();
-
-    return () => {
-      isCancelled = true;
-      setActiveCasting(null);
-    };
-  }, [isBotRunning, chains]);
+  const isRu = language === 'ru';
+  const activeRoute = routes.find((r) => r.active) || routes[0];
 
   return (
-    <div className={`min-h-screen w-full flex flex-col items-center justify-start sm:justify-center p-1 sm:p-2 md:p-3 lg:p-4 transition-colors duration-200 overflow-x-hidden ${
-      isDark ? 'bg-black text-zinc-300 selection:bg-zinc-700 selection:text-white' : 'bg-[#eef0f4] text-zinc-800 selection:bg-blue-200 selection:text-blue-900'
-    }`}>
-      {/* Window Card - Responsive and adapts fluidly to window enlargement/reduction */}
+    <div
+      className="relative w-screen h-screen overflow-hidden bg-[#09090b] text-zinc-100 font-sans select-none"
+      style={{
+        width: '100vw',
+        height: '100vh',
+      }}
+    >
+
+      {/* =========================================================================
+          LEFT SIDEBAR: Sleek Stealth HUD (320px, 4 Core Tabs: Routes, Rotation, Filters, Settings)
+          ========================================================================= */}
+      <StealthHUDLeftSidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        routes={routes}
+        onSelectRoute={handleSelectRoute}
+        onDeleteRoute={handleDeleteRoute}
+        isRouteVisible={isRouteVisible}
+        onToggleRouteVisible={() => setIsRouteVisible(!isRouteVisible)}
+        onRecordRouteClick={() => setIsRecordModalOpen(true)}
+        resourceFilters={resourceFilters}
+        onToggleResource={handleToggleResource}
+        language={language}
+      />
+
+      {/* =========================================================================
+          RIGHT TOP TOOLBAR: Compact Glass Capsule
+          ========================================================================= */}
+      <StealthHUDTopToolbar
+        language={language}
+        onToggleLanguage={() => setLanguage((l) => (l === 'ru' ? 'en' : 'ru'))}
+        theme={theme}
+        onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+        isBotRunning={isBotRunning}
+        onToggleBot={handleToggleBot}
+        onExport={handleExportJson}
+        onOpenSettings={() => setActiveTab('settings')}
+        isMuted={isMuted}
+        onToggleMute={() => setIsMuted(soundFx.toggleMute())}
+      />
+
+      {/* =========================================================================
+          DYNAMIC RIGHT-SIDE VIEWPORT (Switches with 60 FPS Smooth Assembly)
+          ========================================================================= */}
       <div
-        id="app-window-card"
-        className={`w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl rounded-xl sm:rounded-2xl flex flex-col relative max-h-[99vh] sm:max-h-[96vh] my-auto transition-all duration-350 ease-[cubic-bezier(0.4,0,0.2,1)] border ${
-          isDark
-            ? 'bg-[#07070a] border-zinc-800/90 shadow-[0_0_50px_rgba(0,0,0,0.95),0_0_25px_rgba(255,255,255,0.03)]'
-            : 'bg-white border-zinc-200/90 shadow-[0_10px_35px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.05)]'
-        }`}
+        className="absolute top-0 bottom-0 right-0 overflow-hidden"
+        style={{
+          left: '350px',
+        }}
       >
-        {/* Compact & Responsive Header: strictly single-row without wrapping */}
-        <header className={`px-2.5 sm:px-3 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-2 rounded-t-xl shrink-0 border-b select-none flex-nowrap min-w-0 transition-colors ${
-          isDark
-            ? 'border-zinc-800/80 bg-[#06080d] text-zinc-100'
-            : 'border-slate-200/90 bg-white/95 text-slate-800 shadow-xs'
-        }`}>
-          {/* Left: Animated Logo */}
-          <div className="flex items-center shrink-0">
-            <span className="logo-shimmer font-mono text-sm sm:text-base font-black tracking-[0.18em] sm:tracking-[0.22em] uppercase select-none cursor-default text-cyan-400">
-              EZF
-            </span>
-            <span className={`hidden md:inline-block ml-2 text-[10px] font-mono uppercase tracking-wider font-bold ${
-              isDark ? 'text-zinc-500' : 'text-slate-400'
-            }`}>
-              {t.logoSubtitle}
-            </span>
-          </div>
-
-          {/* Center: Morphing Navigation Icons [ ⊞ ] [ 🧭 ] [ ⚔️ ] [ ⛏️ ] + Minimalist Terrain Dot/Check Indicator */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <div className={`p-0.5 rounded-lg border flex items-center shrink-0 ${
-              isDark
-                ? 'border-cyan-900/60 bg-[#070b12] shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]'
-                : 'border-slate-200 bg-slate-100/90 shadow-inner'
-            }`}>
-              {/* Ротация */}
-              <button
-                type="button"
-                onClick={() => setActiveView('rotation')}
-                className={`group flex items-center h-7 px-2 rounded-md transition-all duration-200 cursor-pointer select-none active:scale-95 ${
-                  activeView === 'rotation'
-                    ? isDark
-                      ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black tab-active-glow'
-                      : 'bg-white text-cyan-800 border border-cyan-500 font-black shadow-xs'
-                    : isDark
-                    ? 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
-                    : 'text-slate-600 hover:text-cyan-800 border border-transparent hover:bg-white/80'
-                }`}
-                title={t.navRotation}
-              >
-                <Layers className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
-                <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[75px] group-hover:opacity-100 group-hover:ml-1.5 text-[10.5px] font-mono font-bold tracking-wider">
-                  {t.navRotation}
-                </span>
-              </button>
-
-              {/* Маршруты */}
-              <button
-                type="button"
-                onClick={() => setActiveView('routes')}
-                className={`group flex items-center h-7 px-2 rounded-md transition-all duration-200 cursor-pointer select-none active:scale-95 ${
-                  activeView === 'routes'
-                    ? isDark
-                      ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black tab-active-glow'
-                      : 'bg-white text-cyan-800 border border-cyan-500 font-black shadow-xs'
-                    : isDark
-                    ? 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
-                    : 'text-slate-600 hover:text-cyan-800 border border-transparent hover:bg-white/80'
-                }`}
-                title={t.navRoutes}
-              >
-                <Compass className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
-                <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[75px] group-hover:opacity-100 group-hover:ml-1.5 text-[10.5px] font-mono font-bold tracking-wider">
-                  {t.navRoutes}
-                </span>
-              </button>
-
-              {/* Гринд */}
-              <button
-                type="button"
-                disabled={isBotRunning}
-                onClick={() => handleModeChange('grind')}
-                className={`group flex items-center h-7 px-2 rounded-md transition-all duration-200 select-none ${
-                  isBotRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-95'
-                } ${
-                  settings.mode === 'grind'
-                    ? isDark
-                      ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
-                      : 'bg-white text-cyan-800 border border-cyan-500 font-black shadow-xs'
-                    : isDark
-                    ? 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
-                    : 'text-slate-600 hover:text-cyan-800 border border-transparent hover:bg-white/80'
-                }`}
-                title={isBotRunning ? t.modeLockedWhileRunning : t.modeGrindTitle}
-              >
-                <Swords className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
-                <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[75px] group-hover:opacity-100 group-hover:ml-1.5 text-[10.5px] font-mono font-bold tracking-wider">
-                  {t.modeGrind}
-                </span>
-              </button>
-
-              {/* Сбор */}
-              <button
-                type="button"
-                disabled={isBotRunning}
-                onClick={() => handleModeChange('gather')}
-                className={`group flex items-center h-7 px-2 rounded-md transition-all duration-200 select-none ${
-                  isBotRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-95'
-                } ${
-                  settings.mode === 'gather'
-                    ? isDark
-                      ? 'bg-[#0c1626] text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)] border border-cyan-400 font-black'
-                      : 'bg-white text-cyan-800 border border-cyan-500 font-black shadow-xs'
-                    : isDark
-                    ? 'text-zinc-400 hover:text-cyan-200 border border-transparent hover:bg-zinc-800/40'
-                    : 'text-slate-600 hover:text-cyan-800 border border-transparent hover:bg-white/80'
-                }`}
-                title={isBotRunning ? t.modeLockedWhileRunning : t.modeGatherTitle}
-              >
-                <Pickaxe className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
-                <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[75px] group-hover:opacity-100 group-hover:ml-1.5 text-[10.5px] font-mono font-bold tracking-wider">
-                  {t.modeGather}
-                </span>
-              </button>
-            </div>
-
-            {/* Minimalist Terrain Dot / Checkmark Beacon */}
-            <TerrainHeaderIndicator
-              initialTerrain={activeTerrain}
-              language={language}
-              theme={theme}
-              onClear={() => {
-                setActiveTerrain(null);
-                setActiveTerrainCard(null);
-              }}
-              onToggleCard={() => {
-                if (activeView !== 'routes') {
-                  setActiveView('routes');
-                  if (!activeTerrainCard && activeTerrain && activeTerrain.status === 'building') {
-                    setActiveTerrainCard({
-                      routeName: 'Маршрут',
-                      initialTerrain: activeTerrain,
-                    });
-                  }
-                  return;
-                }
-                if (activeTerrainCard) {
-                  setActiveTerrainCard(null);
-                } else if (activeTerrain && activeTerrain.status === 'building') {
-                  setActiveTerrainCard({
-                    routeName: 'Маршрут',
-                    initialTerrain: activeTerrain,
-                  });
-                }
-              }}
-            />
-          </div>
-
-          {/* Right Action Controls: [ 🌐 RU ] [ ☼/☾ ] [ ▶ СТАРТ ] [ ⤓ ] [ ⚙ ] */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            {/* Language Switcher Button (RU / EN) */}
-            <button
-              type="button"
-              onClick={() => setLanguage((prev) => (prev === 'ru' ? 'en' : 'ru'))}
-              className={`group flex items-center h-7 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none active:scale-95 ${
-                isDark
-                  ? 'border-cyan-900/60 bg-[#070b12] hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
-                  : 'border-slate-300 bg-white hover:border-cyan-500 hover:bg-slate-50 text-slate-700 shadow-xs'
-              }`}
-              title={t.langToggle}
-            >
-              <Globe className="w-3.5 h-3.5 text-cyan-500 shrink-0 drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]" />
-              <span className={`text-[10px] font-mono font-black ml-1 ${isDark ? 'text-cyan-300' : 'text-slate-800'}`}>
-                {language.toUpperCase()}
-              </span>
-              <span className={`max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[70px] group-hover:opacity-100 group-hover:ml-1 text-[9px] font-mono ${
-                isDark ? 'text-zinc-400' : 'text-slate-500'
-              }`}>
-                {language === 'ru' ? '→ EN' : '→ RU'}
-              </span>
-            </button>
-
-            {/* Dark / Light Theme Toggle */}
-            <button
-              type="button"
-              onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
-              className={`group flex items-center h-7 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none active:scale-95 ${
-                isDark
-                  ? 'border-cyan-900/60 bg-[#070b12] hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
-                  : 'border-slate-300 bg-white hover:border-cyan-500 hover:bg-slate-50 text-slate-700 shadow-xs'
-              }`}
-              title={theme === 'dark' ? t.themeLight : t.themeDark}
-            >
-              {theme === 'dark' ? (
-                <Sun className="w-3.5 h-3.5 text-amber-400 shrink-0 drop-shadow-[0_0_6px_rgba(251,191,36,0.6)]" />
-              ) : (
-                <Moon className="w-3.5 h-3.5 text-cyan-600 shrink-0 drop-shadow-[0_0_6px_rgba(6,182,212,0.6)]" />
-              )}
-              <span className={`max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[65px] group-hover:opacity-100 group-hover:ml-1.5 text-[9.5px] font-mono font-bold tracking-wider ${
-                isDark ? 'text-zinc-300' : 'text-slate-800'
-              }`}>
-                {t.theme}
-              </span>
-            </button>
-
-            {/* Minimalist Start / Stop Button with Status Ping and Hover Text */}
-            {isBotRunning ? (
-              <button
-                onClick={handleStopBot}
-                disabled={isStopping}
-                className={`group flex items-center h-7 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none disabled:opacity-50 active:scale-95 ${
-                  isDark
-                    ? 'border-rose-500/80 bg-gradient-to-r from-[#190a12] via-[#240e1b] to-[#190a12] text-rose-300 hover:border-rose-400 hover:text-rose-100 hover:shadow-[0_0_16px_rgba(244,63,94,0.45)] shadow-[0_0_8px_rgba(244,63,94,0.25)] animate-pulse'
-                    : 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 shadow-xs'
-                }`}
-                title={t.stopTitle}
-              >
-                <span className="relative flex h-1.5 w-1.5 shrink-0 mr-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
-                </span>
-                {isStopping ? (
-                  <Loader2 className="w-3 h-3 text-rose-400 animate-spin shrink-0" />
-                ) : (
-                  <Square className="w-2.5 h-2.5 fill-current shrink-0" />
-                )}
-                <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[85px] group-hover:opacity-100 group-hover:ml-1.5 text-[10px] font-mono font-black uppercase tracking-wider">
-                  {isStopping ? t.stopping : `${t.stop} (F5)`}
-                </span>
-              </button>
-            ) : (
-              <button
-                onClick={handleStartBot}
-                disabled={isStarting}
-                className={`group flex items-center h-7 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none disabled:opacity-50 active:scale-95 ${
-                  isDark
-                    ? 'border-cyan-400/80 bg-gradient-to-r from-[#061019] via-[#091b2c] to-[#061019] text-cyan-300 hover:border-cyan-300 hover:text-cyan-100 hover:shadow-[0_0_16px_rgba(6,182,212,0.5)] shadow-[0_0_8px_rgba(6,182,212,0.3)]'
-                    : 'border-cyan-500 bg-cyan-50 text-cyan-800 hover:bg-cyan-100 shadow-xs'
-                }`}
-                title={t.startTitle}
-              >
-                <span className="relative flex h-1.5 w-1.5 shrink-0 mr-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-80"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.9)]"></span>
-                </span>
-                {isStarting ? (
-                  <Loader2 className="w-3 h-3 text-cyan-500 animate-spin shrink-0" />
-                ) : (
-                  <Play className="w-2.5 h-2.5 fill-current drop-shadow-[0_0_6px_rgba(6,182,212,0.8)] shrink-0" />
-                )}
-                <span className="max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[85px] group-hover:opacity-100 group-hover:ml-1.5 text-[10px] font-mono font-black uppercase tracking-wider">
-                  {isStarting ? t.starting : `${t.start} (F5)`}
-                </span>
-              </button>
-            )}
-
-            {/* Download JSON backup */}
-            <button
-              onClick={handleExportJson}
-              className={`group flex items-center h-7 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none active:scale-95 ${
-                isDark
-                  ? 'border-cyan-900/60 bg-[#070b12] hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
-                  : 'border-slate-300 bg-white hover:border-cyan-500 hover:bg-slate-50 text-slate-700 shadow-xs'
-              }`}
-              title={t.exportJson}
-            >
-              <Download className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
-              <span className={`max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[65px] group-hover:opacity-100 group-hover:ml-1.5 text-[10px] font-mono font-bold tracking-wider ${
-                isDark ? 'text-cyan-300' : 'text-slate-800'
-              }`}>
-                {t.exportJsonShort}
-              </span>
-            </button>
-
-            {/* Settings Tab Button */}
-            <button
-              type="button"
-              onClick={() => setActiveView((curr) => (curr === 'settings' ? 'rotation' : 'settings'))}
-              className={`group flex items-center h-7 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none active:scale-95 ${
-                activeView === 'settings'
-                  ? isDark
-                    ? 'bg-[#0c1626] border-cyan-400 text-cyan-200 shadow-[0_0_14px_rgba(6,182,212,0.7)] ring-1 ring-cyan-400 tab-active-glow'
-                    : 'bg-cyan-50 border-cyan-500 text-cyan-800 shadow-sm ring-1 ring-cyan-400'
-                  : isDark
-                  ? 'bg-[#070b12] border-cyan-900/60 hover:border-cyan-400 hover:bg-[#0c1626] hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] text-cyan-300'
-                  : 'bg-white border-slate-300 hover:border-cyan-500 hover:bg-slate-50 text-slate-700 shadow-xs'
-              }`}
-              title={t.settings}
-            >
-              <Settings
-                className={`w-3.5 h-3.5 transition-transform duration-300 shrink-0 text-cyan-500 ${
-                  activeView === 'settings' ? 'rotate-90' : ''
-                }`}
+        {/* 1. ROUTES VIEW: Clean Route Card with LatticeLoader & Quick Actions */}
+        {activeTab === 'routes' && (
+          <div className="relative w-full h-full p-4 sm:p-6 pt-14 pb-6 flex flex-col justify-start overflow-y-auto animate-assemble">
+            <div className="w-full max-w-5xl mx-auto flex flex-col gap-4">
+              {/* Minimal Line Sidebar Route List (strictly route name, no buttons) */}
+              <LineSidebarRouteList
+                routes={routes}
+                activeRouteId={activeRoute?.id || routes[0]?.id || ''}
+                onSelectRoute={handleSelectRoute}
+                language={language}
               />
-              <span className={`max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:max-w-[65px] group-hover:opacity-100 group-hover:ml-1.5 text-[10px] font-mono font-bold tracking-wider ${
-                isDark ? 'text-cyan-300' : 'text-slate-800'
-              }`}>
-                {t.settingsBinds}
-              </span>
-            </button>
-          </div>
-        </header>
 
-        {/* Floating Status / Error Notifications */}
-        {errorMessage && (
-          <div className="mx-3 mt-2 px-3 py-1.5 rounded-lg bg-[#1a1215] border border-zinc-600 text-zinc-200 text-xs flex items-center justify-between shadow-[0_0_20px_rgba(0,0,0,0.9)]">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-zinc-300 shrink-0" />
-              <span className="font-medium">{errorMessage}</span>
+              {/* Compact Bottom Stats Bar */}
+              <CompactStatsBar
+                sessionSeconds={sessionSeconds}
+                khoriumCount={khoriumCount}
+                adamantiteCount={adamantiteCount}
+                felIronCount={felIronCount}
+                goldEstimate={goldEstimate}
+                speedMultiplier={speedMultiplier}
+                onSpeedChange={setSpeedMultiplier}
+                language={language}
+              />
             </div>
-            <button
-              onClick={() => setErrorMessage(null)}
-              className="text-zinc-400 hover:text-white font-bold px-1 cursor-pointer"
-            >
-              ✕
-            </button>
           </div>
         )}
 
-        {successMessage && (
-          <div className="mx-3 mt-2 px-3 py-1.5 rounded-lg bg-[#111116] border border-zinc-600 text-zinc-200 text-xs flex items-center justify-between shadow-[0_0_20px_rgba(0,0,0,0.9)]">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-zinc-300 shrink-0" />
-              <span className="font-medium">{successMessage}</span>
-            </div>
-            <button
-              onClick={() => setSuccessMessage(null)}
-              className="text-zinc-400 hover:text-white font-bold px-1 cursor-pointer"
+        {/* 2. ROTATION VIEW: Full Interactive ComboSequence & Keybind Editor */}
+        {activeTab === 'rotation' && (
+          <div className="relative w-full h-full p-4 sm:p-6 pt-14 pb-6 flex flex-col justify-start overflow-y-auto animate-assemble">
+            <SpecularCard
+              className="w-full max-w-5xl mx-auto rounded-xl p-4 sm:p-5 border border-transparent hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
             >
-              ✕
-            </button>
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-transparent">
+                <div>
+                  <h1 className="text-sm font-semibold tracking-wide text-white font-mono flex items-center gap-2">
+                    <Crosshair className="w-4 h-4 text-zinc-300" strokeWidth={1.5} />
+                    <span>{isRu ? 'Боевая ротация и бинды' : 'Combat rotation & binds'}</span>
+                  </h1>
+                  <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">
+                    {isRu
+                      ? 'Последовательность заклинаний, тайминги каста, кулдауны и клавиши'
+                      : 'Spell sequence, cast timings, cooldowns, and action keys'}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-zinc-400">
+                    {isRu ? 'Режим: ' : 'Mode: '}
+                    <strong className="text-white font-semibold">Сбор (Gather)</strong>
+                  </span>
+                </div>
+              </div>
+
+              {/* Full Original ComboSequence Component with sleek styling */}
+              <ComboSequence
+                chains={chains}
+                onChainsChange={(newChains) => {
+                  setChains(newChains);
+                  saveCurrentConfigToBackend(newChains, settings);
+                }}
+                activeCasting={activeCasting}
+                isBotRunning={isBotRunning}
+                language={language}
+                theme={theme}
+              />
+            </SpecularCard>
           </div>
         )}
 
-        {/* Main Content: Rotation Sequence OR Routes View OR Settings View */}
-        <main className={`p-1.5 sm:p-2.5 w-full flex flex-col min-h-0 flex-1 relative ${activeView === 'routes' || activeView === 'settings' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
-          <div
-            key={activeView}
-            className="animate-screen-assemble stagger-assemble w-full flex flex-col flex-1"
-          >
-            {activeView === 'settings' ? (
+        {/* 3. GATHER / RESOURCE FILTERS VIEW */}
+        {activeTab === 'gather' && (
+          <div className="relative w-full h-full p-4 sm:p-6 pt-14 pb-6 flex flex-col justify-start overflow-y-auto animate-assemble">
+            <div className="w-full max-w-5xl mx-auto flex flex-col gap-4">
+              <SpecularCard
+                className="w-full rounded-xl p-4 sm:p-5 border border-transparent hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
+              >
+                <div className="flex items-center justify-between pb-3 mb-4 border-b border-transparent">
+                  <div>
+                    <h1 className="text-sm font-semibold tracking-wide text-white font-mono flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-zinc-300" strokeWidth={1.5} />
+                      <span>{isRu ? 'Фильтры ресурсов и радар жил' : 'Resource filters & radar'}</span>
+                    </h1>
+                    <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">
+                      {isRu
+                        ? 'Управление распознаванием руды и трав при автоматическом сборе'
+                        : 'Manage ore and herb detection during automated gathering'}
+                    </p>
+                  </div>
+
+                  <span className="text-[10px] font-mono text-zinc-400">
+                    {isRu ? 'Режим: ' : 'Mode: '}
+                    <strong className="text-white font-semibold">Сбор (Gather)</strong>
+                  </span>
+                </div>
+
+                {/* 5 Filter Cards with Tactile Ghost Hover */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  {resourceFilters.map((res) => (
+                    <div
+                      key={res.id}
+                      onClick={() => handleToggleResource(res.id)}
+                      className={`group p-3.5 rounded-xl border border-transparent hover:border-white/[0.08] bg-transparent flex flex-col justify-between cursor-pointer transition-all duration-150 ${
+                        res.enabled ? 'opacity-100' : 'opacity-40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              res.enabled ? 'bg-white shadow-[0_0_6px_rgba(255,255,255,0.7)]' : 'bg-zinc-600'
+                            }`}
+                          />
+                          <span className="text-xs font-medium text-white">
+                            {isRu ? res.name : res.nameEn}
+                          </span>
+                        </div>
+
+                        <div
+                          className={`w-4 h-4 rounded flex items-center justify-center border transition-all ${
+                            res.enabled
+                              ? 'text-white border-transparent'
+                              : 'text-transparent border-transparent'
+                          }`}
+                        >
+                          {res.enabled && <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-3 mt-3 border-t border-transparent">
+                        <span className="text-[10px] font-mono text-zinc-500">
+                          {isRu ? 'Статус сбора' : 'Status'}
+                        </span>
+                        <span
+                          className={`text-[10px] font-mono font-medium ${
+                            res.enabled
+                              ? 'text-white font-semibold'
+                              : 'text-zinc-600'
+                          }`}
+                        >
+                          {res.enabled ? (isRu ? 'Активен' : 'Enabled') : (isRu ? 'Отключен' : 'Disabled')}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </SpecularCard>
+
+              {/* Compact Bottom Stats Bar */}
+              <CompactStatsBar
+                sessionSeconds={sessionSeconds}
+                khoriumCount={khoriumCount}
+                adamantiteCount={adamantiteCount}
+                felIronCount={felIronCount}
+                goldEstimate={goldEstimate}
+                speedMultiplier={speedMultiplier}
+                onSpeedChange={setSpeedMultiplier}
+                language={language}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* 4. SETTINGS VIEW: Full AppSettings Editor */}
+        {activeTab === 'settings' && (
+          <div className="relative w-full h-full p-6 pt-16 pb-8 flex flex-col justify-start overflow-y-auto animate-assemble">
+            <SpecularCard
+              className="w-full max-w-3xl mx-auto rounded-xl p-5 border border-transparent hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
+            >
               <SettingsView
                 settings={settings}
                 onSettingsChange={(newSettings) => {
                   setSettings(newSettings);
                   saveCurrentConfigToBackend(chains, newSettings);
                 }}
-                onBack={() => setActiveView('rotation')}
-                onNavigateToRoutes={() => setActiveView('routes')}
+                onBack={() => setActiveTab('routes')}
                 onExportJson={handleExportJson}
                 language={language}
                 onLanguageChange={setLanguage}
                 theme={theme}
                 onThemeChange={setTheme}
-                onToast={(msg) => addToast({ type: 'success', message: msg })}
               />
-            ) : activeView === 'routes' ? (
-              <RoutesView
-                isBotRunning={isBotRunning}
-                onToast={addToast}
-                onError={(msg) => addToast({ type: 'error', message: msg })}
-                onTerrainStatus={handleTerrainResponse}
-                activeTerrainCard={activeTerrainCard}
-                onCloseTerrainCard={() => setActiveTerrainCard(null)}
-                language={language}
-                theme={theme}
-              />
-            ) : (
-              <ComboSequence
-                chains={chains}
-                onChainsChange={setChains}
-                activeCasting={activeCasting}
-                isBotRunning={isBotRunning}
-                onToast={(msg) => addToast({ type: 'success', message: msg })}
-                onError={(msg) => addToast({ type: 'error', message: msg })}
-                language={language}
-                theme={theme}
-              />
-            )}
+            </SpecularCard>
           </div>
-        </main>
+        )}
       </div>
 
-      {/* Floating Notifications in top-right corner */}
-      <div className="fixed top-3 right-3 z-50 flex flex-col gap-2 max-w-sm pointer-events-none select-none">
-        {/* Regular Toast Notifications (5s auto-dismiss, click to dismiss) */}
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            onClick={() => removeToast(toast.id)}
-            className={`px-3 py-2 rounded-lg border text-xs font-mono shadow-[0_0_20px_rgba(0,0,0,0.95)] cursor-pointer pointer-events-auto flex items-start gap-2 transition-transform active:scale-95 animate-fadeIn ${
-              toast.type === 'success'
-                ? 'bg-[#061810] border-emerald-500/70 text-emerald-200'
-                : toast.type === 'error'
-                ? 'bg-[#1a0a0f] border-rose-500/70 text-rose-200'
-                : 'bg-[#12141a] border-zinc-700/80 text-zinc-300'
-            }`}
-            title="Нажмите, чтобы закрыть"
-          >
-            {toast.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-            ) : toast.type === 'error' ? (
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-            ) : (
-              <AlertCircle className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
-            )}
-            <span className="leading-snug flex-1">{toast.message}</span>
-          </div>
-        ))}
-      </div>
+      {/* Record Route Modal */}
+      <RouteRecordModal
+        isOpen={isRecordModalOpen}
+        onClose={() => setIsRecordModalOpen(false)}
+        defaultName={`Маршрут ${routes.length + 1}`}
+        onStartRecord={handleAddRoute}
+        language={language}
+      />
 
       {/* Session Summary Modal */}
       <SessionSummaryModal

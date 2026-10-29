@@ -543,11 +543,11 @@ export const RouteCanvas: React.FC<RouteCanvasProps> = ({
               strokeLinejoin="round"
               opacity={0.85}
             />
-            {/* Cyan Bot Route 3px */}
+            {/* Ruby / Gold Bot Variant Route 3px */}
             <path
               d={botRouteD}
               fill="none"
-              stroke="#38bdf8"
+              stroke="#ef4444"
               strokeWidth={3}
               vectorEffect="non-scaling-stroke"
               strokeLinecap="round"
@@ -560,7 +560,7 @@ export const RouteCanvas: React.FC<RouteCanvasProps> = ({
               <path
                 d={botPassedD}
                 fill="none"
-                stroke="#67e8f9"
+                stroke="#f0b232"
                 strokeWidth={3.5}
                 vectorEffect="non-scaling-stroke"
                 strokeLinecap="round"
@@ -582,7 +582,7 @@ export const RouteCanvas: React.FC<RouteCanvasProps> = ({
                 <path
                   d="M -5 -4 L 3 0 L -5 4"
                   fill="none"
-                  stroke="#38bdf8"
+                  stroke="#ef4444"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -641,8 +641,8 @@ export const RouteCanvas: React.FC<RouteCanvasProps> = ({
             {/* Animated Bot Circle (6px) */}
             {isAnimating && botPos && (
               <g transform={`translate(${botPos[0]}, ${botPos[1]}) scale(${px})`}>
-                <circle r={6} fill="#ffffff" stroke="#38bdf8" strokeWidth={2.5} />
-                <circle r={10} fill="none" stroke="#67e8f9" strokeWidth={1.5} opacity={0.7} />
+                <circle r={6} fill="#ffffff" stroke="#ef4444" strokeWidth={2.5} />
+                <circle r={10} fill="none" stroke="#f0b232" strokeWidth={1.5} opacity={0.8} />
               </g>
             )}
           </g>

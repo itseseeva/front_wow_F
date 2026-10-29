@@ -40,7 +40,7 @@ export const ThreeRouteRecordView: React.FC<ThreeRouteRecordViewProps> = ({
 
     // 1. Three.js Scene & Perspective Camera
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x02050c, 0.12);
+    scene.fog = new THREE.FogExp2(0x0e0a0d, 0.12);
 
     const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 50);
     camera.position.set(0, 3.8, 5.8);
@@ -61,16 +61,16 @@ export const ThreeRouteRecordView: React.FC<ThreeRouteRecordViewProps> = ({
     const platformGroup = new THREE.Group();
     scene.add(platformGroup);
 
-    // Ground Grid
-    const gridHelper = new THREE.GridHelper(8, 16, 0x0ea5e9, 0x082738);
+    // Ground Grid (WoW Forged Bronze & Obsidian)
+    const gridHelper = new THREE.GridHelper(8, 16, 0xc89b3c, 0x3d2716);
     gridHelper.position.y = -0.05;
     platformGroup.add(gridHelper);
 
-    // Concentric Radar Rings
+    // Concentric Runic Rings
     const ringMat = new THREE.LineBasicMaterial({
-      color: 0x0891b2,
+      color: 0x785a28,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.65,
     });
     [1.5, 2.8, 3.8].forEach((radius) => {
       const ringGeo = new THREE.BufferGeometry();
@@ -84,20 +84,20 @@ export const ThreeRouteRecordView: React.FC<ThreeRouteRecordViewProps> = ({
       platformGroup.add(ringLine);
     });
 
-    // Sweeping Radar Beam Ray
+    // Sweeping Radar Beam Ray (Molten Gold Arcane Ray)
     const radarBeamGeo = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(0, 0.02, 0),
       new THREE.Vector3(3.8, 0.02, 0),
     ]);
     const radarBeamMat = new THREE.LineBasicMaterial({
-      color: 0x22d3ee,
+      color: 0xf0b232,
       transparent: true,
       opacity: 0.85,
     });
     const radarBeam = new THREE.Line(radarBeamGeo, radarBeamMat);
     platformGroup.add(radarBeam);
 
-    // 4. Dynamic 3D Route Line & Nodes
+    // 4. Dynamic 3D Route Line & Nodes (Molten Gold Arcane Route)
     const maxLinePoints = 2000;
     const routePositions = new Float32Array(maxLinePoints * 3);
     const routeGeo = new THREE.BufferGeometry();
@@ -105,7 +105,7 @@ export const ThreeRouteRecordView: React.FC<ThreeRouteRecordViewProps> = ({
     routeGeo.setDrawRange(0, 0);
 
     const routeMat = new THREE.LineBasicMaterial({
-      color: 0x22d3ee,
+      color: 0xf0b232,
       linewidth: 2,
     });
     const routeLine = new THREE.Line(routeGeo, routeMat);
@@ -113,32 +113,32 @@ export const ThreeRouteRecordView: React.FC<ThreeRouteRecordViewProps> = ({
 
     // Outer Glow Line for contrast
     const glowRouteMat = new THREE.LineBasicMaterial({
-      color: 0x0284c7,
+      color: 0x926e25,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.55,
     });
     const glowRouteLine = new THREE.Line(routeGeo, glowRouteMat);
     glowRouteLine.position.y = 0.01;
     platformGroup.add(glowRouteLine);
 
-    // 5. Current Player Beacon ("Ты здесь")
+    // 5. Current Player Beacon ("Ты здесь" - Horde Ruby & Gold)
     const playerBeaconGroup = new THREE.Group();
     platformGroup.add(playerBeaconGroup);
 
-    // Central Sphere
+    // Central Sphere (Ruby Gemstone)
     const beaconSphereGeo = new THREE.SphereGeometry(0.1, 10, 10);
-    const beaconSphereMat = new THREE.MeshBasicMaterial({ color: 0x67e8f9 });
+    const beaconSphereMat = new THREE.MeshBasicMaterial({ color: 0xdc2626 });
     const beaconSphere = new THREE.Mesh(beaconSphereGeo, beaconSphereMat);
     beaconSphere.position.y = 0.2;
     playerBeaconGroup.add(beaconSphere);
 
-    // Vertical Holographic Light Shaft
+    // Vertical Holographic Light Shaft (Warm Gold)
     const shaftGeo = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(0, 0, 0),
       new THREE.Vector3(0, 1.2, 0),
     ]);
     const shaftMat = new THREE.LineBasicMaterial({
-      color: 0x38bdf8,
+      color: 0xf5d17f,
       transparent: true,
       opacity: 0.9,
     });
@@ -151,14 +151,14 @@ export const ThreeRouteRecordView: React.FC<ThreeRouteRecordViewProps> = ({
     crownMesh.position.y = 1.2;
     playerBeaconGroup.add(crownMesh);
 
-    // Ground expanding sonar ring
+    // Ground expanding sonar ring (Ruby pulse)
     const groundSonarGeo = new THREE.RingGeometry(0.05, 0.08, 24);
     groundSonarGeo.rotateX(-Math.PI / 2);
     const groundSonarMat = new THREE.MeshBasicMaterial({
-      color: 0x22d3ee,
+      color: 0xef4444,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.85,
     });
     const groundSonarRing = new THREE.Mesh(groundSonarGeo, groundSonarMat);
     groundSonarRing.position.y = 0.02;

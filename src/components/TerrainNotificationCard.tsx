@@ -80,21 +80,21 @@ export const TerrainNotificationCard: React.FC<TerrainNotificationCardProps> = (
   const isReady = terrain.status === 'ready';
   const isError = terrain.status === 'error';
 
-  // Ready Card: Minimal green indicator with close button
+  // Ready Card: WoW Emerald Rune Seal with close button
   if (isReady) {
     return (
-      <div className={`w-full p-2.5 rounded-xl border flex items-center justify-between text-xs font-mono shadow-md animate-fadeIn select-none ${
+      <div className={`w-full p-2.5 rounded-xl border-2 flex items-center justify-between text-xs font-fantasy shadow-lg animate-fadeIn select-none ${
         isDark
-          ? 'bg-[#04140b]/95 border-emerald-500/60 text-emerald-200'
-          : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+          ? 'bg-gradient-to-r from-[#142e1d] to-[#0c1f14] border-[#2ecc71] text-[#a7f3d0]'
+          : 'bg-emerald-50 border-emerald-400 text-emerald-900'
       }`}>
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399] shrink-0" />
-          <span className="font-bold">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#2ecc71] shadow-[0_0_8px_#2ecc71] shrink-0" />
+          <span className="font-fantasy font-black tracking-wide">
             {t.terrainReadyTitle}: «{routeName}»
           </span>
-          <span className={isDark ? 'text-zinc-500' : 'text-slate-400'}>•</span>
-          <span className={isDark ? 'text-zinc-400 text-[11px]' : 'text-slate-600 text-[11px]'}>
+          <span className={isDark ? 'text-[#2ecc71]/60' : 'text-slate-400'}>•</span>
+          <span className={isDark ? 'text-[#86efac] text-[11px]' : 'text-slate-600 text-[11px]'}>
             {t.terrainGridReady}
           </span>
         </div>
@@ -102,7 +102,7 @@ export const TerrainNotificationCard: React.FC<TerrainNotificationCardProps> = (
           type="button"
           onClick={onClose}
           className={`p-1 rounded-md transition-colors cursor-pointer ${
-            isDark ? 'text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-800'
+            isDark ? 'text-[#a7f3d0] hover:text-white hover:bg-black/30' : 'text-slate-500 hover:text-slate-800'
           }`}
           title={t.recordModalClose}
         >
@@ -132,17 +132,17 @@ export const TerrainNotificationCard: React.FC<TerrainNotificationCardProps> = (
   const progressPercent = Math.max(0, Math.min(100, Math.round((terrain.progress || 0) * 100)));
 
   return (
-    <div className={`w-full p-2 rounded-xl border backdrop-blur-md text-xs font-mono shadow-xl pointer-events-auto select-none transition-all duration-300 animate-fadeIn relative flex flex-col gap-1.5 ${
+    <div className={`w-full p-2.5 rounded-xl border-2 backdrop-blur-md text-xs font-fantasy shadow-2xl pointer-events-auto select-none transition-all duration-300 animate-fadeIn relative flex flex-col gap-2 ${
       isDark
-        ? 'border-cyan-800/40 bg-[#040812]/95 text-zinc-100'
-        : 'border-slate-200 bg-white/95 text-slate-800 shadow-md'
+        ? 'border-[#785a28] bg-[#161216] text-[#d9c8a9] shadow-[inset_0_0_24px_rgba(0,0,0,0.95)]'
+        : 'border-[#bfa57a] bg-[#faf4ea] text-slate-800 shadow-md'
     }`}>
-      {/* 1. Header Line: Cyan Glowing Disc + Title + Close Button */}
-      <div className="flex items-center justify-between gap-1.5 shrink-0">
+      {/* 1. Header Line: Ruby Gemstone + Cinzel Title + Close Button */}
+      <div className="flex items-center justify-between gap-1.5 shrink-0 border-b pb-1.5 border-[#5a4422]/60">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] shrink-0" />
-          <h4 className={`text-[12px] sm:text-[13px] font-mono font-medium tracking-wide truncate ${
-            isDark ? 'text-zinc-100' : 'text-slate-900'
+          <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-b from-red-500 to-red-800 border border-[#f0b232] shadow-[0_0_8px_rgba(240,178,50,0.7)] shrink-0" />
+          <h4 className={`text-xs sm:text-[13px] font-fantasy font-black tracking-wide truncate ${
+            isDark ? 'text-wow-gold' : 'text-[#422206]'
           }`}>
             {isError ? (isEn ? 'Terrain build error' : 'Ошибка сборки местности') : `${t.terrainBuildingTitle} • «${routeName}»`}
           </h4>
@@ -151,8 +151,8 @@ export const TerrainNotificationCard: React.FC<TerrainNotificationCardProps> = (
         <button
           type="button"
           onClick={onClose}
-          className={`p-1 rounded-md transition-colors cursor-pointer shrink-0 ${
-            isDark ? 'text-zinc-400 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:text-slate-800 hover:bg-slate-100'
+          className={`p-1 rounded-md transition-colors cursor-pointer shrink-0 border ${
+            isDark ? 'border-[#5a4422] bg-[#141014] text-[#a89274] hover:text-[#f5d17f] hover:border-[#c89b3c]' : 'border-[#d9c8a9] bg-white text-slate-500 hover:text-slate-900'
           }`}
           title={t.recordModalClose}
         >
@@ -162,63 +162,66 @@ export const TerrainNotificationCard: React.FC<TerrainNotificationCardProps> = (
 
       {/* Error State */}
       {isError ? (
-        <div className="py-2.5 px-3 rounded-xl bg-rose-500/10 border border-rose-500/40 space-y-1">
-          <div className="flex items-center gap-2 text-rose-500 font-bold text-[11px]">
-            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+        <div className="py-2.5 px-3 rounded-xl bg-red-950/40 border-2 border-red-700/60 space-y-1">
+          <div className="flex items-center gap-2 text-red-300 font-bold text-[11px]">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
             <span>{terrain.error || (isEn ? 'Failed to build terrain mesh' : 'Не удалось построить сетку местности')}</span>
           </div>
-          <p className="text-[9.5px] text-slate-500 dark:text-zinc-400 pl-6 leading-tight">
+          <p className="text-[9.5px] text-[#a89274] pl-6 leading-tight">
             {isEn ? 'Bot will navigate without mesh; rebuild will retry next record.' : 'Бот сможет двигаться без сетки; повторная сборка запустится при следующей записи.'}
           </p>
         </div>
       ) : (
         /* Active Building State - Real 3D WebGL Three.js Scene */
         <div className="flex flex-col gap-2">
-          {/* 2. Subheader: [ ОБЪЕКТЫ ] badge + Count + Glowing 10% */}
+          {/* 2. Subheader: [ ОБЪЕКТЫ ] badge + Count + Glowing Amber Gold */}
           <div className="flex items-center justify-between text-xs px-0.5">
-            <span className={`px-2.5 py-0.5 rounded-md font-bold tracking-widest text-[9.5px] border ${
+            <span className={`px-2.5 py-0.5 rounded-md font-fantasy font-black tracking-widest text-[9.5px] border-2 ${
               isDark
-                ? 'bg-[#061424] border-cyan-800/60 text-cyan-300'
-                : 'bg-cyan-50 border-cyan-200 text-cyan-800'
+                ? 'bg-[#22181d] border-[#5a4422] text-[#f5d17f]'
+                : 'bg-amber-50 border-[#c89b3c] text-[#785a28]'
             }`}>
               {stageBadge}
             </span>
 
             <div className="flex items-center gap-3">
               {countText && (
-                <span className={`font-mono text-[11.5px] ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>
+                <span className={`font-fantasy font-bold text-[11.5px] ${isDark ? 'text-wow-parchment' : 'text-slate-600'}`}>
                   {countText}
                 </span>
               )}
-              <span className="font-mono font-extrabold text-sm sm:text-base text-cyan-500 drop-shadow-[0_0_8px_rgba(34,211,238,0.85)]">
+              <span className="font-fantasy font-black text-sm sm:text-base text-wow-gold drop-shadow-[0_0_8px_rgba(240,178,50,0.85)]">
                 {progressPercent}%
               </span>
             </div>
           </div>
 
           {/* 3. Real 3D WebGL Interactive Three.js Scene */}
-          <ThreeTerrainScene
-            progress={terrain.progress || 0}
-            stageName={terrain.stage || 'models'}
-          />
+          <div className="rounded-lg overflow-hidden border-2 border-[#5a4422] bg-[#0c090c]">
+            <ThreeTerrainScene
+              progress={terrain.progress || 0}
+              stageName={terrain.stage || 'models'}
+              language={language}
+            />
+          </div>
 
-          {/* 4. Glowing Cyan Progress Bar at the bottom */}
+          {/* 4. World of Warcraft Cast Bar with Liquid Amber/Gold Fill */}
           <div className="pt-0.5 flex flex-col gap-1.5">
-            <div className={`w-full h-1.5 rounded-full overflow-hidden relative border ${
-              isDark ? 'bg-[#081324] border-cyan-950/80' : 'bg-slate-200 border-slate-300'
+            <div className={`wow-castbar-track w-full h-3 rounded-sm relative border-2 ${
+              isDark ? 'border-[#785a28] bg-[#0c090c]' : 'border-[#785a28] bg-stone-900'
             }`}>
               <div
-                className="h-full bg-gradient-to-r from-cyan-600 via-cyan-400 to-[#38bdf8] rounded-full relative transition-all duration-300 ease-out shadow-[0_0_12px_rgba(6,182,212,0.95)]"
+                className="wow-castbar-fill h-full relative transition-all duration-300 ease-out"
                 style={{ width: `${Math.max(2, progressPercent)}%` }}
               >
-                {/* Glowing bead on the right edge */}
-                <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-white/90 rounded-full shadow-[0_0_8px_#ffffff]" />
+                {/* Glowing edge bead */}
+                <div className="absolute right-0 top-0 bottom-0 w-2 bg-[#fff0a6] rounded-sm shadow-[0_0_8px_#ffffff]" />
               </div>
             </div>
 
-            {/* Timers below Progress Bar */}
-            <div className={`flex items-center justify-between text-[10px] font-mono px-0.5 ${
-              isDark ? 'text-zinc-400' : 'text-slate-500'
+            {/* Timers below Cast Bar */}
+            <div className={`flex items-center justify-between text-[10px] font-fantasy px-0.5 ${
+              isDark ? 'text-wow-parchment' : 'text-slate-600'
             }`}>
               <span>{t.terrainRemaining} ≈ {etaText}</span>
               <span>{t.terrainElapsed} {elapsedText}</span>

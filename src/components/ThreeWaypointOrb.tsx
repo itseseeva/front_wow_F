@@ -19,21 +19,21 @@ export const ThreeWaypointOrb: React.FC<{ className?: string }> = ({ className =
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    // Inner Glowing Core
+    // Inner Glowing Core (WoW Horde Ruby Core)
     const coreGeo = new THREE.IcosahedronGeometry(0.38, 1);
-    const coreMat = new THREE.MeshBasicMaterial({ color: 0x67e8f9, wireframe: true });
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0xdc2626, wireframe: true });
     const coreMesh = new THREE.Mesh(coreGeo, coreMat);
     scene.add(coreMesh);
 
-    // Outer Gyro Ring 1
+    // Outer Gyro Ring 1 (Polished Gold Ring)
     const ring1Geo = new THREE.TorusGeometry(0.65, 0.02, 8, 32);
-    const ring1Mat = new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.85 });
+    const ring1Mat = new THREE.MeshBasicMaterial({ color: 0xf0b232, transparent: true, opacity: 0.9 });
     const ring1 = new THREE.Mesh(ring1Geo, ring1Mat);
     scene.add(ring1);
 
-    // Outer Gyro Ring 2
+    // Outer Gyro Ring 2 (Antique Bronze/Gold Ring)
     const ring2Geo = new THREE.TorusGeometry(0.78, 0.02, 8, 32);
-    const ring2Mat = new THREE.MeshBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.75 });
+    const ring2Mat = new THREE.MeshBasicMaterial({ color: 0xc89b3c, transparent: true, opacity: 0.85 });
     const ring2 = new THREE.Mesh(ring2Geo, ring2Mat);
     ring2.rotation.x = Math.PI / 2.5;
     scene.add(ring2);
