@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ComboChain, ChainStep } from '../data/skillsLibrary';
-import { Plus, Clock, RotateCcw, Pencil, X, Check, Zap, Heart } from 'lucide-react';
+import { Plus, Clock, RotateCcw, X, Check, Zap, Heart } from 'lucide-react';
 import { Language, Theme } from '../utils/i18n';
 
 interface Props {
@@ -243,12 +243,11 @@ export const ComboSequence: React.FC<Props> = ({
     : -1;
 
   return (
-    <div className="flex flex-col gap-4 w-full select-none text-zinc-100 font-sans">
+    <div className="flex flex-col gap-4 w-full select-none text-zinc-900 dark:text-zinc-100 font-sans">
       {/* 1. TOP BAR: Header & Clear Action */}
-      <div className="flex items-center justify-between pb-2 border-b border-white/10">
-        <div className="flex items-center gap-2.5">
-          <span className="w-2 h-2 rounded-full bg-[#e5c158] shadow-[0_0_8px_rgba(229,193,88,0.7)]" />
-          <span className="text-xs font-mono font-bold tracking-wider uppercase text-white">
+      <div className="flex items-center justify-between pb-2 border-b border-black/10 dark:border-white/10">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-mono font-bold tracking-wider uppercase text-zinc-950 dark:text-white">
             {isRu ? 'ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАКЛИНАНИЙ' : 'SPELL ROTATION SEQUENCE'}
           </span>
           <span className="text-[10px] font-mono text-zinc-500">
@@ -260,7 +259,7 @@ export const ComboSequence: React.FC<Props> = ({
           type="button"
           onClick={() => handleClearAllChainSteps(currentChain.id)}
           title={isRu ? 'Сбросить ротацию' : 'Reset rotation'}
-          className="p-1.5 rounded-lg border border-transparent hover:border-white/[0.08] bg-transparent text-zinc-500 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-mono"
+          className="p-1.5 rounded-lg border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent text-zinc-500 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-mono"
         >
           <RotateCcw className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">{isRu ? 'Сбросить' : 'Reset'}</span>
@@ -268,7 +267,7 @@ export const ComboSequence: React.FC<Props> = ({
       </div>
 
       {/* 2. SPELL SLOTS ROW (Ghost Action Bar) */}
-      <div className="p-3 rounded-xl bg-transparent border border-transparent hover:border-white/[0.08] flex flex-wrap items-center gap-2.5 min-h-[64px] transition-all duration-200">
+      <div className="p-3 rounded-xl bg-transparent border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] flex flex-wrap items-center gap-2.5 min-h-[64px] transition-all duration-200">
         {currentChain.steps.map((step, idx) => {
           const isCasting = activeCasting?.chainId === currentChain.id && activeCasting?.stepId === step.id;
           const isIndependent = Boolean(step.independent);
@@ -278,16 +277,18 @@ export const ComboSequence: React.FC<Props> = ({
             <div
               key={step.id}
               onClick={() => setEditingStep({ chainId: currentChain.id, stepId: step.id })}
-              className={`w-[44px] h-[44px] rounded-lg p-1 relative flex flex-col items-center justify-center cursor-pointer transition-all duration-150 group select-none ${
-                isCasting
-                  ? 'border border-white text-white scale-105 z-20'
+              className={`w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg p-1 relative flex flex-col items-center justify-center cursor-pointer transition-all duration-150 group select-none ${
+                activeCapturingStepId === step.id
+                  ? 'border border-zinc-950 dark:border-white text-zinc-950 dark:text-white animate-pulse bg-black/5 dark:bg-white/10 z-30'
+                  : isCasting
+                  ? 'border border-zinc-950 dark:border-white text-zinc-950 dark:text-white scale-105 z-20'
                   : isCurrentlyEditing
-                  ? 'border border-white text-white z-20'
-                  : 'border border-transparent hover:border-white/[0.08] bg-transparent'
+                  ? 'border border-zinc-950 dark:border-white text-zinc-950 dark:text-white z-20'
+                  : 'border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent'
               }`}
             >
               {/* Slot Index */}
-              <span className="absolute top-1 left-1.5 text-[8px] font-mono font-medium text-zinc-600 pointer-events-none">
+              <span className="absolute top-1 left-1.5 text-[8px] font-mono font-medium text-zinc-400 dark:text-zinc-600 pointer-events-none">
                 {idx + 1}
               </span>
 
@@ -297,13 +298,13 @@ export const ComboSequence: React.FC<Props> = ({
                   type="button"
                   onClick={(e) => handleDeleteStep(currentChain.id, step.id, e)}
                   title={isRu ? 'Удалить умение' : 'Delete spell'}
-                  className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-zinc-900 border border-white/30 text-zinc-300 text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white hover:text-black cursor-pointer z-30"
+                  className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-zinc-200 dark:bg-zinc-900 border border-black/20 dark:border-white/30 text-zinc-700 dark:text-zinc-300 text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-zinc-950 hover:text-white dark:hover:bg-white dark:hover:text-black cursor-pointer z-30"
                 >
                   ✕
                 </button>
               )}
 
-              {/* Keycap Label */}
+              {/* Keycap Label (pulses without 'жми' text) */}
               <button
                 type="button"
                 tabIndex={0}
@@ -333,38 +334,25 @@ export const ComboSequence: React.FC<Props> = ({
                 }}
                 className={`w-full text-center font-mono font-semibold text-xs tracking-wide transition-colors outline-none cursor-pointer ${
                   activeCapturingStepId === step.id
-                    ? 'text-white animate-pulse'
+                    ? 'text-zinc-950 dark:text-white'
                     : step.key
-                    ? 'text-white'
-                    : 'text-zinc-600'
+                    ? 'text-zinc-950 dark:text-white'
+                    : 'text-zinc-400 dark:text-zinc-600'
                 }`}
               >
-                {activeCapturingStepId === step.id ? (
-                  <span className="text-[9px] text-white font-mono">ЖМИ</span>
-                ) : (
-                  step.key || '—'
-                )}
+                {step.key || '—'}
               </button>
-
-              {/* Edit Icon Indicator in Corner */}
-              <div
-                className={`absolute bottom-1 left-1.5 text-[8px] transition-colors ${
-                  isCurrentlyEditing ? 'text-white' : 'text-zinc-600 group-hover:text-zinc-400'
-                }`}
-              >
-                <Pencil className="w-2 h-2" />
-              </div>
 
               {/* HP Condition Indicator */}
               {step.hpBelowPercent != null && (
-                <span className="absolute top-1 right-1 text-[7px] font-mono font-medium text-zinc-300 bg-white/10 border border-white/20 rounded px-0.5">
+                <span className="absolute top-1 right-1 text-[7px] font-mono font-medium text-zinc-700 dark:text-zinc-300 bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/20 rounded px-0.5">
                   &lt;{step.hpBelowPercent}%
                 </span>
               )}
 
               {/* Repeat Indicator */}
               {step.repeatCount && step.repeatCount > 1 && (
-                <span className="absolute bottom-1 right-1 text-[7px] font-mono font-medium text-zinc-300 bg-white/10 rounded px-0.5">
+                <span className="absolute bottom-1 right-1 text-[7px] font-mono font-medium text-zinc-700 dark:text-zinc-300 bg-black/5 dark:bg-white/10 rounded px-0.5">
                   {step.repeatCount}×
                 </span>
               )}
@@ -377,21 +365,21 @@ export const ComboSequence: React.FC<Props> = ({
           type="button"
           onClick={() => handleAddStepToChain(currentChain.id)}
           title={isRu ? 'Добавить слот в ротацию' : 'Add slot to rotation'}
-          className="w-[44px] h-[44px] rounded-lg border border-dashed border-white/20 hover:border-white hover:bg-white/5 text-zinc-500 hover:text-white transition-all flex items-center justify-center cursor-pointer shrink-0"
+          className="w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg border border-dashed border-black/20 dark:border-white/20 hover:border-black/50 dark:hover:border-white hover:bg-black/5 dark:hover:bg-white/5 text-zinc-500 hover:text-zinc-950 dark:hover:text-white transition-all flex items-center justify-center cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4 stroke-[1.5]" />
         </button>
       </div>
 
       {/* 3. DOCKED BOTTOM EDITING PANEL (Ghost Mode) */}
-      <div className="w-full rounded-2xl border border-transparent hover:border-white/[0.08] bg-transparent p-4 shadow-none transition-all duration-200">
+      <div className="w-full rounded-2xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent p-4 shadow-none transition-all duration-200">
         {editingStep && editingStepData ? (
           <div className="flex flex-col gap-3.5">
             {/* Panel Header */}
             <div className="flex items-center justify-between pb-2.5 border-b border-transparent">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono font-medium tracking-wide text-white flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-white font-mono font-bold">
+                <span className="text-xs sm:text-sm font-mono font-medium tracking-wide text-zinc-950 dark:text-white flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-zinc-950 dark:text-white font-mono font-bold">
                     #{editingStepIdx + 1}
                   </span>
                   <span>{isRu ? 'Редактирование умения' : 'Edit spell slot'}</span>
@@ -405,7 +393,7 @@ export const ComboSequence: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={() => setEditingStep(null)}
-                  className="p-1 rounded-lg text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                  className="p-1 rounded-lg text-zinc-500 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer"
                   title={isRu ? 'Закрыть панель' : 'Close panel'}
                 >
                   <X className="w-4 h-4" />
@@ -416,9 +404,9 @@ export const ComboSequence: React.FC<Props> = ({
             {/* Grid of 4 Monochrome Settings Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* CARD 1: Keybind Capture */}
-              <div className="p-3 rounded-xl border border-transparent hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-2.5 transition-all">
+              <div className="p-3 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-2.5 transition-all">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-mono font-semibold text-zinc-300">
+                  <label className="text-[11px] font-mono font-semibold text-zinc-700 dark:text-zinc-300">
                     1. {isRu ? 'Клавиша' : 'Keybind'}
                   </label>
                   <span className="text-[10px] font-mono text-zinc-400">
@@ -449,30 +437,20 @@ export const ComboSequence: React.FC<Props> = ({
                     }}
                     className={`flex-1 h-9 px-3 rounded-lg font-mono font-bold text-sm uppercase flex items-center justify-center border transition-all cursor-pointer outline-none select-none ${
                       isPanelKeyCapturing
-                        ? 'bg-red-950/80 border-[#e5c158] text-[#fef08a] ring-2 ring-[#e5c158] animate-pulse'
+                        ? 'border-zinc-950 dark:border-white text-zinc-950 dark:text-white animate-pulse bg-black/5 dark:bg-white/10'
                         : draftStep.key
-                        ? 'bg-[#222730] border-white/20 text-white hover:border-[#e5c158]'
-                        : 'bg-white/5 border-dashed border-white/20 text-zinc-400 hover:border-white/40'
+                        ? 'bg-transparent border-black/15 dark:border-white/20 text-zinc-950 dark:text-white hover:border-black/30 dark:hover:border-white/40'
+                        : 'bg-transparent border-dashed border-black/15 dark:border-white/20 text-zinc-500 dark:text-zinc-400 hover:border-black/30 dark:hover:border-white/40'
                     }`}
                   >
-                    {isPanelKeyCapturing ? (
-                      <span className="text-xs text-[#e5c158] animate-pulse font-mono font-bold">
-                        ⚡ {isRu ? 'НАЖМИТЕ КЛАВИШУ' : 'PRESS KEY'}
-                      </span>
-                    ) : draftStep.key ? (
-                      <span className="tracking-widest">[{draftStep.key}]</span>
-                    ) : (
-                      <span className="text-xs font-normal">
-                        {isRu ? '+ Назначить клавишу' : '+ Assign Key'}
-                      </span>
-                    )}
+                    <span className="tracking-widest">[{draftStep.key || '—'}]</span>
                   </button>
 
                   {draftStep.key && (
                     <button
                       type="button"
                       onClick={() => setDraftStep((prev) => ({ ...prev, key: '' }))}
-                      className="w-9 h-9 rounded-lg border border-white/10 bg-white/5 hover:bg-red-950/50 hover:border-red-500/50 text-zinc-400 hover:text-red-300 text-xs flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                      className="w-9 h-9 rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-red-950/20 dark:hover:bg-red-950/50 hover:border-red-500/50 text-zinc-500 hover:text-red-500 text-xs flex items-center justify-center transition-colors cursor-pointer shrink-0"
                       title={isRu ? 'Очистить клавишу' : 'Clear key'}
                     >
                       ✕
@@ -492,9 +470,9 @@ export const ComboSequence: React.FC<Props> = ({
               </div>
 
               {/* CARD 2: Trigger Condition & HP */}
-              <div className="p-3 rounded-xl border border-transparent hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-2.5 transition-all">
+              <div className="p-3 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-2.5 transition-all">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-mono font-semibold text-zinc-300">
+                  <label className="text-[11px] font-mono font-semibold text-zinc-700 dark:text-zinc-300">
                     2. {isRu ? 'Условие' : 'Condition'}
                   </label>
                   <span className="text-[10px] font-mono text-zinc-400">
@@ -509,14 +487,14 @@ export const ComboSequence: React.FC<Props> = ({
                 </div>
 
                 {/* Mode toggle */}
-                <div className="grid grid-cols-2 gap-1 p-0.5 rounded-lg bg-transparent border border-transparent hover:border-white/[0.08]">
+                <div className="grid grid-cols-2 gap-1 p-0.5 rounded-lg bg-transparent border border-transparent hover:border-black/10 dark:hover:border-white/[0.08]">
                   <button
                     type="button"
                     onClick={() => setDraftStep((prev) => ({ ...prev, independent: false }))}
                     className={`py-1.5 px-2 rounded-md text-[10px] font-mono font-medium transition cursor-pointer flex items-center justify-center gap-1 ${
                       !draftStep.independent
-                        ? 'text-white font-semibold underline underline-offset-4'
-                        : 'text-zinc-500 hover:text-zinc-300'
+                        ? 'text-zinc-950 dark:text-white font-semibold underline underline-offset-4'
+                        : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
                     }`}
                   >
                     <span>{isRu ? 'По очереди' : 'Sequential'}</span>
@@ -526,11 +504,11 @@ export const ComboSequence: React.FC<Props> = ({
                     onClick={() => setDraftStep((prev) => ({ ...prev, independent: true }))}
                     className={`py-1.5 px-2 rounded-md text-[10px] font-mono font-medium transition cursor-pointer flex items-center justify-center gap-1 ${
                       draftStep.independent
-                        ? 'text-white font-semibold underline underline-offset-4'
-                        : 'text-zinc-500 hover:text-zinc-300'
+                        ? 'text-zinc-950 dark:text-white font-semibold underline underline-offset-4'
+                        : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
                     }`}
                   >
-                    <Zap className="w-3 h-3 text-zinc-400" />
+                    <Zap className="w-3 h-3 text-zinc-500 dark:text-zinc-400" />
                     <span>{isRu ? 'По готовности' : 'ASAP'}</span>
                   </button>
                 </div>
@@ -541,7 +519,7 @@ export const ComboSequence: React.FC<Props> = ({
                     <Heart className="w-3 h-3 text-zinc-500" />
                     <span>{isRu ? 'HP ниже:' : 'HP below:'}</span>
                   </span>
-                  <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-transparent border border-transparent hover:border-white/[0.1] focus-within:border-white">
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-transparent border border-transparent hover:border-black/15 dark:hover:border-white/[0.1] focus-within:border-zinc-950 dark:focus-within:border-white">
                     <input
                       type="text"
                       inputMode="numeric"
@@ -555,7 +533,7 @@ export const ComboSequence: React.FC<Props> = ({
                           hpBelowPercent: !isNaN(val) ? Math.min(100, Math.max(1, val)) : null,
                         }));
                       }}
-                      className="w-8 bg-transparent text-center font-mono font-bold text-xs text-white outline-none"
+                      className="w-8 bg-transparent text-center font-mono font-bold text-xs text-zinc-950 dark:text-white outline-none"
                       placeholder="—"
                     />
                     <span className="text-[10px] font-mono text-zinc-500">%</span>
@@ -564,12 +542,12 @@ export const ComboSequence: React.FC<Props> = ({
               </div>
 
               {/* CARD 3: Cast Time & Repeats */}
-              <div className="p-3 rounded-xl border border-transparent hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-2.5 transition-all">
+              <div className="p-3 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-2.5 transition-all">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-mono font-semibold text-zinc-300">
+                  <label className="text-[11px] font-mono font-semibold text-zinc-700 dark:text-zinc-300">
                     3. {isRu ? 'Время каста' : 'Cast Time'}
                   </label>
-                  <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-transparent border border-transparent hover:border-white/[0.1] focus-within:border-white">
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-transparent border border-transparent hover:border-black/15 dark:hover:border-white/[0.1] focus-within:border-zinc-950 dark:focus-within:border-white">
                     <input
                       type="text"
                       inputMode="decimal"
@@ -585,9 +563,9 @@ export const ComboSequence: React.FC<Props> = ({
                           }));
                         }
                       }}
-                      className="w-10 bg-transparent text-center font-mono font-bold text-xs text-white outline-none"
+                      className="w-10 bg-transparent text-center font-mono font-bold text-xs text-zinc-950 dark:text-white outline-none"
                     />
-                    <span className="text-[10px] font-mono text-zinc-500">c</span>
+                    <span className="text-[10px] font-mono text-zinc-500">{isRu ? 'с' : 's'}</span>
                   </div>
                 </div>
 
@@ -603,8 +581,8 @@ export const ComboSequence: React.FC<Props> = ({
                       }}
                       className={`h-6 rounded text-[10px] font-mono transition cursor-pointer border flex items-center justify-center ${
                         draftStep.castTimeSeconds === s
-                          ? 'text-white font-bold underline underline-offset-2 border-transparent'
-                          : 'border-transparent text-zinc-500 hover:text-white'
+                          ? 'text-zinc-950 dark:text-white font-bold underline underline-offset-2 border-transparent'
+                          : 'border-transparent text-zinc-500 hover:text-zinc-950 dark:hover:text-white'
                       }`}
                     >
                       {s}s
@@ -625,8 +603,8 @@ export const ComboSequence: React.FC<Props> = ({
                         onClick={() => setDraftStep((prev) => ({ ...prev, repeatCount: cnt }))}
                         className={`w-6 h-5 rounded text-[10px] font-mono transition cursor-pointer border flex items-center justify-center ${
                           (draftStep.repeatCount || 1) === cnt
-                            ? 'text-white font-bold underline underline-offset-2 border-transparent'
-                            : 'border-transparent text-zinc-500 hover:text-white'
+                            ? 'text-zinc-950 dark:text-white font-bold underline underline-offset-2 border-transparent'
+                            : 'border-transparent text-zinc-500 hover:text-zinc-950 dark:hover:text-white'
                         }`}
                       >
                         {cnt}×
@@ -637,13 +615,13 @@ export const ComboSequence: React.FC<Props> = ({
               </div>
 
               {/* CARD 4: Cooldown (CD) */}
-              <div className="p-3 rounded-xl border border-transparent hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-2.5 transition-all">
+              <div className="p-3 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-2.5 transition-all">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-mono font-semibold text-zinc-300 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-zinc-400" />
+                  <label className="text-[11px] font-mono font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
                     <span>4. {isRu ? 'Кулдаун (КД)' : 'Cooldown'}</span>
                   </label>
-                  <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-black/40 border border-white/10 focus-within:border-white">
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-transparent border border-transparent hover:border-black/15 dark:hover:border-white/10 focus-within:border-zinc-950 dark:focus-within:border-white">
                     <input
                       type="text"
                       inputMode="decimal"
@@ -659,9 +637,9 @@ export const ComboSequence: React.FC<Props> = ({
                           }));
                         }
                       }}
-                      className="w-10 bg-transparent text-center font-mono font-bold text-xs text-white outline-none"
+                      className="w-10 bg-transparent text-center font-mono font-bold text-xs text-zinc-950 dark:text-white outline-none"
                     />
-                    <span className="text-[10px] font-mono text-zinc-400">c</span>
+                    <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400">{isRu ? 'с' : 's'}</span>
                   </div>
                 </div>
 
@@ -677,8 +655,8 @@ export const ComboSequence: React.FC<Props> = ({
                       }}
                       className={`h-6 rounded text-[10px] font-mono transition cursor-pointer border flex items-center justify-center ${
                         draftStep.skillCooldownSeconds === sec
-                          ? 'bg-white text-zinc-950 font-semibold border-white shadow-sm'
-                          : 'bg-[#18181b] border-white/10 text-zinc-400 hover:text-white'
+                          ? 'bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 font-semibold border-zinc-950 dark:border-white shadow-sm'
+                          : 'bg-zinc-100 dark:bg-[#18181b] border-black/10 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white'
                       }`}
                     >
                       {sec}s
@@ -693,7 +671,7 @@ export const ComboSequence: React.FC<Props> = ({
             </div>
 
             {/* Bottom Actions Bar */}
-            <div className="flex items-center justify-between pt-2 border-t border-white/10">
+            <div className="flex items-center justify-between pt-2 border-t border-black/10 dark:border-white/10">
               <span className="text-[11px] font-mono text-zinc-500">
                 {isRu ? 'Изменения применяются сразу к ротации' : 'Changes apply immediately to rotation'}
               </span>
@@ -702,14 +680,14 @@ export const ComboSequence: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={() => setEditingStep(null)}
-                  className="px-3 py-1.5 rounded-lg border border-white/10 bg-[#18181b] hover:bg-[#202024] text-zinc-300 hover:text-white text-xs font-mono font-medium transition cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg border border-black/10 dark:border-white/10 bg-zinc-100 dark:bg-[#18181b] hover:bg-zinc-200 dark:hover:bg-[#202024] text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white text-xs font-mono font-medium transition cursor-pointer"
                 >
                   {isRu ? 'Отмена' : 'Cancel'}
                 </button>
                 <button
                   type="button"
                   onClick={handleSaveStep}
-                  className="px-4 py-1.5 rounded-lg bg-white hover:bg-zinc-100 text-zinc-950 text-xs font-mono font-semibold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+                  className="px-4 py-1.5 rounded-lg bg-zinc-950 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-100 text-white dark:text-zinc-950 text-xs font-mono font-semibold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>{isRu ? 'Сохранить слот' : 'Save Slot'}</span>
@@ -720,10 +698,7 @@ export const ComboSequence: React.FC<Props> = ({
         ) : (
           /* Empty / Idle State when no slot is active */
           <div className="py-6 flex flex-col items-center justify-center gap-2 text-center text-zinc-500 font-mono">
-            <div className="w-8 h-8 rounded-full border border-white/10 bg-white/5 flex items-center justify-center text-zinc-400">
-              <Pencil className="w-4 h-4" />
-            </div>
-            <p className="text-xs text-zinc-400 font-medium">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 font-medium">
               {isRu
                 ? 'Кликните по любому слоту умения выше, чтобы настроить клавишу, тайминги и условия'
                 : 'Click any spell slot above to configure keybind, timings, and trigger conditions'}
@@ -737,7 +712,7 @@ export const ComboSequence: React.FC<Props> = ({
                     stepId: currentChain.steps[0].id,
                   })
                 }
-                className="mt-1 px-3 py-1 text-[11px] font-mono rounded border border-white/10 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white cursor-pointer transition-colors"
+                className="mt-1 px-3 py-1 text-[11px] font-mono rounded border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white cursor-pointer transition-colors"
               >
                 {isRu ? 'Настроить слот #1' : 'Configure slot #1'}
               </button>

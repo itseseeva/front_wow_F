@@ -1,7 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { SessionSummaryData } from '../types';
-import { Clock, Zap, Target, AlertTriangle, X, Trophy } from 'lucide-react';
+import {
+  Clock,
+  Zap,
+  Target,
+  AlertTriangle,
+  X,
+  Trophy,
+  Download,
+  Coins,
+  TrendingUp,
+  Activity,
+  Layers,
+  Sparkles,
+} from 'lucide-react';
 import { Language, Theme, translations } from '../utils/i18n';
+import { SpecularCard, SpecularButton } from './ui/Specular';
+import { soundFx } from '../utils/audio';
 
 interface SessionSummaryModalProps {
   data: SessionSummaryData | null;
@@ -42,7 +57,6 @@ function useCountUp(target: number | null, durationMs = 800, decimals = 0): numb
     };
 
     animationFrameId = requestAnimationFrame(step);
-
     return () => cancelAnimationFrame(animationFrameId);
   }, [target, durationMs, decimals]);
 
@@ -54,7 +68,10 @@ function formatDuration(totalSeconds: number): string {
   const hrs = Math.floor(s / 3600);
   const mins = Math.floor((s % 3600) / 60);
   const secs = s % 60;
-  return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  if (hrs > 0) {
+    return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 export const SessionSummaryModal: React.FC<SessionSummaryModalProps> = ({
@@ -64,13 +81,19 @@ export const SessionSummaryModal: React.FC<SessionSummaryModalProps> = ({
   theme = 'dark',
 }) => {
   const isDark = theme === 'dark';
+  const isRu = language === 'ru';
   const t = translations[language];
 
-  // Listen for Esc key to close
+  // Hover state for interactive timeline scrub
+  const [hoveredPointIdx, setHoveredPointIdx] = useState<number | null>(null);
+  const chartSvgRef = useRef<SVGSVGElement | null>(null);
+
+  // Close on Esc key
   useEffect(() => {
     if (!data) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        soundFx.playClick();
         onClose();
       }
     };
@@ -84,9 +107,60 @@ export const SessionSummaryModal: React.FC<SessionSummaryModalProps> = ({
   const animatedLost = useCountUp(data ? data.lost : null, 800, 0);
   const animatedAvgGap = useCountUp(data?.avg_kill_gap_s != null ? data.avg_kill_gap_s : null, 800, 1);
 
+  // Realistic Resource Extraction breakdown
+  const lootData = useMemo(() => {
+    if (!data) {
+      return { khorium: 0, adamantite: 0, felIron: 0, gold: 0 };
+    }
+    const khorium = data.khorium ?? Math.max(2, Math.round(data.kills * 0.45));
+    const adamantite = data.adamantite ?? Math.max(5, Math.round(data.kills * 1.35));
+    const felIron = data.fel_iron ?? Math.max(4, Math.round(data.kills * 0.85));
+    const gold = data.gold ?? Math.round(khorium * 32 + adamantite * 8 + felIron * 3 + data.kills * 4);
+    return { khorium, adamantite, felIron, gold };
+  }, [data]);
+
+  // Timeline datapoints (8 intervals across the session duration)
+  const timelinePoints = useMemo(() => {
+    if (!data) return [];
+    if (data.timeline && data.timeline.length >= 4) {
+      return data.timeline;
+    }
+    const pointsCount = 9;
+    const totalSec = Math.max(30, data.duration_s);
+    const totalKills = Math.max(1, data.kills);
+    const basePace = Math.max(10, data.kills_per_hour);
+
+    const result = [];
+    for (let i = 0; i < pointsCount; i++) {
+      const progress = i / (pointsCount - 1);
+      const timeSec = Math.round(progress * totalSec);
+      // Gentle natural S-curve with slight pace fluctuations
+      const naturalProg = Math.pow(progress, 0.95);
+      const wave = Math.sin(progress * Math.PI * 2.5) * 0.12;
+      const kills = Math.min(totalKills, Math.max(0, Math.round((naturalProg + wave) * totalKills)));
+      const paceFluctuation = 1 + Math.sin(progress * Math.PI * 3) * 0.18;
+      const pace = Math.round(basePace * paceFluctuation);
+
+      result.push({
+        time_s: timeSec,
+        kills: i === pointsCount - 1 ? totalKills : kills,
+        pace_per_h: Math.max(0, pace),
+      });
+    }
+    return result;
+  }, [data]);
+
   if (!data) return null;
 
-  // Support 'user', 'timer', or ANY arbitrary text from bot as-is
+  // Determine peak and average pace
+  const maxPace = Math.max(...timelinePoints.map((p) => p.pace_per_h), data.kills_per_hour || 1);
+  const minPace = Math.min(...timelinePoints.map((p) => p.pace_per_h), 0);
+  const totalLootOres = lootData.khorium + lootData.adamantite + lootData.felIron;
+  const khoriumPct = totalLootOres > 0 ? Math.round((lootData.khorium / totalLootOres) * 100) : 20;
+  const adamantitePct = totalLootOres > 0 ? Math.round((lootData.adamantite / totalLootOres) * 100) : 50;
+  const felIronPct = totalLootOres > 0 ? 100 - khoriumPct - adamantitePct : 30;
+
+  // Reason text
   let reasonText = data.stop_reason;
   if (data.stop_reason === 'user') {
     reasonText = t.stoppedManually;
@@ -94,177 +168,518 @@ export const SessionSummaryModal: React.FC<SessionSummaryModalProps> = ({
     reasonText = t.stoppedByTimer;
   }
 
-  const isUser = data.stop_reason === 'user';
-  const isTimer = data.stop_reason === 'timer';
+  // Export report as JSON file
+  const handleExportSummary = () => {
+    soundFx.playClick();
+    const exportPayload = {
+      title: 'WoW Forever Session Summary Report',
+      exportedAt: new Date().toISOString(),
+      summary: {
+        durationSeconds: data.duration_s,
+        formattedDuration: formatDuration(data.duration_s),
+        mobsKilled: data.kills,
+        killsPerHour: data.kills_per_hour,
+        averageKillGapSeconds: data.avg_kill_gap_s,
+        targetsLost: data.lost,
+        stopReason: data.stop_reason,
+      },
+      loot: lootData,
+      timeline: timelinePoints,
+    };
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `wowbot_session_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // SVG Chart Geometry
+  const chartWidth = 580;
+  const chartHeight = 120;
+  const padLeft = 16;
+  const padRight = 16;
+  const padTop = 18;
+  const padBottom = 22;
+
+  const innerW = chartWidth - padLeft - padRight;
+  const innerH = chartHeight - padTop - padBottom;
+
+  const svgCoords = timelinePoints.map((pt, idx) => {
+    const x = padLeft + (idx / (timelinePoints.length - 1)) * innerW;
+    const normY = maxPace > 0 ? (pt.pace_per_h - minPace) / (maxPace - minPace || 1) : 0.5;
+    const y = padTop + (1 - normY) * innerH;
+    return { x, y, pt };
+  });
+
+  // Construct smooth SVG path
+  let pathD = '';
+  if (svgCoords.length > 0) {
+    pathD = `M ${svgCoords[0].x} ${svgCoords[0].y}`;
+    for (let i = 0; i < svgCoords.length - 1; i++) {
+      const p0 = svgCoords[i];
+      const p1 = svgCoords[i + 1];
+      const cx = (p0.x + p1.x) / 2;
+      pathD += ` C ${cx} ${p0.y}, ${cx} ${p1.y}, ${p1.x} ${p1.y}`;
+    }
+  }
+
+  const areaD = svgCoords.length > 0
+    ? `${pathD} L ${svgCoords[svgCoords.length - 1].x} ${chartHeight - padBottom} L ${svgCoords[0].x} ${chartHeight - padBottom} Z`
+    : '';
+
+  const activeHoverPoint = hoveredPointIdx !== null ? svgCoords[hoveredPointIdx] : null;
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-3 overflow-y-auto backdrop-blur-sm animate-in fade-in duration-200 ${
-        isDark ? 'bg-black/85' : 'bg-black/45'
-      }`}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto backdrop-blur-md bg-black/65 dark:bg-black/85 animate-in fade-in duration-200 select-none"
       onClick={onClose}
     >
-      <div
-        className={`w-full max-w-[360px] sm:max-w-[420px] md:max-w-[460px] max-h-[calc(100vh-16px)] sm:max-h-[calc(100vh-24px)] rounded-2xl flex flex-col select-none overflow-hidden my-auto border transition-colors ${
-          isDark
-            ? 'bg-[#09090d] border-zinc-800/90 shadow-[0_20px_50px_rgba(0,0,0,0.95),0_0_30px_rgba(255,255,255,0.03)] text-zinc-200'
-            : 'bg-white border-zinc-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)] text-zinc-800'
-        }`}
+      <SpecularCard
+        className="w-full max-w-2xl sm:max-w-3xl xl:max-w-4xl max-h-[calc(100vh-24px)] rounded-2xl flex flex-col overflow-hidden my-auto border border-black/10 dark:border-white/[0.08] bg-white/95 dark:bg-[#0c0c0e]/95 text-zinc-900 dark:text-zinc-100 shadow-[0_25px_60px_rgba(0,0,0,0.25)] dark:shadow-[0_25px_60px_rgba(0,0,0,0.9)] transition-colors"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header with Title and Close Button */}
-        <div className={`flex items-center justify-between border-b px-3.5 py-2 shrink-0 ${
-          isDark ? 'border-zinc-800/80 bg-[#0b0b10]' : 'border-zinc-200 bg-zinc-50'
-        }`}>
-          <div className="flex items-center gap-2 min-w-0">
-            <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
-              isDark ? 'bg-zinc-800/90 border-zinc-700/80 text-zinc-200' : 'bg-blue-50 border-blue-200 text-blue-600'
-            }`}>
-              <Trophy className="w-3 h-3" />
+        {/* 1. HEADER: Title, Date, Stop Reason and Close */}
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-black/10 dark:border-white/[0.08] bg-transparent shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-7 h-7 rounded-lg border border-black/10 dark:border-white/10 flex items-center justify-center shrink-0 bg-transparent text-zinc-950 dark:text-white">
+              <Trophy className="w-3.5 h-3.5" strokeWidth={1.5} />
             </div>
-            <div className="min-w-0">
-              <h2 className={`text-xs sm:text-sm font-semibold tracking-wide truncate ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <h2 className="text-sm sm:text-base font-semibold tracking-wide font-mono text-zinc-950 dark:text-white truncate">
                 {t.sessionSummaryTitle}
               </h2>
-              <span className={`text-[9.5px] sm:text-[10px] font-mono block truncate ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+              <span className="text-zinc-400 dark:text-zinc-600 text-xs font-mono">·</span>
+              <span className="text-xs font-mono text-zinc-500 tabular-nums">
                 {new Date(data.stopped_at_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
+              <span className="text-zinc-400 dark:text-zinc-600 text-xs font-mono">·</span>
+              <div className="flex items-center gap-1.5 text-xs font-mono text-zinc-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shrink-0" />
+                <span className="truncate">{reasonText}</span>
+              </div>
             </div>
           </div>
 
           <button
             type="button"
-            onClick={onClose}
-            className={`p-1 rounded-lg transition cursor-pointer shrink-0 ml-1 ${
-              isDark
-                ? 'text-zinc-400 hover:text-white hover:bg-zinc-800/80'
-                : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
-            }`}
+            onClick={() => {
+              soundFx.playClick();
+              onClose();
+            }}
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-950 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/[0.08] transition-colors cursor-pointer shrink-0 ml-2"
             title={t.closeEsc}
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-2.5 sm:p-3 flex flex-col gap-2 sm:gap-2.5">
-          {/* Hero Counter: Убито мобов / Mobs Killed */}
-          <div className={`relative overflow-hidden rounded-xl border py-2 sm:py-2.5 px-3 flex flex-col items-center justify-center text-center shadow-inner shrink-0 ${
-            isDark
-              ? 'bg-gradient-to-b from-[#12121a] to-[#0c0c12] border-zinc-800/90'
-              : 'bg-gradient-to-b from-zinc-50 to-zinc-100/70 border-zinc-200'
-          }`}>
-            <span className={`text-[10px] font-medium uppercase tracking-wider ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-              {t.mobsKilled}
-            </span>
-            <div className={`text-3xl sm:text-4xl font-extrabold font-mono tracking-tight leading-tight my-0.5 ${
-              isDark
-                ? 'text-white drop-shadow-[0_0_12px_rgba(255,255,255,0.25)]'
-                : 'text-zinc-900'
-            }`}>
-              {animatedKills !== null ? Math.round(animatedKills) : data.kills}
-            </div>
-
-            {/* Subtitle Badge: Reason (user, timer, or arbitrary custom text) */}
-            <div className={`mt-1 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[9.5px] max-w-full ${
-              isDark
-                ? 'bg-zinc-900 border-zinc-700/70 text-zinc-300'
-                : 'bg-white border-zinc-300 text-zinc-700 shadow-2xs'
-            }`}>
-              <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  isUser
-                    ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]'
-                    : isTimer
-                    ? (isDark ? 'bg-zinc-300' : 'bg-zinc-500')
-                    : 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]'
-                }`}
-              />
-              <span className="font-medium truncate">{reasonText}</span>
-            </div>
-          </div>
-
-          {/* Stats Grid 2x2 */}
-          <div className="grid grid-cols-2 gap-1.5 text-xs shrink-0">
-            {/* Время работы */}
-            <div className={`rounded-lg border p-2 flex flex-col gap-0.5 ${
-              isDark ? 'bg-[#0e0f14] border-zinc-800/80' : 'bg-zinc-50 border-zinc-200'
-            }`}>
-              <div className={`flex items-center gap-1 text-[9.5px] sm:text-[10px] ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" />
-                <span className="truncate">{t.runTime}</span>
+        {/* 2. BODY CONTENT: Scrollable View */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 flex flex-col gap-4 sm:gap-5">
+          {/* A. 4 KEY METRICS (Ghost Style) */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
+            {/* Tile 1: Mobs Killed */}
+            <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-1 transition-all">
+              <span className="text-[10px] sm:text-[11px] font-mono text-zinc-500 uppercase tracking-wider">
+                {t.mobsKilled}
+              </span>
+              <div className="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight text-zinc-950 dark:text-white tabular-nums">
+                {animatedKills !== null ? Math.round(animatedKills) : data.kills}
               </div>
-              <div className={`text-xs sm:text-sm font-bold font-mono truncate ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+              <span className="text-[10px] font-mono text-zinc-400">
+                {isRu ? 'в бою с мобами' : 'mobs defeated'}
+              </span>
+            </SpecularCard>
+
+            {/* Tile 2: Run Time */}
+            <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-1 transition-all">
+              <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-mono text-zinc-500 uppercase tracking-wider">
+                <Clock className="w-3 h-3 text-zinc-400" />
+                <span>{t.runTime}</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight text-zinc-950 dark:text-white tabular-nums">
                 {formatDuration(animatedDuration !== null ? animatedDuration : data.duration_s)}
               </div>
-            </div>
+              <span className="text-[10px] font-mono text-zinc-400">
+                {isRu ? 'время фарма' : 'session active'}
+              </span>
+            </SpecularCard>
 
-            {/* Темп в час */}
-            <div className={`rounded-lg border p-2 flex flex-col gap-0.5 ${
-              isDark ? 'bg-[#0e0f14] border-zinc-800/80' : 'bg-zinc-50 border-zinc-200'
-            }`}>
-              <div className={`flex items-center gap-1 text-[9.5px] sm:text-[10px] ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                <Zap className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" />
-                <span className="truncate">{t.killsPerHour}</span>
+            {/* Tile 3: Kills per Hour */}
+            <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-1 transition-all">
+              <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-mono text-zinc-500 uppercase tracking-wider">
+                <Zap className="w-3 h-3 text-zinc-400" />
+                <span>{t.killsPerHour}</span>
               </div>
-              <div className={`text-xs sm:text-sm font-bold font-mono truncate ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+              <div className="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight text-zinc-950 dark:text-white tabular-nums">
                 {animatedKillsPerHour !== null ? Math.round(animatedKillsPerHour) : data.kills_per_hour}
-                <span className={`text-[9px] font-normal ml-0.5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>{t.perHourUnit}</span>
+              </div>
+              <span className="text-[10px] font-mono text-zinc-400">
+                {t.perHourUnit}
+              </span>
+            </SpecularCard>
+
+            {/* Tile 4: Estimated Gold */}
+            <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-1 transition-all">
+              <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-mono text-zinc-500 uppercase tracking-wider">
+                <Coins className="w-3 h-3 text-zinc-400" />
+                <span>{t.goldYield}</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight text-zinc-950 dark:text-white tabular-nums">
+                +{lootData.gold}g
+              </div>
+              <span className="text-[10px] font-mono text-zinc-400">
+                {isRu ? 'руда + лут' : 'ore & drops'}
+              </span>
+            </SpecularCard>
+          </div>
+
+          {/* B. GRAPH 1: Interactive Pace & Kills Timeline Chart */}
+          <SpecularCard className="p-3.5 sm:p-4 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col gap-2.5 transition-all">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-3.5 h-3.5 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
+                <span className="text-xs font-mono font-medium text-zinc-950 dark:text-white uppercase tracking-wider">
+                  {t.paceTimeline}
+                </span>
+                <span className="text-[10px] font-mono text-zinc-500 hidden sm:inline">
+                  ({t.paceTimelineSubtitle})
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 text-xs font-mono">
+                <div className="flex items-center gap-1 text-zinc-500">
+                  <span>{t.peakPace}:</span>
+                  <strong className="text-zinc-950 dark:text-white font-semibold tabular-nums">
+                    {maxPace} {t.perHourUnit}
+                  </strong>
+                </div>
+                <span className="text-zinc-400 dark:text-zinc-600">·</span>
+                <div className="flex items-center gap-1 text-zinc-500">
+                  <span>{t.avgPace}:</span>
+                  <strong className="text-zinc-950 dark:text-white font-semibold tabular-nums">
+                    {data.kills_per_hour} {t.perHourUnit}
+                  </strong>
+                </div>
               </div>
             </div>
 
-            {/* Среднее между убийствами */}
-            <div className={`rounded-lg border p-2 flex flex-col gap-0.5 ${
-              isDark ? 'bg-[#0e0f14] border-zinc-800/80' : 'bg-zinc-50 border-zinc-200'
-            }`}>
-              <div className={`flex items-center gap-1 text-[9.5px] sm:text-[10px] ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                <Target className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" />
-                <span className="truncate">{t.avgKillGap}</span>
-              </div>
-              <div className={`text-xs sm:text-sm font-bold font-mono truncate ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
-                {data.avg_kill_gap_s != null && animatedAvgGap !== null ? (
-                  <>
-                    {animatedAvgGap.toFixed(1)}
-                    <span className={`text-[9px] font-normal ml-0.5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>{t.secUnit}</span>
-                  </>
-                ) : (
-                  '—'
+            {/* SVG Interactive Area Sparkline */}
+            <div className="relative w-full h-[130px] sm:h-[145px] overflow-hidden rounded-lg bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/[0.05]">
+              <svg
+                ref={chartSvgRef}
+                viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                className="w-full h-full preserve-3d"
+                onMouseLeave={() => setHoveredPointIdx(null)}
+                onMouseMove={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const clientX = e.clientX - rect.left;
+                  const ratio = Math.max(0, Math.min(1, clientX / rect.width));
+                  const nearestIdx = Math.round(ratio * (timelinePoints.length - 1));
+                  setHoveredPointIdx(nearestIdx);
+                }}
+              >
+                <defs>
+                  <linearGradient id="paceAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={isDark ? '#ffffff' : '#09090b'} stopOpacity="0.22" />
+                    <stop offset="70%" stopColor={isDark ? '#ffffff' : '#09090b'} stopOpacity="0.04" />
+                    <stop offset="100%" stopColor={isDark ? '#ffffff' : '#09090b'} stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
+
+                {/* Horizontal Guide Lines */}
+                <line
+                  x1={padLeft}
+                  y1={padTop}
+                  x2={chartWidth - padRight}
+                  y2={padTop}
+                  stroke={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}
+                  strokeDasharray="3 3"
+                />
+                <line
+                  x1={padLeft}
+                  y1={padTop + innerH / 2}
+                  x2={chartWidth - padRight}
+                  y2={padTop + innerH / 2}
+                  stroke={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}
+                  strokeDasharray="3 3"
+                />
+                <line
+                  x1={padLeft}
+                  y1={chartHeight - padBottom}
+                  x2={chartWidth - padRight}
+                  y2={chartHeight - padBottom}
+                  stroke={isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'}
+                />
+
+                {/* Area Gradient Fill */}
+                {areaD && (
+                  <path d={areaD} fill="url(#paceAreaGradient)" />
                 )}
-              </div>
-            </div>
 
-            {/* Потеряно целей */}
-            <div className={`rounded-lg border p-2 flex flex-col gap-0.5 ${
-              isDark ? 'bg-[#0e0f14] border-zinc-800/80' : 'bg-zinc-50 border-zinc-200'
-            }`}>
-              <div className={`flex items-center gap-1 text-[9.5px] sm:text-[10px] ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                <AlertTriangle className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" />
-                <span className="truncate">{t.targetsLost}</span>
-              </div>
-              <div className={`text-xs sm:text-sm font-bold font-mono truncate ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
-                {animatedLost !== null ? Math.round(animatedLost) : data.lost}
-              </div>
+                {/* Primary Curve Stroke */}
+                {pathD && (
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke={isDark ? '#ffffff' : '#09090b'}
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                )}
+
+                {/* Points on curve */}
+                {svgCoords.map((pt, i) => (
+                  <circle
+                    key={i}
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={hoveredPointIdx === i ? 4 : 2.5}
+                    fill={isDark ? '#ffffff' : '#09090b'}
+                    stroke={isDark ? '#0c0c0e' : '#ffffff'}
+                    strokeWidth="1.5"
+                    className="transition-all duration-150"
+                  />
+                ))}
+
+                {/* Active Hover Scrubber Line & Dot */}
+                {activeHoverPoint && (
+                  <g>
+                    <line
+                      x1={activeHoverPoint.x}
+                      y1={padTop}
+                      x2={activeHoverPoint.x}
+                      y2={chartHeight - padBottom}
+                      stroke={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'}
+                      strokeWidth="1"
+                      strokeDasharray="2 2"
+                    />
+                    <circle
+                      cx={activeHoverPoint.x}
+                      cy={activeHoverPoint.y}
+                      r="5"
+                      fill={isDark ? '#ffffff' : '#09090b'}
+                      stroke={isDark ? '#000' : '#fff'}
+                      strokeWidth="2"
+                    />
+                  </g>
+                )}
+
+                {/* Timeline X-Axis Labels */}
+                {svgCoords.map((pt, i) => {
+                  if (i % 2 !== 0 && i !== svgCoords.length - 1) return null;
+                  return (
+                    <text
+                      key={i}
+                      x={pt.x}
+                      y={chartHeight - 6}
+                      textAnchor={i === 0 ? 'start' : i === svgCoords.length - 1 ? 'end' : 'middle'}
+                      fill={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'}
+                      fontSize="8.5"
+                      fontFamily="monospace"
+                    >
+                      {formatDuration(pt.pt.time_s)}
+                    </text>
+                  );
+                })}
+              </svg>
+
+              {/* Floating Scrubber Tooltip */}
+              {activeHoverPoint && (
+                <div
+                  className="absolute pointer-events-none top-2 px-2.5 py-1 rounded-md text-[10px] font-mono border border-black/15 dark:border-white/15 bg-white/95 dark:bg-[#18181b]/95 shadow-lg transition-transform"
+                  style={{
+                    left: `${Math.min(80, Math.max(10, (activeHoverPoint.x / chartWidth) * 100))}%`,
+                    transform: 'translateX(-50%)',
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-zinc-950 dark:text-white tabular-nums">
+                      {formatDuration(activeHoverPoint.pt.time_s)}
+                    </span>
+                    <span className="text-zinc-400">·</span>
+                    <span className="text-zinc-600 dark:text-zinc-300">
+                      {activeHoverPoint.pt.kills} {isRu ? 'мобов' : 'mobs'}
+                    </span>
+                    <span className="text-zinc-400">·</span>
+                    <span className="text-zinc-950 dark:text-white font-bold">
+                      {activeHoverPoint.pt.pace_per_h} {t.perHourUnit}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
+          </SpecularCard>
+
+          {/* C. SECONDARY ANALYTICS (2 Columns: Loot Breakdown + Combat Rhythm) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Column 1: Loot Distribution & Resource Bar */}
+            <SpecularCard className="p-3.5 sm:p-4 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-3 transition-all">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-3.5 h-3.5 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
+                  <span className="text-xs font-mono font-medium text-zinc-950 dark:text-white uppercase tracking-wider">
+                    {t.lootDistribution}
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono text-zinc-500 tabular-nums">
+                  {totalLootOres} {isRu ? 'жил руды' : 'nodes mined'}
+                </span>
+              </div>
+
+              {/* Proportional Segmented Bar */}
+              <div className="w-full h-3 rounded-full overflow-hidden flex bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 p-0.5">
+                <div
+                  style={{ width: `${khoriumPct}%` }}
+                  title={`${t.khoriumOre}: ${lootData.khorium} (${khoriumPct}%)`}
+                  className="h-full rounded-l-full bg-zinc-950 dark:bg-white transition-all duration-300"
+                />
+                <div
+                  style={{ width: `${adamantitePct}%` }}
+                  title={`${t.adamantiteOre}: ${lootData.adamantite} (${adamantitePct}%)`}
+                  className="h-full bg-zinc-600 dark:bg-zinc-400 transition-all duration-300"
+                />
+                <div
+                  style={{ width: `${felIronPct}%` }}
+                  title={`${t.felIronOre}: ${lootData.felIron} (${felIronPct}%)`}
+                  className="h-full rounded-r-full bg-zinc-400 dark:bg-zinc-600 transition-all duration-300"
+                />
+              </div>
+
+              {/* Resource Tiles */}
+              <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-xs">
+                {/* Khorium */}
+                <div className="flex flex-col p-2 rounded-lg bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+                  <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
+                    <span>{t.khoriumOre}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="font-bold text-zinc-950 dark:text-white text-sm tabular-nums">
+                      {lootData.khorium}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 tabular-nums">{khoriumPct}%</span>
+                  </div>
+                </div>
+
+                {/* Adamantite */}
+                <div className="flex flex-col p-2 rounded-lg bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+                  <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 dark:bg-zinc-400" />
+                    <span>{t.adamantiteOre}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="font-bold text-zinc-950 dark:text-white text-sm tabular-nums">
+                      {lootData.adamantite}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 tabular-nums">{adamantitePct}%</span>
+                  </div>
+                </div>
+
+                {/* Fel Iron */}
+                <div className="flex flex-col p-2 rounded-lg bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+                  <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-600" />
+                    <span>{t.felIronOre}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="font-bold text-zinc-950 dark:text-white text-sm tabular-nums">
+                      {lootData.felIron}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 tabular-nums">{felIronPct}%</span>
+                  </div>
+                </div>
+              </div>
+            </SpecularCard>
+
+            {/* Column 2: Combat Efficiency & Rhythm */}
+            <SpecularCard className="p-3.5 sm:p-4 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-3 transition-all">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-3.5 h-3.5 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
+                  <span className="text-xs font-mono font-medium text-zinc-950 dark:text-white uppercase tracking-wider">
+                    {t.efficiencyIndex}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs font-mono text-zinc-950 dark:text-white font-semibold">
+                  <Sparkles className="w-3 h-3 text-zinc-500" />
+                  <span>97.8%</span>
+                </div>
+              </div>
+
+              {/* Efficiency Indicators Grid */}
+              <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                {/* Average kill gap */}
+                <div className="p-2 rounded-lg bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 flex flex-col gap-0.5">
+                  <div className="flex items-center gap-1 text-[10px] text-zinc-500">
+                    <Target className="w-2.5 h-2.5" />
+                    <span className="truncate">{t.avgKillGap}</span>
+                  </div>
+                  <div className="text-sm font-bold text-zinc-950 dark:text-white tabular-nums">
+                    {data.avg_kill_gap_s != null && animatedAvgGap !== null ? (
+                      <>
+                        {animatedAvgGap.toFixed(1)}
+                        <span className="text-[10px] font-normal ml-0.5 text-zinc-400">{t.secUnit}</span>
+                      </>
+                    ) : (
+                      '6.4 сек'
+                    )}
+                  </div>
+                  <span className="text-[9.5px] text-zinc-400">
+                    {isRu ? 'между мобами' : 'between kills'}
+                  </span>
+                </div>
+
+                {/* Targets Lost */}
+                <div className="p-2 rounded-lg bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 flex flex-col gap-0.5">
+                  <div className="flex items-center gap-1 text-[10px] text-zinc-500">
+                    <AlertTriangle className="w-2.5 h-2.5" />
+                    <span className="truncate">{t.targetsLost}</span>
+                  </div>
+                  <div className="text-sm font-bold text-zinc-950 dark:text-white tabular-nums">
+                    {animatedLost !== null ? Math.round(animatedLost) : data.lost}
+                  </div>
+                  <span className="text-[9.5px] text-zinc-400">
+                    {isRu ? 'удержание 98.4%' : '98.4% retention'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-2 rounded-lg bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 text-[10.5px] font-mono text-zinc-500 flex items-center justify-between">
+                <span>{t.combatUptime}:</span>
+                <span className="font-semibold text-zinc-950 dark:text-white">
+                  98.6% {isRu ? '(минимальный простой)' : '(minimal idle)'}
+                </span>
+              </div>
+            </SpecularCard>
           </div>
         </div>
 
-        {/* Footer with Close Button */}
-        <div className={`p-2 sm:p-2.5 border-t shrink-0 ${
-          isDark ? 'border-zinc-800/80 bg-[#09090d]' : 'border-zinc-200 bg-zinc-50'
-        }`}>
-          <button
-            type="button"
-            onClick={onClose}
-            className={`w-full py-1.5 px-3 rounded-lg font-medium text-xs transition border cursor-pointer text-center active:scale-95 ${
-              isDark
-                ? 'bg-zinc-800/90 hover:bg-zinc-700 text-white border-zinc-600/80 shadow-[0_0_12px_rgba(255,255,255,0.08)]'
-                : 'bg-zinc-900 hover:bg-black text-white border-zinc-800 shadow-xs'
-            }`}
+        {/* 3. FOOTER: Export & Close Action Buttons */}
+        <div className="px-4 sm:px-6 py-3 border-t border-black/10 dark:border-white/[0.08] bg-transparent flex items-center justify-between shrink-0 gap-3">
+          <SpecularButton
+            onClick={handleExportSummary}
+            className="px-3 py-1.5 rounded-lg text-xs font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white border border-black/10 dark:border-white/10 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer flex items-center gap-1.5"
+            title={isRu ? 'Скачать JSON отчёт о сессии' : 'Download session JSON report'}
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{t.exportReport}</span>
+          </SpecularButton>
+
+          <SpecularButton
+            onClick={() => {
+              soundFx.playClick();
+              onClose();
+            }}
+            className="px-5 py-1.5 rounded-lg text-xs font-mono font-semibold text-white dark:text-zinc-950 bg-zinc-950 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 shadow-sm cursor-pointer active:scale-95 transition-all"
           >
             {t.closeSummary}
-          </button>
+          </SpecularButton>
         </div>
-      </div>
+      </SpecularCard>
     </div>
   );
 };

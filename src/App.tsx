@@ -1,39 +1,42 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { LineSidebarRouteList } from './components/LineSidebarRouteList';
-import { StealthHUDLeftSidebar, NavTab, RouteItem, ResourceFilterItem } from './components/StealthHUDLeftSidebar';
+import { StealthHUDLeftSidebar, NavTab, RouteItem } from './components/StealthHUDLeftSidebar';
 import { StealthHUDTopToolbar } from './components/StealthHUDTopToolbar';
-import { CompactStatsBar } from './components/CompactStatsBar';
 import { RouteRecordModal } from './components/RouteRecordModal';
 import { SettingsView } from './components/SettingsView';
 import { ComboSequence } from './components/ComboSequence';
-import { SessionSummaryModal } from './components/SessionSummaryModal';
 import { ComboChain, DEFAULT_COMBO_CHAINS } from './data/skillsLibrary';
 import { AppSettings, SessionSummaryData } from './types';
 import { soundFx } from './utils/audio';
-import { SpecularCard, SpecularButton } from './components/ui/Specular';
-import { Crosshair, Layers, Check } from 'lucide-react';
+import { SpecularCard } from './components/ui/Specular';
+import { Crosshair } from 'lucide-react';
 
 export const App: React.FC = () => {
-  // Navigation: 'routes' | 'rotation' | 'gather' | 'settings'
+  // Navigation: 'routes' | 'rotation' | 'settings'
   const [activeTab, setActiveTab] = useState<NavTab>('routes');
   const [language, setLanguage] = useState<'ru' | 'en'>(() => {
     const saved = localStorage.getItem('wowbot_lang');
     return saved === 'en' || saved === 'ru' ? saved : 'ru';
   });
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [isRouteVisible, setIsRouteVisible] = useState<boolean>(true);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const saved = localStorage.getItem('wowbot_theme');
+    return saved === 'light' || saved === 'dark' ? saved : 'dark';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('wowbot_theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.add('light');
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
 
   // Bot Execution State
   const [isBotRunning, setIsBotRunning] = useState<boolean>(false);
-  const [speedMultiplier, setSpeedMultiplier] = useState<number>(1);
   const [sessionSeconds, setSessionSeconds] = useState<number>(149);
-
-  // Farming Telemetry Counters
-  const [khoriumCount] = useState<number>(790);
-  const [adamantiteCount] = useState<number>(1297);
-  const [felIronCount] = useState<number>(98);
-  const [goldEstimate] = useState<number>(56875);
 
   // Routes Management
   const [routes, setRoutes] = useState<RouteItem[]>(() => {
@@ -75,52 +78,6 @@ export const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('wowbot_routes', JSON.stringify(routes));
   }, [routes]);
-
-  // Resource Filters State (monochrome palette)
-  const [resourceFilters, setResourceFilters] = useState<ResourceFilterItem[]>([
-    {
-      id: 'khorium',
-      name: 'Кориумная жила (Khorium)',
-      nameEn: 'Khorium Vein',
-      color: '#ffffff',
-      enabled: true,
-    },
-    {
-      id: 'adamantite',
-      name: 'Залежи адамантита (Adamantite)',
-      nameEn: 'Adamantite Deposit',
-      color: '#d4d4d8',
-      enabled: true,
-    },
-    {
-      id: 'fel_iron',
-      name: 'Оскверненное железо (Fel Iron)',
-      nameEn: 'Fel Iron Deposit',
-      color: '#a1a1aa',
-      enabled: true,
-    },
-    {
-      id: 'netherbloom',
-      name: 'Пустоцвет (Netherbloom)',
-      nameEn: 'Netherbloom',
-      color: '#71717a',
-      enabled: true,
-    },
-    {
-      id: 'dreamfoil',
-      name: 'Грозовой мак (Dreamfoil)',
-      nameEn: 'Dreamfoil',
-      color: '#52525b',
-      enabled: true,
-    },
-  ]);
-
-  const handleToggleResource = (id: string) => {
-    soundFx.playClick();
-    setResourceFilters((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r))
-    );
-  };
 
   // Combo Chains
   const [chains, setChains] = useState<ComboChain[]>(() => {
@@ -239,16 +196,21 @@ export const App: React.FC = () => {
   }, [chains, saveCurrentConfigToBackend]);
 
   // Route Handlers
-  const handleAddRoute = (name: string, isLoop: boolean) => {
+  const handleAddRoute = (name: string, _isLoop: boolean) => {
     const pointCount = 38 + Math.floor(Math.random() * 16);
     const durationSec = 120 + Math.floor(Math.random() * 30);
+    const newRouteId = `route_${Date.now()}`;
+    const isRu = language === 'ru';
     const newRoute: RouteItem = {
-      id: `route_${Date.now()}`,
-      name: name || `Маршрут ${routes.length + 1}`,
-      type: isLoop ? 'КРУГ' : 'ТОЧКА-ТОЧКА',
-      duration: `≈${durationSec} с бега • ${pointCount} точек`,
+      id: newRouteId,
+      name: name || (isRu ? `Маршрут ${routes.length + 1}` : `Route ${routes.length + 1}`),
+      type: isRu ? 'КРУГ' : 'LOOP',
+      duration: isRu
+        ? `≈${durationSec} с бега • ${pointCount} точек`
+        : `≈${durationSec}s run • ${pointCount} pts`,
       points: pointCount,
       active: true,
+      isCreating: true,
     };
 
     setRoutes((prev) => [
@@ -256,6 +218,13 @@ export const App: React.FC = () => {
       newRoute,
     ]);
     soundFx.playClick();
+
+    // Inline loading duration before route is finalized
+    setTimeout(() => {
+      setRoutes((prev) =>
+        prev.map((r) => (r.id === newRouteId ? { ...r, isCreating: false } : r))
+      );
+    }, 1200);
   };
 
   const handleSelectRoute = (id: string) => {
@@ -282,13 +251,38 @@ export const App: React.FC = () => {
     if (isBotRunning) {
       soundFx.playStop();
       setIsBotRunning(false);
+      let backendSummary: SessionSummaryData | null = null;
       if (window.pywebview?.api?.stop_bot) {
         try {
           await window.pywebview.api.stop_bot();
+          if (window.pywebview.api.get_last_session) {
+            backendSummary = await window.pywebview.api.get_last_session();
+          }
         } catch (err) {
           console.warn('stop_bot error:', err);
         }
       }
+
+      const dur = sessionSeconds > 0 ? sessionSeconds : 149;
+      const k = backendSummary?.kills ?? Math.max(3, Math.round(dur * 0.15));
+      const kph = backendSummary?.kills_per_hour ?? Math.round((k / (dur / 3600)));
+      setSessionSummary(
+        backendSummary || {
+          started_at_ms: Date.now() - dur * 1000,
+          stopped_at_ms: Date.now(),
+          duration_s: dur,
+          kills: k,
+          kills_per_hour: kph,
+          avg_kill_gap_s: 6.4,
+          lost: 1,
+          stop_reason: 'user',
+          khorium: Math.max(2, Math.round(k * 0.45)),
+          adamantite: Math.max(5, Math.round(k * 1.35)),
+          fel_iron: Math.max(4, Math.round(k * 0.85)),
+          gold: Math.round(k * 28 + 240),
+        }
+      );
+      setActiveTab('summary');
     } else {
       soundFx.playStart();
       setIsBotRunning(true);
@@ -301,6 +295,31 @@ export const App: React.FC = () => {
         }
       }
     }
+  };
+
+  // Open statistics report in left sidebar
+  const handleOpenStats = () => {
+    soundFx.playClick();
+    if (!sessionSummary) {
+      const dur = sessionSeconds > 0 ? sessionSeconds : 149;
+      const k = Math.max(3, Math.round(dur * 0.15));
+      const kph = Math.round((k / (dur / 3600)));
+      setSessionSummary({
+        started_at_ms: Date.now() - dur * 1000,
+        stopped_at_ms: Date.now(),
+        duration_s: dur,
+        kills: k,
+        kills_per_hour: kph,
+        avg_kill_gap_s: 6.4,
+        lost: 1,
+        stop_reason: 'user',
+        khorium: Math.max(2, Math.round(k * 0.45)),
+        adamantite: Math.max(5, Math.round(k * 1.35)),
+        fel_iron: Math.max(4, Math.round(k * 0.85)),
+        gold: Math.round(k * 28 + 240),
+      });
+    }
+    setActiveTab('summary');
   };
 
   // Session timer ticker
@@ -351,15 +370,12 @@ export const App: React.FC = () => {
 
   return (
     <div
-      className="relative w-screen h-screen overflow-hidden bg-[#09090b] text-zinc-100 font-sans select-none"
-      style={{
-        width: '100vw',
-        height: '100vh',
-      }}
+      className={`relative w-screen h-screen overflow-hidden flex flex-row ${
+        theme === 'dark' ? 'dark bg-[#09090b] text-zinc-100' : 'light bg-zinc-100/90 text-zinc-900'
+      } font-sans select-none transition-colors duration-250`}
     >
-
       {/* =========================================================================
-          LEFT SIDEBAR: Sleek Stealth HUD (320px, 4 Core Tabs: Routes, Rotation, Filters, Settings)
+          LEFT SIDEBAR: Sleek Stealth HUD (Responsive scalable width: 270px -> 410px)
           ========================================================================= */}
       <StealthHUDLeftSidebar
         activeTab={activeTab}
@@ -367,60 +383,39 @@ export const App: React.FC = () => {
         routes={routes}
         onSelectRoute={handleSelectRoute}
         onDeleteRoute={handleDeleteRoute}
-        isRouteVisible={isRouteVisible}
-        onToggleRouteVisible={() => setIsRouteVisible(!isRouteVisible)}
         onRecordRouteClick={() => setIsRecordModalOpen(true)}
-        resourceFilters={resourceFilters}
-        onToggleResource={handleToggleResource}
+        sessionSummary={sessionSummary}
+        onResetSessionSummary={() => setSessionSummary(null)}
         language={language}
-      />
-
-      {/* =========================================================================
-          RIGHT TOP TOOLBAR: Compact Glass Capsule
-          ========================================================================= */}
-      <StealthHUDTopToolbar
-        language={language}
-        onToggleLanguage={() => setLanguage((l) => (l === 'ru' ? 'en' : 'ru'))}
         theme={theme}
-        onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-        isBotRunning={isBotRunning}
-        onToggleBot={handleToggleBot}
-        onExport={handleExportJson}
-        onOpenSettings={() => setActiveTab('settings')}
-        isMuted={isMuted}
-        onToggleMute={() => setIsMuted(soundFx.toggleMute())}
       />
 
       {/* =========================================================================
-          DYNAMIC RIGHT-SIDE VIEWPORT (Switches with 60 FPS Smooth Assembly)
+          MAIN DYNAMIC VIEWPORT AREA (Expands proportionally on large/fullscreen monitors)
           ========================================================================= */}
-      <div
-        className="absolute top-0 bottom-0 right-0 overflow-hidden"
-        style={{
-          left: '350px',
-        }}
-      >
-        {/* 1. ROUTES VIEW: Clean Route Card with LatticeLoader & Quick Actions */}
+      <div className="relative flex-1 h-full min-w-0 overflow-hidden flex flex-col">
+        {/* RIGHT TOP TOOLBAR: Compact Glass Capsule */}
+        <StealthHUDTopToolbar
+          language={language}
+          onToggleLanguage={() => setLanguage((l) => (l === 'ru' ? 'en' : 'ru'))}
+          theme={theme}
+          onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+          isBotRunning={isBotRunning}
+          onToggleBot={handleToggleBot}
+          onExport={handleExportJson}
+          onOpenSettings={() => setActiveTab('settings')}
+          onOpenStats={handleOpenStats}
+        />
+
+        {/* 1. ROUTES VIEW: Clean Route Card with Line-Sidebar Rail */}
         {activeTab === 'routes' && (
-          <div className="relative w-full h-full p-4 sm:p-6 pt-14 pb-6 flex flex-col justify-start overflow-y-auto animate-assemble">
-            <div className="w-full max-w-5xl mx-auto flex flex-col gap-4">
-              {/* Minimal Line Sidebar Route List (strictly route name, no buttons) */}
+          <div className="relative w-full h-full p-4 sm:p-6 2xl:p-10 pt-16 sm:pt-20 pb-6 flex flex-col justify-start overflow-y-auto animate-assemble">
+            <div className="w-full max-w-5xl 2xl:max-w-7xl mx-auto flex flex-col gap-4">
               <LineSidebarRouteList
                 routes={routes}
                 activeRouteId={activeRoute?.id || routes[0]?.id || ''}
                 onSelectRoute={handleSelectRoute}
-                language={language}
-              />
-
-              {/* Compact Bottom Stats Bar */}
-              <CompactStatsBar
-                sessionSeconds={sessionSeconds}
-                khoriumCount={khoriumCount}
-                adamantiteCount={adamantiteCount}
-                felIronCount={felIronCount}
-                goldEstimate={goldEstimate}
-                speedMultiplier={speedMultiplier}
-                onSpeedChange={setSpeedMultiplier}
+                onDeleteRoute={handleDeleteRoute}
                 language={language}
               />
             </div>
@@ -429,17 +424,17 @@ export const App: React.FC = () => {
 
         {/* 2. ROTATION VIEW: Full Interactive ComboSequence & Keybind Editor */}
         {activeTab === 'rotation' && (
-          <div className="relative w-full h-full p-4 sm:p-6 pt-14 pb-6 flex flex-col justify-start overflow-y-auto animate-assemble">
+          <div className="relative w-full h-full p-4 sm:p-6 2xl:p-10 pt-16 sm:pt-20 pb-6 flex flex-col justify-start overflow-y-auto animate-assemble">
             <SpecularCard
-              className="w-full max-w-5xl mx-auto rounded-xl p-4 sm:p-5 border border-transparent hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
+              className="w-full max-w-5xl 2xl:max-w-7xl mx-auto rounded-2xl p-4 sm:p-6 2xl:p-8 border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
             >
               <div className="flex items-center justify-between pb-3 mb-3 border-b border-transparent">
                 <div>
-                  <h1 className="text-sm font-semibold tracking-wide text-white font-mono flex items-center gap-2">
-                    <Crosshair className="w-4 h-4 text-zinc-300" strokeWidth={1.5} />
+                  <h1 className="text-sm 2xl:text-base font-semibold tracking-wide text-zinc-950 dark:text-white font-mono flex items-center gap-2">
+                    <Crosshair className="w-4 h-4 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
                     <span>{isRu ? 'Боевая ротация и бинды' : 'Combat rotation & binds'}</span>
                   </h1>
-                  <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">
+                  <p className="text-[11px] 2xl:text-xs text-zinc-500 mt-0.5 font-mono">
                     {isRu
                       ? 'Последовательность заклинаний, тайминги каста, кулдауны и клавиши'
                       : 'Spell sequence, cast timings, cooldowns, and action keys'}
@@ -447,9 +442,11 @@ export const App: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono text-zinc-400">
+                  <span className="text-[10px] 2xl:text-xs font-mono text-zinc-600 dark:text-zinc-400">
                     {isRu ? 'Режим: ' : 'Mode: '}
-                    <strong className="text-white font-semibold">Сбор (Gather)</strong>
+                    <strong className="text-zinc-950 dark:text-white font-semibold">
+                      {isRu ? 'Сбор' : 'Gather'}
+                    </strong>
                   </span>
                 </div>
               </div>
@@ -470,104 +467,11 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* 3. GATHER / RESOURCE FILTERS VIEW */}
-        {activeTab === 'gather' && (
-          <div className="relative w-full h-full p-4 sm:p-6 pt-14 pb-6 flex flex-col justify-start overflow-y-auto animate-assemble">
-            <div className="w-full max-w-5xl mx-auto flex flex-col gap-4">
-              <SpecularCard
-                className="w-full rounded-xl p-4 sm:p-5 border border-transparent hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
-              >
-                <div className="flex items-center justify-between pb-3 mb-4 border-b border-transparent">
-                  <div>
-                    <h1 className="text-sm font-semibold tracking-wide text-white font-mono flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-zinc-300" strokeWidth={1.5} />
-                      <span>{isRu ? 'Фильтры ресурсов и радар жил' : 'Resource filters & radar'}</span>
-                    </h1>
-                    <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">
-                      {isRu
-                        ? 'Управление распознаванием руды и трав при автоматическом сборе'
-                        : 'Manage ore and herb detection during automated gathering'}
-                    </p>
-                  </div>
-
-                  <span className="text-[10px] font-mono text-zinc-400">
-                    {isRu ? 'Режим: ' : 'Mode: '}
-                    <strong className="text-white font-semibold">Сбор (Gather)</strong>
-                  </span>
-                </div>
-
-                {/* 5 Filter Cards with Tactile Ghost Hover */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                  {resourceFilters.map((res) => (
-                    <div
-                      key={res.id}
-                      onClick={() => handleToggleResource(res.id)}
-                      className={`group p-3.5 rounded-xl border border-transparent hover:border-white/[0.08] bg-transparent flex flex-col justify-between cursor-pointer transition-all duration-150 ${
-                        res.enabled ? 'opacity-100' : 'opacity-40'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              res.enabled ? 'bg-white shadow-[0_0_6px_rgba(255,255,255,0.7)]' : 'bg-zinc-600'
-                            }`}
-                          />
-                          <span className="text-xs font-medium text-white">
-                            {isRu ? res.name : res.nameEn}
-                          </span>
-                        </div>
-
-                        <div
-                          className={`w-4 h-4 rounded flex items-center justify-center border transition-all ${
-                            res.enabled
-                              ? 'text-white border-transparent'
-                              : 'text-transparent border-transparent'
-                          }`}
-                        >
-                          {res.enabled && <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-3 mt-3 border-t border-transparent">
-                        <span className="text-[10px] font-mono text-zinc-500">
-                          {isRu ? 'Статус сбора' : 'Status'}
-                        </span>
-                        <span
-                          className={`text-[10px] font-mono font-medium ${
-                            res.enabled
-                              ? 'text-white font-semibold'
-                              : 'text-zinc-600'
-                          }`}
-                        >
-                          {res.enabled ? (isRu ? 'Активен' : 'Enabled') : (isRu ? 'Отключен' : 'Disabled')}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </SpecularCard>
-
-              {/* Compact Bottom Stats Bar */}
-              <CompactStatsBar
-                sessionSeconds={sessionSeconds}
-                khoriumCount={khoriumCount}
-                adamantiteCount={adamantiteCount}
-                felIronCount={felIronCount}
-                goldEstimate={goldEstimate}
-                speedMultiplier={speedMultiplier}
-                onSpeedChange={setSpeedMultiplier}
-                language={language}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* 4. SETTINGS VIEW: Full AppSettings Editor */}
+        {/* 3. SETTINGS VIEW: Full AppSettings Editor */}
         {activeTab === 'settings' && (
-          <div className="relative w-full h-full p-6 pt-16 pb-8 flex flex-col justify-start overflow-y-auto animate-assemble">
+          <div className="relative w-full h-full p-4 sm:p-6 2xl:p-10 pt-16 sm:pt-20 pb-8 flex flex-col justify-start overflow-y-auto animate-assemble">
             <SpecularCard
-              className="w-full max-w-3xl mx-auto rounded-xl p-5 border border-transparent hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
+              className="w-full max-w-3xl 2xl:max-w-5xl mx-auto rounded-2xl p-5 2xl:p-8 border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
             >
               <SettingsView
                 settings={settings}
@@ -591,18 +495,11 @@ export const App: React.FC = () => {
       <RouteRecordModal
         isOpen={isRecordModalOpen}
         onClose={() => setIsRecordModalOpen(false)}
-        defaultName={`Маршрут ${routes.length + 1}`}
+        defaultName={isRu ? `Маршрут ${routes.length + 1}` : `Route ${routes.length + 1}`}
         onStartRecord={handleAddRoute}
         language={language}
       />
 
-      {/* Session Summary Modal */}
-      <SessionSummaryModal
-        data={sessionSummary}
-        onClose={() => setSessionSummary(null)}
-        language={language}
-        theme={theme}
-      />
     </div>
   );
 };

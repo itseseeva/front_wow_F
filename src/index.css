@@ -1,10 +1,50 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --default-border-glow: rgba(255, 255, 255, 0.65);
+  --default-surface-glow: rgba(255, 255, 255, 0.05);
+  --default-hover-border: rgba(255, 255, 255, 0.08);
+}
+
+html.light, .light {
+  --default-border-glow: rgba(0, 0, 0, 0.35);
+  --default-surface-glow: rgba(0, 0, 0, 0.03);
+  --default-hover-border: rgba(0, 0, 0, 0.12);
+}
+
 @layer base {
-  body {
-    background-color: #000000;
+  html, body {
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+  html.dark, body.dark {
+    background-color: #09090b;
     color: #e4e4e7;
+  }
+  html.light, body.light {
+    background-color: #fafafa;
+    color: #09090b;
+  }
+  body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+}
+
+/* Proportional scaling for large screens (Full HD, 2K, 4K) */
+@media (min-width: 1920px) {
+  :root {
+    font-size: 16px;
+  }
+}
+@media (min-width: 2560px) {
+  :root {
+    font-size: 18px;
+  }
+}
+@media (min-width: 3840px) {
+  :root {
+    font-size: 22px;
   }
 }
 
@@ -936,7 +976,7 @@ input[type="number"] {
   mask-composite: exclude;
   background: radial-gradient(
     110px circle at var(--mouse-x, -999px) var(--mouse-y, -999px),
-    var(--border-glow-color, rgba(255, 255, 255, 0.65)),
+    var(--border-glow-color, var(--default-border-glow, rgba(255, 255, 255, 0.65))),
     transparent 100%
   );
 }
@@ -946,7 +986,7 @@ input[type="number"] {
   border-radius: inherit;
   background: radial-gradient(
     200px circle at var(--mouse-x, -999px) var(--mouse-y, -999px),
-    var(--surface-glow-color, rgba(255, 255, 255, 0.05)),
+    var(--surface-glow-color, var(--default-surface-glow, rgba(255, 255, 255, 0.05))),
     transparent 80%
   );
 }
@@ -960,7 +1000,7 @@ input[type="number"] {
 }
 
 .card-specular:hover {
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: var(--default-hover-border, rgba(255, 255, 255, 0.08));
 }
 
 .btn-specular {
@@ -971,6 +1011,6 @@ input[type="number"] {
 }
 
 .btn-specular:hover {
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: var(--default-hover-border, rgba(255, 255, 255, 0.12));
 }
 

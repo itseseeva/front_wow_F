@@ -3,6 +3,7 @@ import React, { useRef, useCallback, CSSProperties, HTMLAttributes, ReactNode } 
 export interface SpecularProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
   className?: string;
+  contentClassName?: string;
   style?: CSSProperties;
   borderGlowColor?: string;
   surfaceGlowColor?: string;
@@ -12,9 +13,10 @@ export interface SpecularProps extends HTMLAttributes<HTMLDivElement> {
 export const SpecularCard = React.forwardRef<HTMLDivElement, SpecularProps>(({
   children,
   className = '',
+  contentClassName = '',
   style,
-  borderGlowColor = 'rgba(255, 255, 255, 0.55)',
-  surfaceGlowColor = 'rgba(255, 255, 255, 0.06)',
+  borderGlowColor,
+  surfaceGlowColor,
   disabled = false,
   ...props
 }, ref) => {
@@ -54,8 +56,8 @@ export const SpecularCard = React.forwardRef<HTMLDivElement, SpecularProps>(({
       onMouseLeave={handleMouseLeave}
       className={`specular-container card-specular relative overflow-hidden transition-all duration-200 select-none ${className}`}
       style={{
-        '--border-glow-color': borderGlowColor,
-        '--surface-glow-color': surfaceGlowColor,
+        '--border-glow-color': borderGlowColor || 'var(--default-border-glow, rgba(255, 255, 255, 0.65))',
+        '--surface-glow-color': surfaceGlowColor || 'var(--default-surface-glow, rgba(255, 255, 255, 0.05))',
         ...style,
       } as CSSProperties}
       {...props}
@@ -67,7 +69,7 @@ export const SpecularCard = React.forwardRef<HTMLDivElement, SpecularProps>(({
       <span className="specular-sheen pointer-events-none absolute inset-0 z-0 transition-opacity duration-300" />
 
       {/* Actual Content */}
-      <div className="relative z-10 w-full h-full">
+      <div className={`relative z-10 w-full h-full ${contentClassName}`}>
         {children}
       </div>
     </div>
@@ -86,8 +88,8 @@ export const SpecularButton = React.forwardRef<HTMLButtonElement, SpecularButton
   children,
   className = '',
   style,
-  borderGlowColor = 'rgba(255, 255, 255, 0.7)',
-  surfaceGlowColor = 'rgba(255, 255, 255, 0.08)',
+  borderGlowColor,
+  surfaceGlowColor,
   disabled = false,
   ...props
 }, ref) => {
@@ -128,8 +130,8 @@ export const SpecularButton = React.forwardRef<HTMLButtonElement, SpecularButton
       onMouseLeave={handleMouseLeave}
       className={`specular-container btn-specular relative overflow-hidden transition-all duration-150 select-none active:scale-[0.98] ${className}`}
       style={{
-        '--border-glow-color': borderGlowColor,
-        '--surface-glow-color': surfaceGlowColor,
+        '--border-glow-color': borderGlowColor || 'var(--default-border-glow, rgba(255, 255, 255, 0.7))',
+        '--surface-glow-color': surfaceGlowColor || 'var(--default-surface-glow, rgba(255, 255, 255, 0.08))',
         ...style,
       } as CSSProperties}
       {...props}

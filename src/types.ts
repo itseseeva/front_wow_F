@@ -117,6 +117,11 @@ export interface SessionSummaryData {
   avg_kill_gap_s: number | null;
   lost: number;
   stop_reason: string;
+  khorium?: number;
+  adamantite?: number;
+  fel_iron?: number;
+  gold?: number;
+  timeline?: { time_s: number; kills: number; pace_per_h: number }[];
 }
 
 declare global {

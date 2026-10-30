@@ -14,6 +14,7 @@ class SilentSoundSystem {
   public playChime() {}
   public playBonk() {}
   public playGatherChime() {}
+  public playIphonePickerTick() {}
 }
 
 export const soundFx = new SilentSoundSystem();

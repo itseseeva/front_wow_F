@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for Ghost / Borderless UI overhaul: zero idle container borders/fills, content floating directly on pure black (#09090b), active items denoted by crisp white typography, status dot, and slim vertical indicator line, with ultra-thin white borders and Specular light sheens revealing strictly on cursor hover.",
-  "updatedAt":  "2026-10-29T16:14:41.875458170Z",
+  "summary":  "План реализации полноценной светлой темы с высокой контрастностью и адаптивного пропорционального масштабирования интерфейса на всех разрешениях и в полноэкранном режиме.",
+  "updatedAt":  "2026-10-30T07:14:18.208868835Z",
   "requestFeedback":  true,
   "userFacing":  true
 }
