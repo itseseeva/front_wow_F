@@ -388,54 +388,7 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
           </div>
         )}
 
-        {/* Full Route Preview Panel (when eye icon is toggled) */}
-        {previewRouteId && (
-          <div className={`shrink-0 p-2.5 rounded-xl border-2 relative overflow-hidden animate-fadeIn ${
-            isDark
-              ? 'bg-[#141115] border-[#785a28] shadow-[inset_0_0_20px_rgba(0,0,0,0.95),0_4px_12px_rgba(0,0,0,0.6)]'
-              : 'bg-[#faf4ea] border-[#bfa57a] shadow-md'
-          }`}>
-            <div className={`flex items-center justify-between pb-1.5 border-b mb-1.5 ${
-              isDark ? 'border-[#5a4422]' : 'border-[#d9c8a9]'
-            }`}>
-              <span className={`text-[11px] font-fantasy font-bold flex items-center gap-1.5 tracking-wide ${
-                isDark ? 'text-wow-gold' : 'text-[#785a28]'
-              }`}>
-                <Eye className="w-3.5 h-3.5 text-[#c89b3c]" />
-                {t.routesMapPreview}
-              </span>
-              <button
-                type="button"
-                onClick={() => setPreviewRouteId(null)}
-                className={`p-0.5 rounded transition-colors ${
-                  isDark ? 'text-[#a89274] hover:text-[#f5d17f] hover:bg-[#241a1f]' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            {loadingPreview ? (
-              <div className="h-28 flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 text-[#c89b3c] animate-spin" />
-                <span className={`text-[10px] font-fantasy ${isDark ? 'text-wow-parchment' : 'text-slate-600'}`}>
-                  {t.routesTrajectoryLoading}
-                </span>
-              </div>
-            ) : previewData ? (
-              <div className={`h-28 w-full rounded-lg overflow-hidden border-2 ${
-                isDark ? 'border-[#5a4422] bg-[#0c090c]' : 'border-[#d9c8a9] bg-white'
-              }`}>
-                <RouteCanvas
-                  points={previewData.points}
-                  paths={previewData.paths}
-                  aspect={previewData.aspect || 1.6}
-                  mode="preview"
-                  loop={previewData.route.loop}
-                />
-              </div>
-            ) : null}
-          </div>
-        )}
+
 
         {/* Scroll Up Button - Warcraft Chiseled Bracket without rounding */}
         {routes.length > 2 && (
@@ -632,27 +585,6 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                           )}
                         </button>
 
-                        {/* Preview Eye button */}
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePreview(route.id)}
-                          className={`w-7.5 h-7.5 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer active:scale-90 ${
-                            isPreviewing
-                              ? isDark
-                                ? 'bg-gradient-to-b from-[#382315] to-[#1e130c] border-[#f0b232] text-[#fef08a] shadow-[0_0_10px_rgba(240,178,50,0.5)]'
-                                : 'bg-[#faebd7] border-[#c89b3c] text-[#785a28] shadow-xs'
-                              : isDark
-                              ? 'bg-[#161114] border-[#5a4422] text-[#a89274] hover:text-[#f5d17f] hover:border-[#c89b3c] shadow-inner'
-                              : 'bg-white border-[#d9c8a9] text-slate-500 hover:text-[#785a28] hover:border-[#bfa57a] shadow-xs'
-                          }`}
-                          title={t.routesPreviewTooltip}
-                        >
-                          {isPreviewing ? (
-                            <EyeOff className="w-3.5 h-3.5" />
-                          ) : (
-                            <Eye className="w-3.5 h-3.5" />
-                          )}
-                        </button>
                       </div>
                     </div>
                   </div>

@@ -2,14 +2,20 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { LineSidebarRouteList } from './components/LineSidebarRouteList';
 import { StealthHUDLeftSidebar, NavTab, RouteItem } from './components/StealthHUDLeftSidebar';
 import { StealthHUDTopToolbar } from './components/StealthHUDTopToolbar';
-import { mockStartRouteRecord, mockGetRouteRecordStatus, mockStopRouteRecord } from './data/mockRoutes';
+import {
+  mockStartRouteRecord,
+  mockGetRouteRecordStatus,
+  mockStopRouteRecord,
+  mockSetActiveRoute,
+  mockDeleteRoute,
+} from './data/mockRoutes';
 import { SettingsView } from './components/SettingsView';
 import { ComboSequence } from './components/ComboSequence';
 import { ComboChain, DEFAULT_COMBO_CHAINS } from './data/skillsLibrary';
 import { AppSettings, SessionSummaryData } from './types';
 import { soundFx } from './utils/audio';
 import { SpecularCard } from './components/ui/Specular';
-import { Crosshair } from 'lucide-react';
+import { Crosshair, AlertTriangle, X } from 'lucide-react';
 import { getPywebviewApi } from './utils/pywebviewBridge';
 
 export const App: React.FC = () => {
@@ -37,7 +43,16 @@ export const App: React.FC = () => {
 
   // Bot Execution State
   const [isBotRunning, setIsBotRunning] = useState<boolean>(false);
-  const [sessionSeconds, setSessionSeconds] = useState<number>(149);
+  const [sessionSeconds, setSessionSeconds] = useState<number>(0);
+  const [globalError, setGlobalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!globalError) return;
+    const timer = setTimeout(() => {
+      setGlobalError(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [globalError]);
 
   // Routes Management
   const [routes, setRoutes] = useState<RouteItem[]>(() => {
@@ -218,7 +233,7 @@ export const App: React.FC = () => {
       const api = await getPywebviewApi();
       if (api?.list_routes) {
         const res = await api.list_routes();
-        if (res && res.ok && Array.isArray(res.routes) && res.routes.length > 0) {
+        if (res && res.ok && Array.isArray(res.routes)) {
           const isRu = language === 'ru';
           const mapped: RouteItem[] = res.routes.map((r) => ({
             id: r.id,
@@ -228,7 +243,7 @@ export const App: React.FC = () => {
               ? `≈${r.length_s} с бега • ${r.points} точек`
               : `≈${r.length_s}s run • ${r.points} pts`,
             points: r.points,
-            active: res.active_id ? r.id === res.active_id : r.active,
+            active: Boolean(res.active_id && r.id === res.active_id),
           }));
           setRoutes(mapped);
         }
@@ -341,26 +356,23 @@ export const App: React.FC = () => {
             }
           }
 
-          const dur = sessionSecondsRef.current > 0 ? sessionSecondsRef.current : 149;
-          const k = backendSummary?.kills ?? Math.max(3, Math.round(dur * 0.15));
-          const kph = backendSummary?.kills_per_hour ?? Math.round(k / (dur / 3600));
-          setSessionSummary(
-            backendSummary || {
+          if (backendSummary) {
+            setSessionSummary(backendSummary);
+            setActiveTab('summary');
+          } else if (sessionSecondsRef.current > 0) {
+            const dur = sessionSecondsRef.current;
+            setSessionSummary({
               started_at_ms: Date.now() - dur * 1000,
               stopped_at_ms: Date.now(),
               duration_s: dur,
-              kills: k,
-              kills_per_hour: kph,
-              avg_kill_gap_s: 6.4,
-              lost: 1,
+              kills: 0,
+              kills_per_hour: 0,
+              avg_kill_gap_s: null,
+              lost: 0,
               stop_reason: 'auto',
-              khorium: Math.max(2, Math.round(k * 0.45)),
-              adamantite: Math.max(5, Math.round(k * 1.35)),
-              fel_iron: Math.max(4, Math.round(k * 0.85)),
-              gold: Math.round(k * 28 + 240),
-            }
-          );
-          setActiveTab('summary');
+            });
+            setActiveTab('summary');
+          }
         }
       } catch (err) {
         console.warn('get_status poll warning:', err);
@@ -374,33 +386,51 @@ export const App: React.FC = () => {
   }, []);
 
   // Route Selection & Deletion Handlers
-  const handleSelectRoute = (id: string) => {
-    setRoutes((prev) =>
-      prev.map((r) => ({ ...r, active: r.id === id }))
-    );
+  const handleSelectRoute = async (id: string) => {
     soundFx.playClick();
-    getPywebviewApi().then((api) => {
+    try {
+      const api = await getPywebviewApi();
+      let res: { ok: boolean; error?: string } | null = null;
       if (api?.set_active_route) {
-        api.set_active_route(id).catch((e) => console.warn('set_active_route error:', e));
+        res = await api.set_active_route(id);
+      } else {
+        res = await mockSetActiveRoute(id);
       }
-    });
+
+      if (res && res.ok) {
+        setRoutes((prev) =>
+          prev.map((r) => ({ ...r, active: r.id === id }))
+        );
+      } else {
+        const errMsg = res?.error || (language === 'ru' ? 'Не удалось выбрать маршрут' : 'Failed to select route');
+        setGlobalError(errMsg);
+      }
+    } catch (err: any) {
+      console.warn('set_active_route error:', err);
+      setGlobalError(err?.message || (language === 'ru' ? 'Ошибка при выборе маршрута' : 'Error selecting route'));
+    }
   };
 
-  const handleDeleteRoute = (id: string) => {
-    if (routes.length <= 1) return;
+  const handleDeleteRoute = async (id: string) => {
+    soundFx.playClick();
     setRoutes((prev) => {
       const filtered = prev.filter((r) => r.id !== id);
-      if (!filtered.some((r) => r.active) && filtered.length > 0) {
-        filtered[0].active = true;
-      }
       return filtered;
     });
-    soundFx.playClick();
-    getPywebviewApi().then((api) => {
+    try {
+      const api = await getPywebviewApi();
       if (api?.delete_route) {
-        api.delete_route(id).catch((e) => console.warn('delete_route error:', e));
+        const res = await api.delete_route(id);
+        if (res && !res.ok && res.error) {
+          setGlobalError(res.error);
+          fetchRoutes();
+        }
+      } else {
+        await mockDeleteRoute(id);
       }
-    });
+    } catch (e: any) {
+      console.warn('delete_route error:', e);
+    }
   };
 
   // Start inline route recording without popup window
@@ -492,11 +522,15 @@ export const App: React.FC = () => {
         const finalRoute = res.route;
         const pts = finalRoute?.points || 44;
         const dur = finalRoute?.length_s || 128;
+        const finalId = finalRoute?.id || activeRecId;
+
+        // Replace temporary id with res.route.id and do NOT set active: true locally
         setRoutes((prev) =>
           prev.map((r) =>
             r.id === activeRecId
               ? {
                   ...r,
+                  id: finalId,
                   name: finalRoute?.name || r.name,
                   isRecording: false,
                   isCreating: false,
@@ -505,12 +539,27 @@ export const App: React.FC = () => {
                     ? `≈${dur} с бега • ${pts} точек`
                     : `≈${dur}s run • ${pts} pts`,
                   type: finalRoute?.loop ? (isRu ? 'КРУГ' : 'LOOP') : (isRu ? 'ТОЧКА-ТОЧКА' : 'POINT-TO-POINT'),
-                  active: true,
                 }
               : r
           )
         );
-        fetchRoutes();
+
+        if (finalRoute?.id) {
+          let setRes: { ok: boolean; error?: string } | null = null;
+          if (api?.set_active_route) {
+            setRes = await api.set_active_route(finalRoute.id);
+          } else {
+            setRes = await mockSetActiveRoute(finalRoute.id);
+          }
+
+          if (setRes && setRes.ok) {
+            await fetchRoutes();
+          } else if (setRes && !setRes.ok && setRes.error) {
+            setGlobalError(setRes.error);
+          }
+        } else {
+          await fetchRoutes();
+        }
       }
     } catch (err) {
       console.warn('stop_route_record save error:', err);
@@ -566,11 +615,14 @@ export const App: React.FC = () => {
         const finalRoute = detail.route;
         const pts = finalRoute.points || 42;
         const dur = finalRoute.length_s || 130;
+        const finalId = finalRoute.id || activeRecId;
+
         setRoutes((prev) =>
           prev.map((r) =>
             r.id === activeRecId
               ? {
                   ...r,
+                  id: finalId,
                   name: finalRoute.name || r.name,
                   isRecording: false,
                   isCreating: false,
@@ -579,12 +631,28 @@ export const App: React.FC = () => {
                     ? `≈${dur} с бега • ${pts} точек`
                     : `≈${dur}s run • ${pts} pts`,
                   type: finalRoute.loop ? (isRu ? 'КРУГ' : 'LOOP') : (isRu ? 'ТОЧКА-ТОЧКА' : 'POINT-TO-POINT'),
-                  active: true,
                 }
               : r
           )
         );
-        fetchRoutes();
+
+        getPywebviewApi().then(async (api) => {
+          if (finalRoute?.id) {
+            let setRes: { ok: boolean; error?: string } | null = null;
+            if (api?.set_active_route) {
+              setRes = await api.set_active_route(finalRoute.id);
+            } else {
+              setRes = await mockSetActiveRoute(finalRoute.id);
+            }
+            if (setRes && setRes.ok) {
+              await fetchRoutes();
+            } else if (setRes && !setRes.ok && setRes.error) {
+              setGlobalError(setRes.error);
+            }
+          } else {
+            await fetchRoutes();
+          }
+        });
       } else {
         setRoutes((prev) => {
           const filtered = prev.filter((r) => r.id !== activeRecId);
@@ -602,7 +670,9 @@ export const App: React.FC = () => {
 
   // Bot Start / Stop
   const handleToggleBot = async () => {
+    const isRu = language === 'ru';
     const api = await getPywebviewApi();
+
     if (isBotRunning) {
       soundFx.playStop();
       setIsBotRunning(false);
@@ -618,60 +688,76 @@ export const App: React.FC = () => {
         }
       }
 
-      const dur = sessionSeconds > 0 ? sessionSeconds : 149;
-      const k = backendSummary?.kills ?? Math.max(3, Math.round(dur * 0.15));
-      const kph = backendSummary?.kills_per_hour ?? Math.round((k / (dur / 3600)));
-      setSessionSummary(
-        backendSummary || {
-          started_at_ms: Date.now() - dur * 1000,
+      if (backendSummary) {
+        setSessionSummary(backendSummary);
+        setActiveTab('summary');
+      } else if (sessionSeconds > 0) {
+        // Real session took place, report real seconds without fabricated loot
+        setSessionSummary({
+          started_at_ms: Date.now() - sessionSeconds * 1000,
           stopped_at_ms: Date.now(),
-          duration_s: dur,
-          kills: k,
-          kills_per_hour: kph,
-          avg_kill_gap_s: 6.4,
-          lost: 1,
+          duration_s: sessionSeconds,
+          kills: 0,
+          kills_per_hour: 0,
+          avg_kill_gap_s: null,
+          lost: 0,
           stop_reason: 'user',
-          khorium: Math.max(2, Math.round(k * 0.45)),
-          adamantite: Math.max(5, Math.round(k * 1.35)),
-          fel_iron: Math.max(4, Math.round(k * 0.85)),
-          gold: Math.round(k * 28 + 240),
-        }
-      );
-      setActiveTab('summary');
+        });
+        setActiveTab('summary');
+      }
     } else {
-      soundFx.playStart();
-      setIsBotRunning(true);
+      // 1. Check board connection and start bot via backend
       await saveCurrentConfigToBackend();
+
       if (api?.start_bot) {
         try {
-          await api.start_bot();
-        } catch (err) {
-          console.warn('start_bot error:', err);
+          const res = await api.start_bot();
+          if (!res || !res.ok) {
+            soundFx.playStop();
+            const errMsg = res?.error || (isRu
+              ? 'Ошибка: плата управления не подключена'
+              : 'Error: Controller board not connected');
+            setGlobalError(errMsg);
+            return;
+          }
+        } catch (err: any) {
+          soundFx.playStop();
+          setGlobalError(err?.message || (isRu
+            ? 'Ошибка связи: плата не отвечает'
+            : 'Connection error: board not responding'));
+          return;
+        }
+      } else {
+        // In browser mock mode: check if board is mock-connected
+        const isMockBoardConnected = localStorage.getItem('wowbot_board_connected') !== 'false';
+        if (!isMockBoardConnected) {
+          soundFx.playStop();
+          setGlobalError(isRu ? 'Ошибка: плата управления не подключена' : 'Error: Controller board not connected');
+          return;
         }
       }
+
+      // 2. Only if board connection and start succeed:
+      setGlobalError(null);
+      soundFx.playStart();
+      setSessionSeconds(0);
+      setIsBotRunning(true);
     }
   };
 
   // Open statistics report in left sidebar
   const handleOpenStats = () => {
     soundFx.playClick();
-    if (!sessionSummary) {
-      const dur = sessionSeconds > 0 ? sessionSeconds : 149;
-      const k = Math.max(3, Math.round(dur * 0.15));
-      const kph = Math.round((k / (dur / 3600)));
+    if (!sessionSummary && sessionSeconds > 0) {
       setSessionSummary({
-        started_at_ms: Date.now() - dur * 1000,
+        started_at_ms: Date.now() - sessionSeconds * 1000,
         stopped_at_ms: Date.now(),
-        duration_s: dur,
-        kills: k,
-        kills_per_hour: kph,
-        avg_kill_gap_s: 6.4,
-        lost: 1,
+        duration_s: sessionSeconds,
+        kills: 0,
+        kills_per_hour: 0,
+        avg_kill_gap_s: null,
+        lost: 0,
         stop_reason: 'user',
-        khorium: Math.max(2, Math.round(k * 0.45)),
-        adamantite: Math.max(5, Math.round(k * 1.35)),
-        fel_iron: Math.max(4, Math.round(k * 0.85)),
-        gold: Math.round(k * 28 + 240),
       });
     }
     setActiveTab('summary');
@@ -729,6 +815,21 @@ export const App: React.FC = () => {
         theme === 'dark' ? 'dark bg-[#09090b] text-zinc-100' : 'light bg-zinc-100/90 text-zinc-900'
       } font-sans select-none transition-colors duration-250`}
     >
+      {/* Global Error Banner */}
+      {globalError && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-red-950/95 border border-red-500/50 text-red-100 text-xs font-mono shadow-[0_12px_40px_rgba(239,68,68,0.35)] backdrop-blur-md animate-fadeIn select-none">
+          <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+          <span>{globalError}</span>
+          <button
+            type="button"
+            onClick={() => setGlobalError(null)}
+            className="ml-2 text-red-400 hover:text-white p-0.5 rounded cursor-pointer transition-colors"
+            title={isRu ? 'Закрыть' : 'Close'}
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
       {/* =========================================================================
           LEFT SIDEBAR: Sleek Stealth HUD (Responsive scalable width: 270px -> 410px)
           ========================================================================= */}
@@ -771,6 +872,7 @@ export const App: React.FC = () => {
                 activeRouteId={activeRoute?.id || routes[0]?.id || ''}
                 onSelectRoute={handleSelectRoute}
                 onDeleteRoute={handleDeleteRoute}
+                onRecordRoute={handleStartRouteRecord}
                 onSaveRecording={handleSaveRecording}
                 onCancelRecording={handleCancelRecording}
                 language={language}

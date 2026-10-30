@@ -80,36 +80,18 @@ export const TerrainNotificationCard: React.FC<TerrainNotificationCardProps> = (
   const isReady = terrain.status === 'ready';
   const isError = terrain.status === 'error';
 
-  // Ready Card: WoW Emerald Rune Seal with close button
+  useEffect(() => {
+    if (terrain.status === 'ready') {
+      const timer = setTimeout(() => {
+        onClose();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [terrain.status, onClose]);
+
+  // When terrain is ready, do not display annoying notification
   if (isReady) {
-    return (
-      <div className={`w-full p-2.5 rounded-xl border-2 flex items-center justify-between text-xs font-fantasy shadow-lg animate-fadeIn select-none ${
-        isDark
-          ? 'bg-gradient-to-r from-[#142e1d] to-[#0c1f14] border-[#2ecc71] text-[#a7f3d0]'
-          : 'bg-emerald-50 border-emerald-400 text-emerald-900'
-      }`}>
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#2ecc71] shadow-[0_0_8px_#2ecc71] shrink-0" />
-          <span className="font-fantasy font-black tracking-wide">
-            {t.terrainReadyTitle}: «{routeName}»
-          </span>
-          <span className={isDark ? 'text-[#2ecc71]/60' : 'text-slate-400'}>•</span>
-          <span className={isDark ? 'text-[#86efac] text-[11px]' : 'text-slate-600 text-[11px]'}>
-            {t.terrainGridReady}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className={`p-1 rounded-md transition-colors cursor-pointer ${
-            isDark ? 'text-[#a7f3d0] hover:text-white hover:bg-black/30' : 'text-slate-500 hover:text-slate-800'
-          }`}
-          title={t.recordModalClose}
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    );
+    return null;
   }
 
   const stageBadge =

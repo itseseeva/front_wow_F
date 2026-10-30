@@ -3,10 +3,8 @@ import {
   Route,
   Crosshair,
   SlidersHorizontal,
-  Plus,
   BarChart3,
 } from 'lucide-react';
-import { SpecularButton } from './ui/Specular';
 import { soundFx } from '../utils/audio';
 import { SessionSummaryData } from '../types';
 import { StealthHUDSessionSummary } from './StealthHUDSessionSummary';
@@ -31,7 +29,7 @@ interface StealthHUDLeftSidebarProps {
   routes: RouteItem[];
   onSelectRoute: (id: string) => void;
   onDeleteRoute: (id: string) => void;
-  onRecordRouteClick: () => void;
+  onRecordRouteClick?: () => void;
   sessionSummary?: SessionSummaryData | null;
   onResetSessionSummary?: () => void;
   language: 'ru' | 'en';
@@ -157,18 +155,6 @@ export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
                   : 'Automated farming node navigation based on radar detection and route loop optimization.'}
               </p>
             </div>
-
-            {/* Button: + Записать маршрут (Ghost Button) */}
-            <SpecularButton
-              onClick={() => {
-                soundFx.playClick();
-                onRecordRouteClick();
-              }}
-              className="w-full h-9 rounded-lg flex items-center justify-center gap-2 cursor-pointer border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white transition-all"
-            >
-              <Plus className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
-              <span>{isRu ? 'Записать маршрут' : 'Record Route'}</span>
-            </SpecularButton>
           </div>
         )}
 

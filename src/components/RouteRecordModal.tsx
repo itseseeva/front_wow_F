@@ -253,104 +253,75 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/75 backdrop-blur-md animate-fadeIn select-none">
-      <div
-        className={`w-full ${
-          screen === 'recording' ? 'max-w-xl' : 'max-w-md'
-        } rounded-2xl p-5 border border-black/10 dark:border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.2)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.9)] bg-white dark:bg-[#121214] transition-all duration-200`}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md animate-fadeIn select-none">
+      <div className="w-[290px] rounded-2xl p-4 border border-white/10 shadow-[0_25px_60px_rgba(0,0,0,0.85)] bg-[#101014]/95 text-zinc-100 transition-all duration-300 relative overflow-hidden flex flex-col gap-3">
+        {/* Top subtle cyan laser accent line */}
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-80" />
+
         {/* Modal Header */}
-        <div className="flex items-center justify-between pb-3.5 border-b border-black/10 dark:border-white/[0.08]">
-          <div className="flex items-center gap-2.5">
-            <Route className="w-4 h-4 text-zinc-950 dark:text-white" strokeWidth={1.5} />
-            <h2 className="text-sm font-semibold text-zinc-950 dark:text-white tracking-wide">
+        <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+          <div className="flex items-center gap-2">
+            <Route className="w-3.5 h-3.5 text-cyan-400" strokeWidth={1.5} />
+            <h2 className="text-xs font-semibold text-white tracking-wide font-mono">
               {screen === 'recording'
-                ? isRu
-                  ? 'Идёт запись маршрута'
-                  : 'Recording route...'
-                : isRu
-                ? 'Запись нового маршрута'
-                : 'Record new route'}
+                ? (status.name || routeName)
+                : (isRu ? 'Новый маршрут' : 'New Route')}
             </h2>
-            {screen === 'recording' && (
-              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/25 text-[10px] font-mono text-red-500 dark:text-red-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                REC
-              </span>
-            )}
           </div>
           <button
             type="button"
             onClick={handleCloseClick}
-            className="text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white cursor-pointer p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/[0.08] transition-colors"
-            title={screen === 'recording' ? (isRu ? 'Отменить запись' : 'Cancel recording') : (isRu ? 'Закрыть' : 'Close')}
+            className="text-zinc-400 hover:text-white cursor-pointer p-1 rounded-md hover:bg-white/[0.08] transition-colors"
+            title={screen === 'recording' ? (isRu ? 'Отменить' : 'Cancel') : (isRu ? 'Закрыть' : 'Close')}
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* =========================================================================
-            SCREEN 1: NAMING
-            ========================================================================= */}
+        {/* SCREEN 1: NAMING */}
         {screen === 'naming' && (
-          <form onSubmit={handleStartRecord} className="mt-4 space-y-4">
-            <div>
-              <label className="block text-xs font-mono text-zinc-600 dark:text-zinc-400 mb-1.5">
-                {isRu ? 'Название маршрута' : 'Route name'}
-              </label>
-              <input
-                type="text"
-                value={routeName}
-                onChange={(e) => setRouteName(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-[#18181b] border border-black/15 dark:border-white/[0.08] text-zinc-950 dark:text-white text-xs font-mono focus:outline-none focus:border-zinc-950 dark:focus:border-white transition-colors"
-                placeholder={isRu ? 'Например: Награнд Руда' : 'e.g. Nagrand Ore'}
-                autoFocus
-              />
-            </div>
+          <form onSubmit={handleStartRecord} className="flex flex-col gap-3">
+            <input
+              type="text"
+              value={routeName}
+              onChange={(e) => setRouteName(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-xs font-mono placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400 transition-colors"
+              placeholder={isRu ? 'Название маршрута...' : 'Route name...'}
+              autoFocus
+            />
 
-            {/* Error Message */}
             {error && (
-              <div className="p-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-400 text-xs font-mono">
+              <div className="p-2 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 text-[11px] font-mono">
                 {error}
               </div>
             )}
 
-            <div className="pt-2 flex justify-end gap-2.5">
-              <SpecularButton
+            <div className="flex justify-end gap-2 pt-1">
+              <button
                 type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white border border-black/10 dark:border-white/[0.08] bg-zinc-100 dark:bg-[#18181b] hover:bg-zinc-200 dark:hover:bg-white/[0.08] cursor-pointer"
+                className="px-3 py-1.5 rounded-lg text-xs font-mono text-zinc-400 hover:text-white border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] cursor-pointer transition-colors"
               >
                 {isRu ? 'Отмена' : 'Cancel'}
-              </SpecularButton>
-              <SpecularButton
+              </button>
+              <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white dark:text-zinc-950 bg-zinc-950 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 shadow-sm cursor-pointer active:scale-95 transition-all flex items-center gap-1.5"
+                className="px-4 py-1.5 rounded-lg text-xs font-mono font-semibold text-black bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.4)] cursor-pointer active:scale-95 transition-all flex items-center gap-1.5"
               >
-                {isSubmitting && <Loader2 className="w-3 h-3 animate-spin" />}
-                <span>{isRu ? 'Начать запись' : 'Start recording'}</span>
-              </SpecularButton>
+                {isSubmitting && <Loader2 className="w-3 h-3 animate-spin text-black" />}
+                <span>{isRu ? 'Запись' : 'Record'}</span>
+              </button>
             </div>
           </form>
         )}
 
-        {/* =========================================================================
-            SCREEN 2: RECORDING IN PROGRESS
-            ========================================================================= */}
+        {/* SCREEN 2: RECORDING */}
         {screen === 'recording' && (
-          <div className="mt-4 flex flex-col gap-3.5">
-            {/* Route Name Badge */}
-            <div className="flex items-center justify-between text-xs font-mono text-zinc-600 dark:text-zinc-400">
-              <span>{isRu ? 'Имя маршрута:' : 'Route name:'}</span>
-              <span className="font-semibold text-zinc-950 dark:text-white font-mono">
-                {status.name || routeName}
-              </span>
-            </div>
-
-            {/* Live Canvas View */}
-            <div className="w-full h-56 sm:h-64 rounded-xl overflow-hidden border border-black/10 dark:border-white/[0.08] relative bg-zinc-950">
+          <div className="flex flex-col gap-2.5">
+            {/* Live Canvas View with HUD Badges */}
+            <div className="w-full h-44 rounded-xl overflow-hidden border border-white/10 relative bg-black/60 shadow-inner">
               <RouteCanvas
                 points={status.points}
                 mapId={status.map_id}
@@ -358,72 +329,60 @@ export const RouteRecordModal: React.FC<RouteRecordModalProps> = ({
                 loop={false}
                 className="w-full h-full"
               />
-            </div>
 
-            {/* Live Telemetry Bar */}
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="p-2 rounded-lg bg-zinc-50 dark:bg-[#18181b] border border-black/10 dark:border-white/[0.08] flex flex-col">
-                <span className="text-[10px] text-zinc-500 font-mono">{isRu ? 'Время' : 'Duration'}</span>
-                <span className="text-xs font-mono font-bold text-zinc-950 dark:text-white mt-0.5">
-                  {formatSeconds(status.seconds)}
-                </span>
+              {/* Floating Minimal HUD: REC Indicator */}
+              <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md border border-red-500/30 text-[10px] font-mono text-red-400 shadow-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                <span>REC</span>
+                <span className="text-zinc-300 ml-0.5">{formatSeconds(status.seconds)}</span>
               </div>
-              <div className="p-2 rounded-lg bg-zinc-50 dark:bg-[#18181b] border border-black/10 dark:border-white/[0.08] flex flex-col">
-                <span className="text-[10px] text-zinc-500 font-mono">{isRu ? 'Точки' : 'Points'}</span>
-                <span className="text-xs font-mono font-bold text-zinc-950 dark:text-white mt-0.5">
-                  {status.points.length}
-                </span>
-              </div>
-              <div className="p-2 rounded-lg bg-zinc-50 dark:bg-[#18181b] border border-black/10 dark:border-white/[0.08] flex flex-col">
-                <span className="text-[10px] text-zinc-500 font-mono">{isRu ? 'Длина' : 'Length'}</span>
-                <span className="text-xs font-mono font-bold text-zinc-950 dark:text-white mt-0.5">
-                  ≈ {status.length_s} {isRu ? 'с бега' : 's run'}
-                </span>
+
+              {/* Floating Minimal HUD: Points */}
+              <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md border border-cyan-500/30 text-[10px] font-mono text-cyan-300 shadow-sm">
+                <span>{status.points.length} {isRu ? 'точек' : 'pts'}</span>
               </div>
             </div>
 
-            {/* Warning Message (Yellow) */}
+            {/* Warning Message if any */}
             {status.warning && (
-              <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-500 dark:text-amber-400 text-xs font-mono flex items-center gap-2">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+              <div className="p-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 text-[11px] font-mono flex items-center gap-1.5">
+                <AlertTriangle className="w-3 h-3 shrink-0 text-amber-500" />
                 <span>{status.warning}</span>
               </div>
             )}
 
-            {/* Reason Message if Stopped by Bot */}
             {botStopReason && (
-              <div className="p-2.5 rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-500 dark:text-sky-400 text-xs font-mono flex items-center gap-2">
-                <Info className="w-3.5 h-3.5 shrink-0" />
+              <div className="p-2 rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-400 text-[11px] font-mono flex items-center gap-1.5">
+                <Info className="w-3 h-3 shrink-0" />
                 <span>{botStopReason}</span>
               </div>
             )}
 
-            {/* Error Message (Red) */}
             {error && (
-              <div className="p-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-400 text-xs font-mono">
+              <div className="p-2 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 text-[11px] font-mono">
                 {error}
               </div>
             )}
 
             {/* Action Buttons */}
-            <div className="pt-2 flex justify-end gap-2.5">
-              <SpecularButton
+            <div className="flex justify-end gap-2 pt-1">
+              <button
                 type="button"
                 onClick={() => handleStopRecord(false)}
                 disabled={isSubmitting}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white border border-black/10 dark:border-white/[0.08] bg-zinc-100 dark:bg-[#18181b] hover:bg-zinc-200 dark:hover:bg-white/[0.08] cursor-pointer"
+                className="px-3 py-1.5 rounded-lg text-xs font-mono text-zinc-400 hover:text-white border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] cursor-pointer transition-colors"
               >
-                {isRu ? 'Отменить' : 'Cancel'}
-              </SpecularButton>
-              <SpecularButton
+                {isRu ? 'Отмена' : 'Cancel'}
+              </button>
+              <button
                 type="button"
                 onClick={() => handleStopRecord(true)}
                 disabled={isSubmitting}
-                className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white dark:text-zinc-950 bg-zinc-950 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 shadow-sm cursor-pointer active:scale-95 transition-all flex items-center gap-1.5"
+                className="px-4 py-1.5 rounded-lg text-xs font-mono font-semibold text-black bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.4)] cursor-pointer active:scale-95 transition-all flex items-center gap-1.5"
               >
-                {isSubmitting && <Loader2 className="w-3 h-3 animate-spin" />}
+                {isSubmitting && <Loader2 className="w-3 h-3 animate-spin text-black" />}
                 <span>{isRu ? 'Сохранить' : 'Save'}</span>
-              </SpecularButton>
+              </button>
             </div>
           </div>
         )}
