@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { LineSidebarRouteList } from './components/LineSidebarRouteList';
 import { StealthHUDLeftSidebar, NavTab, RouteItem } from './components/StealthHUDLeftSidebar';
 import { StealthHUDTopToolbar } from './components/StealthHUDTopToolbar';
-import { RouteRecordModal } from './components/RouteRecordModal';
+import { mockStartRouteRecord, mockGetRouteRecordStatus, mockStopRouteRecord } from './data/mockRoutes';
 import { SettingsView } from './components/SettingsView';
 import { ComboSequence } from './components/ComboSequence';
 import { ComboChain, DEFAULT_COMBO_CHAINS } from './data/skillsLibrary';
@@ -10,6 +10,7 @@ import { AppSettings, SessionSummaryData } from './types';
 import { soundFx } from './utils/audio';
 import { SpecularCard } from './components/ui/Specular';
 import { Crosshair } from 'lucide-react';
+import { getPywebviewApi } from './utils/pywebviewBridge';
 
 export const App: React.FC = () => {
   // Navigation: 'routes' | 'rotation' | 'settings'
@@ -129,9 +130,21 @@ export const App: React.FC = () => {
 
   const rawLoadedSettingsRef = useRef<Record<string, any>>({});
   const isInitialMount = useRef<boolean>(true);
+  const isConfigLoadedRef = useRef<boolean>(false);
+  const isBotRunningRef = useRef<boolean>(isBotRunning);
+  const sessionSecondsRef = useRef<number>(sessionSeconds);
   const [activeCasting] = useState<{ chainId: string; stepId: string } | null>(null);
   const [sessionSummary, setSessionSummary] = useState<SessionSummaryData | null>(null);
-  const [isRecordModalOpen, setIsRecordModalOpen] = useState<boolean>(false);
+  const recordingTimerRef = useRef<any>(null);
+  const recordingRouteIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    isBotRunningRef.current = isBotRunning;
+  }, [isBotRunning]);
+
+  useEffect(() => {
+    sessionSecondsRef.current = sessionSeconds;
+  }, [sessionSeconds]);
 
   // Sync to localStorage
   useEffect(() => {
@@ -172,21 +185,25 @@ export const App: React.FC = () => {
         ],
       };
 
-      if (window.pywebview?.api?.save_config) {
-        try {
-          await window.pywebview.api.save_config(JSON.stringify(configObj, null, 2));
-        } catch (err) {
-          console.warn('save_config auto-save warning:', err);
+      try {
+        const api = await getPywebviewApi();
+        if (api?.save_config) {
+          await api.save_config(JSON.stringify(configObj, null, 2));
         }
+      } catch (err) {
+        console.warn('save_config auto-save warning:', err);
       }
     },
     [chains, settings]
   );
 
-  // Debounced autosave on chain edit
+  // Debounced autosave on chain edit (only after initial load_config completes)
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
+      return;
+    }
+    if (!isConfigLoadedRef.current) {
       return;
     }
     const timer = setTimeout(() => {
@@ -195,43 +212,178 @@ export const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [chains, saveCurrentConfigToBackend]);
 
-  // Route Handlers
-  const handleAddRoute = (name: string, _isLoop: boolean) => {
-    const pointCount = 38 + Math.floor(Math.random() * 16);
-    const durationSec = 120 + Math.floor(Math.random() * 30);
-    const newRouteId = `route_${Date.now()}`;
-    const isRu = language === 'ru';
-    const newRoute: RouteItem = {
-      id: newRouteId,
-      name: name || (isRu ? `Маршрут ${routes.length + 1}` : `Route ${routes.length + 1}`),
-      type: isRu ? 'КРУГ' : 'LOOP',
-      duration: isRu
-        ? `≈${durationSec} с бега • ${pointCount} точек`
-        : `≈${durationSec}s run • ${pointCount} pts`,
-      points: pointCount,
-      active: true,
-      isCreating: true,
+  // Fetch routes from backend
+  const fetchRoutes = useCallback(async () => {
+    try {
+      const api = await getPywebviewApi();
+      if (api?.list_routes) {
+        const res = await api.list_routes();
+        if (res && res.ok && Array.isArray(res.routes) && res.routes.length > 0) {
+          const isRu = language === 'ru';
+          const mapped: RouteItem[] = res.routes.map((r) => ({
+            id: r.id,
+            name: r.name,
+            type: r.loop ? (isRu ? 'КРУГ' : 'LOOP') : (isRu ? 'ТОЧКА-ТОЧКА' : 'POINT-TO-POINT'),
+            duration: isRu
+              ? `≈${r.length_s} с бега • ${r.points} точек`
+              : `≈${r.length_s}s run • ${r.points} pts`,
+            points: r.points,
+            active: res.active_id ? r.id === res.active_id : r.active,
+          }));
+          setRoutes(mapped);
+        }
+      }
+    } catch (err) {
+      console.warn('list_routes error:', err);
+    }
+  }, [language]);
+
+  // 2) Load config on startup: call api.load_config() once
+  useEffect(() => {
+    let cancelled = false;
+
+    const initConfig = async () => {
+      try {
+        const api = await getPywebviewApi();
+        if (api?.load_config) {
+          const res = await api.load_config();
+          if (cancelled) return;
+
+          if (res && res.ok && res.config) {
+            let parsed = res.config;
+            if (typeof parsed === 'string') {
+              try {
+                parsed = JSON.parse(parsed);
+              } catch (e) {
+                console.warn('load_config JSON parse error:', e);
+              }
+            }
+
+            if (parsed && typeof parsed === 'object') {
+              // Restore AppSettings
+              if (parsed.settings) {
+                rawLoadedSettingsRef.current = { ...parsed.settings };
+                setSettings((prev) => ({
+                  ...prev,
+                  previousTargetKey: parsed.settings.previousTargetKey ?? prev.previousTargetKey,
+                  mode: 'gather',
+                  minimapZoomInKey: parsed.settings.minimapZoomInKey ?? prev.minimapZoomInKey,
+                  minimapZoomOutKey: parsed.settings.minimapZoomOutKey ?? prev.minimapZoomOutKey,
+                }));
+              }
+
+              // Restore ComboChains
+              if (Array.isArray(parsed.chains) && parsed.chains.length > 0) {
+                setChains((prev) =>
+                  parsed.chains.map((chain: any, cIdx: number) => {
+                    const existingChain = prev[cIdx] || DEFAULT_COMBO_CHAINS[0];
+                    return {
+                      ...existingChain,
+                      id: chain.id || existingChain.id || `chain_${cIdx + 1}`,
+                      name: chain.name || existingChain.name || (cIdx === 0 ? 'Основная ротация' : `Цепочка ${cIdx + 1}`),
+                      steps: (chain.steps || []).map((step: any, sIdx: number) => ({
+                        id: step.id || `step_${sIdx + 1}`,
+                        key: step.key || '',
+                        castTimeSeconds: step.castTimeSeconds ?? 1.5,
+                        skillCooldownSeconds: step.skillCooldownSeconds != null ? Number(step.skillCooldownSeconds) : 0,
+                        repeatCount: step.repeatCount ?? 1,
+                        independent: Boolean(step.independent),
+                        hpBelowPercent: step.hpBelowPercent != null ? Number(step.hpBelowPercent) : null,
+                        actionType: 'press' as const,
+                      })),
+                    };
+                  })
+                );
+              }
+            }
+          } else if (res && !res.ok) {
+            console.warn('load_config error:', res.error);
+          }
+        }
+      } catch (err) {
+        console.warn('load_config error:', err);
+      } finally {
+        isConfigLoadedRef.current = true;
+      }
     };
 
-    setRoutes((prev) => [
-      ...prev.map((r) => ({ ...r, active: false })),
-      newRoute,
-    ]);
-    soundFx.playClick();
+    initConfig();
+    fetchRoutes();
 
-    // Inline loading duration before route is finalized
-    setTimeout(() => {
-      setRoutes((prev) =>
-        prev.map((r) => (r.id === newRouteId ? { ...r, isCreating: false } : r))
-      );
-    }, 1200);
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchRoutes]);
 
+  // 3) Bot status polling: call api.get_status() every 1 second
+  useEffect(() => {
+    let cancelled = false;
+
+    const interval = setInterval(async () => {
+      try {
+        const api = await getPywebviewApi();
+        if (!api?.get_status) return;
+
+        const status = await api.get_status();
+        if (cancelled || !status) return;
+
+        // If bot stopped on its own (running === false, but UI is currently in running state)
+        if (isBotRunningRef.current && !status.running) {
+          setIsBotRunning(false);
+          soundFx.playStop();
+
+          let backendSummary: SessionSummaryData | null = null;
+          if (api.get_last_session) {
+            try {
+              backendSummary = await api.get_last_session();
+            } catch (err) {
+              console.warn('get_last_session error:', err);
+            }
+          }
+
+          const dur = sessionSecondsRef.current > 0 ? sessionSecondsRef.current : 149;
+          const k = backendSummary?.kills ?? Math.max(3, Math.round(dur * 0.15));
+          const kph = backendSummary?.kills_per_hour ?? Math.round(k / (dur / 3600));
+          setSessionSummary(
+            backendSummary || {
+              started_at_ms: Date.now() - dur * 1000,
+              stopped_at_ms: Date.now(),
+              duration_s: dur,
+              kills: k,
+              kills_per_hour: kph,
+              avg_kill_gap_s: 6.4,
+              lost: 1,
+              stop_reason: 'auto',
+              khorium: Math.max(2, Math.round(k * 0.45)),
+              adamantite: Math.max(5, Math.round(k * 1.35)),
+              fel_iron: Math.max(4, Math.round(k * 0.85)),
+              gold: Math.round(k * 28 + 240),
+            }
+          );
+          setActiveTab('summary');
+        }
+      } catch (err) {
+        console.warn('get_status poll warning:', err);
+      }
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Route Selection & Deletion Handlers
   const handleSelectRoute = (id: string) => {
     setRoutes((prev) =>
       prev.map((r) => ({ ...r, active: r.id === id }))
     );
     soundFx.playClick();
+    getPywebviewApi().then((api) => {
+      if (api?.set_active_route) {
+        api.set_active_route(id).catch((e) => console.warn('set_active_route error:', e));
+      }
+    });
   };
 
   const handleDeleteRoute = (id: string) => {
@@ -244,19 +396,222 @@ export const App: React.FC = () => {
       return filtered;
     });
     soundFx.playClick();
+    getPywebviewApi().then((api) => {
+      if (api?.delete_route) {
+        api.delete_route(id).catch((e) => console.warn('delete_route error:', e));
+      }
+    });
   };
+
+  // Start inline route recording without popup window
+  const handleStartRouteRecord = async () => {
+    soundFx.playClick();
+    const isRu = language === 'ru';
+    const newRouteId = `route_${Date.now()}`;
+    const defaultName = isRu ? `Маршрут ${routes.length + 1}` : `Route ${routes.length + 1}`;
+
+    const newRoute: RouteItem = {
+      id: newRouteId,
+      name: defaultName,
+      type: isRu ? 'КРУГ' : 'LOOP',
+      duration: isRu ? 'идёт запись...' : 'recording...',
+      points: 0,
+      active: true,
+      isRecording: true,
+      recordingSeconds: 0,
+    };
+
+    recordingRouteIdRef.current = newRouteId;
+    setRoutes((prev) => [
+      ...prev.map((r) => ({ ...r, active: false })),
+      newRoute,
+    ]);
+
+    try {
+      const api = await getPywebviewApi();
+      if (api?.start_route_record) {
+        await api.start_route_record(defaultName);
+      } else {
+        await mockStartRouteRecord(defaultName);
+      }
+    } catch (err) {
+      console.warn('start_route_record error:', err);
+    }
+
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    recordingTimerRef.current = setInterval(async () => {
+      try {
+        const api = await getPywebviewApi();
+        let status: any = null;
+        if (api?.get_route_record_status) {
+          status = await api.get_route_record_status();
+        } else {
+          status = await mockGetRouteRecordStatus();
+        }
+
+        if (status) {
+          setRoutes((prev) =>
+            prev.map((r) =>
+              r.id === newRouteId
+                ? {
+                    ...r,
+                    points: status.points ? status.points.length : r.points,
+                    recordingSeconds: status.seconds != null ? status.seconds : (r.recordingSeconds || 0) + 1,
+                  }
+                : r
+            )
+          );
+        }
+      } catch (e) {
+        console.warn('record status poll warning:', e);
+      }
+    }, 1000);
+  };
+
+  // Stop inline route recording (Save)
+  const handleSaveRecording = async (routeId?: string) => {
+    soundFx.playClick();
+    const activeRecId = routeId || recordingRouteIdRef.current;
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    recordingRouteIdRef.current = null;
+
+    try {
+      const api = await getPywebviewApi();
+      let res: any = null;
+      if (api?.stop_route_record) {
+        res = await api.stop_route_record(true);
+      } else {
+        res = await mockStopRouteRecord(true);
+      }
+
+      if (res && res.ok) {
+        const isRu = language === 'ru';
+        const finalRoute = res.route;
+        const pts = finalRoute?.points || 44;
+        const dur = finalRoute?.length_s || 128;
+        setRoutes((prev) =>
+          prev.map((r) =>
+            r.id === activeRecId
+              ? {
+                  ...r,
+                  name: finalRoute?.name || r.name,
+                  isRecording: false,
+                  isCreating: false,
+                  points: pts,
+                  duration: isRu
+                    ? `≈${dur} с бега • ${pts} точек`
+                    : `≈${dur}s run • ${pts} pts`,
+                  type: finalRoute?.loop ? (isRu ? 'КРУГ' : 'LOOP') : (isRu ? 'ТОЧКА-ТОЧКА' : 'POINT-TO-POINT'),
+                  active: true,
+                }
+              : r
+          )
+        );
+        fetchRoutes();
+      }
+    } catch (err) {
+      console.warn('stop_route_record save error:', err);
+    }
+  };
+
+  // Cancel inline route recording (Cancel)
+  const handleCancelRecording = async (routeId?: string) => {
+    soundFx.playClick();
+    const activeRecId = routeId || recordingRouteIdRef.current;
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    recordingRouteIdRef.current = null;
+
+    try {
+      const api = await getPywebviewApi();
+      if (api?.stop_route_record) {
+        await api.stop_route_record(false);
+      } else {
+        await mockStopRouteRecord(false);
+      }
+    } catch (err) {
+      console.warn('stop_route_record cancel error:', err);
+    }
+
+    setRoutes((prev) => {
+      const filtered = prev.filter((r) => r.id !== activeRecId);
+      if (filtered.length > 0 && !filtered.some((r) => r.active)) {
+        filtered[0].active = true;
+      }
+      return filtered;
+    });
+  };
+
+  // Listen for bot auto-stop of route recording
+  useEffect(() => {
+    const handleStopped = (e: Event) => {
+      const customEvent = e as CustomEvent<any>;
+      const detail = customEvent.detail;
+      const activeRecId = recordingRouteIdRef.current;
+      if (!activeRecId) return;
+
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      recordingRouteIdRef.current = null;
+
+      if (detail?.route) {
+        const isRu = language === 'ru';
+        const finalRoute = detail.route;
+        const pts = finalRoute.points || 42;
+        const dur = finalRoute.length_s || 130;
+        setRoutes((prev) =>
+          prev.map((r) =>
+            r.id === activeRecId
+              ? {
+                  ...r,
+                  name: finalRoute.name || r.name,
+                  isRecording: false,
+                  isCreating: false,
+                  points: pts,
+                  duration: isRu
+                    ? `≈${dur} с бега • ${pts} точек`
+                    : `≈${dur}s run • ${pts} pts`,
+                  type: finalRoute.loop ? (isRu ? 'КРУГ' : 'LOOP') : (isRu ? 'ТОЧКА-ТОЧКА' : 'POINT-TO-POINT'),
+                  active: true,
+                }
+              : r
+          )
+        );
+        fetchRoutes();
+      } else {
+        setRoutes((prev) => {
+          const filtered = prev.filter((r) => r.id !== activeRecId);
+          if (filtered.length > 0 && !filtered.some((r) => r.active)) {
+            filtered[0].active = true;
+          }
+          return filtered;
+        });
+      }
+    };
+
+    window.addEventListener('wowbot:route-record-stopped', handleStopped);
+    return () => window.removeEventListener('wowbot:route-record-stopped', handleStopped);
+  }, [fetchRoutes, language]);
 
   // Bot Start / Stop
   const handleToggleBot = async () => {
+    const api = await getPywebviewApi();
     if (isBotRunning) {
       soundFx.playStop();
       setIsBotRunning(false);
       let backendSummary: SessionSummaryData | null = null;
-      if (window.pywebview?.api?.stop_bot) {
+      if (api?.stop_bot) {
         try {
-          await window.pywebview.api.stop_bot();
-          if (window.pywebview.api.get_last_session) {
-            backendSummary = await window.pywebview.api.get_last_session();
+          await api.stop_bot();
+          if (api.get_last_session) {
+            backendSummary = await api.get_last_session();
           }
         } catch (err) {
           console.warn('stop_bot error:', err);
@@ -287,9 +642,9 @@ export const App: React.FC = () => {
       soundFx.playStart();
       setIsBotRunning(true);
       await saveCurrentConfigToBackend();
-      if (window.pywebview?.api?.start_bot) {
+      if (api?.start_bot) {
         try {
-          await window.pywebview.api.start_bot();
+          await api.start_bot();
         } catch (err) {
           console.warn('start_bot error:', err);
         }
@@ -383,7 +738,7 @@ export const App: React.FC = () => {
         routes={routes}
         onSelectRoute={handleSelectRoute}
         onDeleteRoute={handleDeleteRoute}
-        onRecordRouteClick={() => setIsRecordModalOpen(true)}
+        onRecordRouteClick={handleStartRouteRecord}
         sessionSummary={sessionSummary}
         onResetSessionSummary={() => setSessionSummary(null)}
         language={language}
@@ -416,6 +771,8 @@ export const App: React.FC = () => {
                 activeRouteId={activeRoute?.id || routes[0]?.id || ''}
                 onSelectRoute={handleSelectRoute}
                 onDeleteRoute={handleDeleteRoute}
+                onSaveRecording={handleSaveRecording}
+                onCancelRecording={handleCancelRecording}
                 language={language}
               />
             </div>
@@ -490,16 +847,6 @@ export const App: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* Record Route Modal */}
-      <RouteRecordModal
-        isOpen={isRecordModalOpen}
-        onClose={() => setIsRecordModalOpen(false)}
-        defaultName={isRu ? `Маршрут ${routes.length + 1}` : `Route ${routes.length + 1}`}
-        onStartRecord={handleAddRoute}
-        language={language}
-      />
-
     </div>
   );
 };

@@ -8,7 +8,16 @@ interface LineSidebarRouteListProps {
   activeRouteId: string;
   onSelectRoute: (id: string) => void;
   onDeleteRoute?: (id: string) => void;
+  onSaveRecording?: (id: string) => void;
+  onCancelRecording?: (id: string) => void;
   language?: 'ru' | 'en';
+}
+
+function formatSeconds(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const mins = Math.floor(s / 60);
+  const secs = s % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
@@ -16,6 +25,8 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
   activeRouteId,
   onSelectRoute,
   onDeleteRoute,
+  onSaveRecording,
+  onCancelRecording,
   language = 'ru',
 }) => {
   const isRu = language === 'ru';
@@ -171,17 +182,49 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
                   }`}
                 />
 
-                {isCreating ? (
-                  /* Route creation loading state directly at the table insertion position */
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white animate-ping" />
-                    <span className="font-mono text-xs sm:text-sm 2xl:text-base text-zinc-950 dark:text-white font-medium animate-pulse">
-                      {displayName}
-                    </span>
-                    <span className="text-[10px] sm:text-xs font-mono text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 ml-2">
-                      <Loader2 className="w-3 h-3 animate-spin text-zinc-600 dark:text-zinc-300" />
-                      <span>{isRu ? 'создание...' : 'creating...'}</span>
-                    </span>
+                {route.isRecording || isCreating ? (
+                  /* Route recording / creation loading state directly next to route name */
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(255,255,255,0.8)] animate-ping" />
+                      <span className="font-mono text-xs sm:text-sm 2xl:text-base text-zinc-950 dark:text-white font-medium">
+                        {displayName}
+                      </span>
+                      <span className="text-[10px] sm:text-xs font-mono text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 ml-1">
+                        <Loader2 className="w-3 h-3 animate-spin text-zinc-500 dark:text-zinc-400" />
+                        <span>{isRu ? 'идёт запись...' : 'recording...'}</span>
+                        {route.recordingSeconds != null && route.recordingSeconds > 0 && (
+                          <span className="text-zinc-400 font-mono">({formatSeconds(route.recordingSeconds)})</span>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 ml-auto">
+                      {onSaveRecording && route.isRecording && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSaveRecording(route.id);
+                          }}
+                          className="px-2.5 py-0.5 rounded text-[11px] font-mono bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors cursor-pointer active:scale-95 shadow-sm"
+                        >
+                          {isRu ? 'Сохранить' : 'Save'}
+                        </button>
+                      )}
+                      {onCancelRecording && route.isRecording && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onCancelRecording(route.id);
+                          }}
+                          className="px-2 py-0.5 rounded text-[11px] font-mono text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
+                        >
+                          {isRu ? 'Отмена' : 'Cancel'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between w-full">

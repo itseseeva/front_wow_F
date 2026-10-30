@@ -21,6 +21,8 @@ export interface RouteItem {
   points: number;
   active: boolean;
   isCreating?: boolean;
+  isRecording?: boolean;
+  recordingSeconds?: number;
 }
 
 interface StealthHUDLeftSidebarProps {
