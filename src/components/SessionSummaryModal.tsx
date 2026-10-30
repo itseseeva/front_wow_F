@@ -107,58 +107,40 @@ export const SessionSummaryModal: React.FC<SessionSummaryModalProps> = ({
   const animatedLost = useCountUp(data ? data.lost : null, 800, 0);
   const animatedAvgGap = useCountUp(data?.avg_kill_gap_s != null ? data.avg_kill_gap_s : null, 800, 1);
 
-  // Realistic Resource Extraction breakdown
+  // Resource Extraction breakdown (strictly real data)
   const lootData = useMemo(() => {
     if (!data) {
-      return { khorium: 0, adamantite: 0, felIron: 0, gold: 0 };
+      return { khorium: null, adamantite: null, felIron: null, gold: null };
     }
-    const khorium = data.khorium ?? Math.max(2, Math.round(data.kills * 0.45));
-    const adamantite = data.adamantite ?? Math.max(5, Math.round(data.kills * 1.35));
-    const felIron = data.fel_iron ?? Math.max(4, Math.round(data.kills * 0.85));
-    const gold = data.gold ?? Math.round(khorium * 32 + adamantite * 8 + felIron * 3 + data.kills * 4);
-    return { khorium, adamantite, felIron, gold };
+    return {
+      khorium: data.khorium ?? null,
+      adamantite: data.adamantite ?? null,
+      felIron: data.fel_iron ?? null,
+      gold: data.gold ?? null,
+    };
   }, [data]);
 
-  // Timeline datapoints (8 intervals across the session duration)
+  // Real timeline datapoints only (no invented sine waves)
   const timelinePoints = useMemo(() => {
-    if (!data) return [];
-    if (data.timeline && data.timeline.length >= 4) {
-      return data.timeline;
+    if (!data || !data.timeline || data.timeline.length < 2) {
+      return [];
     }
-    const pointsCount = 9;
-    const totalSec = Math.max(30, data.duration_s);
-    const totalKills = Math.max(1, data.kills);
-    const basePace = Math.max(10, data.kills_per_hour);
-
-    const result = [];
-    for (let i = 0; i < pointsCount; i++) {
-      const progress = i / (pointsCount - 1);
-      const timeSec = Math.round(progress * totalSec);
-      // Gentle natural S-curve with slight pace fluctuations
-      const naturalProg = Math.pow(progress, 0.95);
-      const wave = Math.sin(progress * Math.PI * 2.5) * 0.12;
-      const kills = Math.min(totalKills, Math.max(0, Math.round((naturalProg + wave) * totalKills)));
-      const paceFluctuation = 1 + Math.sin(progress * Math.PI * 3) * 0.18;
-      const pace = Math.round(basePace * paceFluctuation);
-
-      result.push({
-        time_s: timeSec,
-        kills: i === pointsCount - 1 ? totalKills : kills,
-        pace_per_h: Math.max(0, pace),
-      });
-    }
-    return result;
+    return data.timeline;
   }, [data]);
 
   if (!data) return null;
 
   // Determine peak and average pace
-  const maxPace = Math.max(...timelinePoints.map((p) => p.pace_per_h), data.kills_per_hour || 1);
-  const minPace = Math.min(...timelinePoints.map((p) => p.pace_per_h), 0);
-  const totalLootOres = lootData.khorium + lootData.adamantite + lootData.felIron;
-  const khoriumPct = totalLootOres > 0 ? Math.round((lootData.khorium / totalLootOres) * 100) : 20;
-  const adamantitePct = totalLootOres > 0 ? Math.round((lootData.adamantite / totalLootOres) * 100) : 50;
-  const felIronPct = totalLootOres > 0 ? 100 - khoriumPct - adamantitePct : 30;
+  const maxPace = timelinePoints.length > 0
+    ? Math.max(...timelinePoints.map((p) => p.pace_per_h), data.kills_per_hour || 1)
+    : (data.kills_per_hour || 1);
+  const minPace = timelinePoints.length > 0
+    ? Math.min(...timelinePoints.map((p) => p.pace_per_h), 0)
+    : 0;
+  const totalLootOres = (lootData.khorium ?? 0) + (lootData.adamantite ?? 0) + (lootData.felIron ?? 0);
+  const khoriumPct = totalLootOres > 0 && lootData.khorium != null ? Math.round((lootData.khorium / totalLootOres) * 100) : 0;
+  const adamantitePct = totalLootOres > 0 && lootData.adamantite != null ? Math.round((lootData.adamantite / totalLootOres) * 100) : 0;
+  const felIronPct = totalLootOres > 0 && lootData.felIron != null ? 100 - khoriumPct - adamantitePct : 0;
 
   // Reason text
   let reasonText = data.stop_reason;
@@ -328,7 +310,7 @@ export const SessionSummaryModal: React.FC<SessionSummaryModalProps> = ({
                 <span>{t.goldYield}</span>
               </div>
               <div className="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight text-zinc-950 dark:text-white tabular-nums">
-                +{lootData.gold}g
+                {lootData.gold != null ? `+${lootData.gold}g` : (isRu ? 'нет данных' : 'no data')}
               </div>
               <span className="text-[10px] font-mono text-zinc-400">
                 {isRu ? 'руда + лут' : 'ore & drops'}

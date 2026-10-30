@@ -29,61 +29,48 @@ export const StealthHUDSessionSummary: React.FC<StealthHUDSessionSummaryProps> =
   const isRu = language === 'ru';
   const [hoveredPointIdx, setHoveredPointIdx] = useState<number | null>(null);
 
-  // Fallback realistic metrics if data not yet populated
-  const summary = useMemo<SessionSummaryData>(() => {
-    if (data) return data;
-    return {
-      started_at_ms: Date.now() - 149 * 1000,
-      stopped_at_ms: Date.now(),
-      duration_s: 149,
-      kills: 22,
-      kills_per_hour: 531,
-      avg_kill_gap_s: 6.4,
-      lost: 1,
-      stop_reason: 'user',
-      khorium: 790,
-      adamantite: 1297,
-      fel_iron: 98,
-      gold: 56875,
-    };
-  }, [data]);
+  // If there is no session data, strictly show "нет данных" without any invented numbers
+  if (!data) {
+    return (
+      <div className="flex flex-col gap-3 animate-fadeIn text-zinc-900 dark:text-zinc-100 select-none">
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400">
+            {isRu ? 'Итоги сессии' : 'Session Summary'}
+          </span>
+          <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+            {isRu ? 'нет данных' : 'no data'}
+          </span>
+        </div>
 
-  const khorium = summary.khorium ?? Math.max(2, Math.round(summary.kills * 0.45));
-  const adamantite = summary.adamantite ?? Math.max(5, Math.round(summary.kills * 1.35));
-  const felIron = summary.fel_iron ?? Math.max(4, Math.round(summary.kills * 0.85));
-  const gold = summary.gold ?? Math.round(summary.kills * 28 + 240);
+        <div className="p-4 rounded-xl border border-dashed border-black/10 dark:border-white/10 flex flex-col items-center justify-center text-center gap-2 py-8 bg-transparent">
+          <span className="text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400">
+            {isRu ? 'нет данных' : 'no data'}
+          </span>
+          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
+            {isRu
+              ? 'Сессия еще не запускалась или данные отсутствуют'
+              : 'Session has not been run or data is unavailable'}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
-  // Timeline datapoints for SVG sparkline chart
-  const timelinePoints = useMemo(() => {
-    if (summary.timeline && summary.timeline.length >= 4) {
-      return summary.timeline;
-    }
-    const pointsCount = 8;
-    const totalSec = Math.max(30, summary.duration_s);
-    const totalKills = Math.max(1, summary.kills);
-    const basePace = Math.max(10, summary.kills_per_hour);
+  // Real fields from data only — never fabricated
+  const khoriumDisplay = data.khorium != null ? data.khorium : (isRu ? 'нет данных' : 'no data');
+  const adamantiteDisplay = data.adamantite != null ? data.adamantite : (isRu ? 'нет данных' : 'no data');
+  const felIronDisplay = data.fel_iron != null ? data.fel_iron : (isRu ? 'нет данных' : 'no data');
+  const goldDisplay = data.gold != null ? `+${data.gold.toLocaleString()}g` : (isRu ? 'нет данных' : 'no data');
 
-    const result = [];
-    for (let i = 0; i < pointsCount; i++) {
-      const progress = i / (pointsCount - 1);
-      const timeSec = Math.round(progress * totalSec);
-      const naturalProg = Math.pow(progress, 0.95);
-      const wave = Math.sin(progress * Math.PI * 2.5) * 0.12;
-      const kills = Math.min(totalKills, Math.max(0, Math.round((naturalProg + wave) * totalKills)));
-      const paceFluctuation = 1 + Math.sin(progress * Math.PI * 3) * 0.18;
-      const pace = Math.round(basePace * paceFluctuation);
+  // Real timeline datapoints only (no invented sine waves)
+  const timelinePoints = (data.timeline && data.timeline.length >= 2) ? data.timeline : [];
 
-      result.push({
-        time_s: timeSec,
-        kills: i === pointsCount - 1 ? totalKills : kills,
-        pace_per_h: Math.max(0, pace),
-      });
-    }
-    return result;
-  }, [summary]);
-
-  const maxPace = Math.max(...timelinePoints.map((p) => p.pace_per_h), summary.kills_per_hour || 1);
-  const minPace = Math.min(...timelinePoints.map((p) => p.pace_per_h), 0);
+  const maxPace = timelinePoints.length > 0
+    ? Math.max(...timelinePoints.map((p) => p.pace_per_h), data.kills_per_hour || 1)
+    : (data.kills_per_hour || 1);
+  const minPace = timelinePoints.length > 0
+    ? Math.min(...timelinePoints.map((p) => p.pace_per_h), 0)
+    : 0;
 
   // SVG Chart Geometry for compact sidebar
   const chartWidth = 230;
@@ -97,8 +84,8 @@ export const StealthHUDSessionSummary: React.FC<StealthHUDSessionSummaryProps> =
   const innerH = chartHeight - padTop - padBottom;
 
   const svgCoords = timelinePoints.map((pt, idx) => {
-    const x = padLeft + (idx / (timelinePoints.length - 1)) * innerW;
-    const normY = maxPace > 0 ? (pt.pace_per_h - minPace) / (maxPace - minPace || 1) : 0.5;
+    const x = padLeft + (idx / Math.max(1, timelinePoints.length - 1)) * innerW;
+    const normY = maxPace > minPace ? (pt.pace_per_h - minPace) / (maxPace - minPace) : 0.5;
     const y = padTop + (1 - normY) * innerH;
     return { x, y, pt };
   });
@@ -118,26 +105,28 @@ export const StealthHUDSessionSummary: React.FC<StealthHUDSessionSummaryProps> =
     ? `${lineD} L ${svgCoords[svgCoords.length - 1].x} ${chartHeight - padBottom} L ${svgCoords[0].x} ${chartHeight - padBottom} Z`
     : '';
 
-  // Export JSON handler
+  // Export JSON handler with strictly real data
   const handleExportJson = () => {
     soundFx.playClick();
     const payload = {
       title: 'WoW Forever Session Report',
       exportedAt: new Date().toISOString(),
       summary: {
-        durationSeconds: summary.duration_s,
-        formattedDuration: formatDuration(summary.duration_s),
-        nodesGathered: summary.kills,
-        nodesPerHour: summary.kills_per_hour,
-        avgGapSeconds: summary.avg_kill_gap_s,
+        durationSeconds: data.duration_s,
+        formattedDuration: formatDuration(data.duration_s),
+        nodesGathered: data.kills,
+        nodesPerHour: data.kills_per_hour,
+        avgGapSeconds: data.avg_kill_gap_s,
+        targetsLost: data.lost,
+        stopReason: data.stop_reason,
       },
       resources: {
-        khorium,
-        adamantite,
-        felIron,
-        gold,
+        khorium: data.khorium ?? null,
+        adamantite: data.adamantite ?? null,
+        felIron: data.fel_iron ?? null,
+        gold: data.gold ?? null,
       },
-      timeline: timelinePoints,
+      timeline: data.timeline ?? [],
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -157,18 +146,18 @@ export const StealthHUDSessionSummary: React.FC<StealthHUDSessionSummaryProps> =
         </span>
         <span className="text-[11px] font-mono font-bold text-zinc-950 dark:text-white flex items-center gap-1">
           <Clock className="w-3 h-3 text-zinc-500" />
-          <span>{formatDuration(summary.duration_s)}</span>
+          <span>{data.duration_s != null ? formatDuration(data.duration_s) : (isRu ? 'нет данных' : 'no data')}</span>
         </span>
       </div>
 
-      {/* 2. Resources Extraction Card (Exact match to WoW telemetry screenshot) */}
+      {/* 2. Resources Extraction Card */}
       <div className="p-3 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col gap-2 transition-all">
         <div className="flex items-center justify-between text-xs font-mono">
           <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
             <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(255,255,255,0.8)]" />
             <span>{isRu ? 'Кориум:' : 'Khorium:'}</span>
           </div>
-          <span className="font-semibold text-zinc-950 dark:text-white font-mono">{khorium}</span>
+          <span className="font-semibold text-zinc-950 dark:text-white font-mono">{khoriumDisplay}</span>
         </div>
 
         <div className="flex items-center justify-between text-xs font-mono">
@@ -176,7 +165,7 @@ export const StealthHUDSessionSummary: React.FC<StealthHUDSessionSummaryProps> =
             <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
             <span>{isRu ? 'Адамант:' : 'Adamantite:'}</span>
           </div>
-          <span className="font-semibold text-zinc-950 dark:text-white font-mono">{adamantite}</span>
+          <span className="font-semibold text-zinc-950 dark:text-white font-mono">{adamantiteDisplay}</span>
         </div>
 
         <div className="flex items-center justify-between text-xs font-mono">
@@ -184,19 +173,19 @@ export const StealthHUDSessionSummary: React.FC<StealthHUDSessionSummaryProps> =
             <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
             <span>{isRu ? 'Железо:' : 'Fel Iron:'}</span>
           </div>
-          <span className="font-semibold text-zinc-950 dark:text-white font-mono">{felIron}</span>
+          <span className="font-semibold text-zinc-950 dark:text-white font-mono">{felIronDisplay}</span>
         </div>
 
         {/* Gold extraction total */}
         <div className="pt-2 mt-1 border-t border-black/10 dark:border-white/10 flex items-center justify-between font-mono">
           <span className="text-[11px] text-zinc-500">{isRu ? 'Золото:' : 'Gold:'}</span>
           <span className="text-xs font-bold text-zinc-950 dark:text-white tracking-wide">
-            +{gold.toLocaleString()}g
+            {goldDisplay}
           </span>
         </div>
       </div>
 
-      {/* 3. Performance Rate Sparkline Chart */}
+      {/* 3. Performance Rate Sparkline Chart or No Data Notice */}
       <div className="p-2.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col gap-1.5 transition-all">
         <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500">
           <span className="flex items-center gap-1">
@@ -206,68 +195,73 @@ export const StealthHUDSessionSummary: React.FC<StealthHUDSessionSummaryProps> =
           <span className="text-zinc-950 dark:text-white font-semibold">
             {hoveredPointIdx !== null && svgCoords[hoveredPointIdx]
               ? `${svgCoords[hoveredPointIdx].pt.pace_per_h}/ч`
-              : `${summary.kills_per_hour}/ч`}
+              : (data.kills_per_hour != null ? `${data.kills_per_hour}/ч` : (isRu ? 'нет данных' : 'no data'))}
           </span>
         </div>
 
-        {/* SVG Sparkline */}
-        <div className="w-full relative h-[64px] overflow-hidden">
-          <svg
-            viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-            className="w-full h-full overflow-visible"
-            preserveAspectRatio="none"
-          >
-            <defs>
-              <linearGradient id="sidebarChartGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="currentColor" stopOpacity="0.25" />
-                <stop offset="100%" stopColor="currentColor" stopOpacity="0.0" />
-              </linearGradient>
-            </defs>
+        {/* SVG Sparkline only if real timeline exists */}
+        {timelinePoints.length >= 2 ? (
+          <>
+            <div className="w-full relative h-[64px] overflow-hidden">
+              <svg
+                viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                className="w-full h-full overflow-visible"
+                preserveAspectRatio="none"
+              >
+                <defs>
+                  <linearGradient id="sidebarChartGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="currentColor" stopOpacity="0.25" />
+                    <stop offset="100%" stopColor="currentColor" stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
 
-            {/* Gradient Area */}
-            {areaD && (
-              <path
-                d={areaD}
-                fill="url(#sidebarChartGrad)"
-                className="text-zinc-950 dark:text-white"
-              />
-            )}
+                {areaD && (
+                  <path
+                    d={areaD}
+                    fill="url(#sidebarChartGrad)"
+                    className="text-zinc-950 dark:text-white"
+                  />
+                )}
 
-            {/* Main Smooth Line */}
-            {lineD && (
-              <path
-                d={lineD}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                className="text-zinc-950 dark:text-white"
-                strokeLinecap="round"
-              />
-            )}
+                {lineD && (
+                  <path
+                    d={lineD}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    className="text-zinc-950 dark:text-white"
+                    strokeLinecap="round"
+                  />
+                )}
 
-            {/* Interactive Points on hover */}
-            {svgCoords.map((coord, idx) => (
-              <circle
-                key={idx}
-                cx={coord.x}
-                cy={coord.y}
-                r={hoveredPointIdx === idx ? 3.5 : 2}
-                className={`transition-all cursor-pointer ${
-                  hoveredPointIdx === idx
-                    ? 'fill-zinc-950 dark:fill-white stroke-black dark:stroke-white stroke-1'
-                    : 'fill-zinc-500 hover:fill-zinc-950 dark:hover:fill-white'
-                }`}
-                onMouseEnter={() => setHoveredPointIdx(idx)}
-                onMouseLeave={() => setHoveredPointIdx(null)}
-              />
-            ))}
-          </svg>
-        </div>
+                {svgCoords.map((coord, idx) => (
+                  <circle
+                    key={idx}
+                    cx={coord.x}
+                    cy={coord.y}
+                    r={hoveredPointIdx === idx ? 3.5 : 2}
+                    className={`transition-all cursor-pointer ${
+                      hoveredPointIdx === idx
+                        ? 'fill-zinc-950 dark:fill-white stroke-black dark:stroke-white stroke-1'
+                        : 'fill-zinc-500 hover:fill-zinc-950 dark:hover:fill-white'
+                    }`}
+                    onMouseEnter={() => setHoveredPointIdx(idx)}
+                    onMouseLeave={() => setHoveredPointIdx(null)}
+                  />
+                ))}
+              </svg>
+            </div>
 
-        <div className="flex items-center justify-between text-[9px] font-mono text-zinc-500 pt-0.5">
-          <span>00:00</span>
-          <span>{formatDuration(summary.duration_s)}</span>
-        </div>
+            <div className="flex items-center justify-between text-[9px] font-mono text-zinc-500 pt-0.5">
+              <span>00:00</span>
+              <span>{formatDuration(data.duration_s)}</span>
+            </div>
+          </>
+        ) : (
+          <div className="h-[44px] flex items-center justify-center text-[10px] font-mono text-zinc-500">
+            {isRu ? 'нет данных' : 'no data'}
+          </div>
+        )}
       </div>
 
       {/* 4. Efficiency Overview Badges */}
@@ -275,13 +269,13 @@ export const StealthHUDSessionSummary: React.FC<StealthHUDSessionSummaryProps> =
         <div className="p-2 rounded-lg border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col">
           <span className="text-[10px] text-zinc-500 font-mono">{isRu ? 'Узлов' : 'Nodes'}</span>
           <span className="text-xs font-mono font-bold text-zinc-950 dark:text-white mt-0.5">
-            {summary.kills}
+            {data.kills != null ? data.kills : (isRu ? 'нет данных' : 'no data')}
           </span>
         </div>
         <div className="p-2 rounded-lg border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col">
           <span className="text-[10px] text-zinc-500 font-mono">{isRu ? 'Пауза' : 'Avg Gap'}</span>
           <span className="text-xs font-mono font-bold text-zinc-950 dark:text-white mt-0.5">
-            {summary.avg_kill_gap_s ?? 6.4}с
+            {data.avg_kill_gap_s != null ? `${data.avg_kill_gap_s}с` : (isRu ? 'нет данных' : 'no data')}
           </span>
         </div>
       </div>
