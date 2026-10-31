@@ -174,7 +174,7 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
         ) : (
           /* Route Items List */
           <div className="flex flex-col gap-1.5 sm:gap-2 relative z-10">
-            {routes.map((route) => {
+            {routes.map((route, routeIndex) => {
               const isActive = route.id === activeRouteId;
               const isHovered = hoveredId === route.id;
               const isCreating = route.isCreating;
@@ -262,7 +262,7 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
                     <div className="flex items-center justify-between w-full">
                       {/* Route Name */}
                       <span
-                        className={`font-mono text-xs sm:text-sm 2xl:text-base tracking-wide transition-colors duration-150 ${
+                        className={`font-mono text-xs sm:text-sm 2xl:text-base tracking-wide transition-colors duration-150 truncate ${
                           isActive
                             ? 'text-zinc-950 dark:text-white font-semibold'
                             : isHovered

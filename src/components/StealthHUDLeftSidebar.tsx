@@ -6,8 +6,8 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { soundFx } from '../utils/audio';
-import { SessionSummaryData } from '../types';
-import { StealthHUDSessionSummary } from './StealthHUDSessionSummary';
+import { CalendarMonthResponse } from '../types';
+import { CalendarMonthView } from './CalendarMonthView';
 
 export type NavTab = 'routes' | 'rotation' | 'summary' | 'settings';
 
@@ -30,8 +30,16 @@ interface StealthHUDLeftSidebarProps {
   onSelectRoute: (id: string) => void;
   onDeleteRoute: (id: string) => void;
   onRecordRouteClick?: () => void;
-  sessionSummary?: SessionSummaryData | null;
-  onResetSessionSummary?: () => void;
+  // Calendar integration props for summary tab
+  selectedDate: string;
+  onSelectDate: (date: string) => void;
+  calendarMonthData: CalendarMonthResponse | null;
+  calendarYear: number;
+  calendarMonth: number;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
+  onRefreshCalendar: () => void;
+  onExportCalendar: () => void;
   language: 'ru' | 'en';
   theme?: 'dark' | 'light';
 }
@@ -39,9 +47,15 @@ interface StealthHUDLeftSidebarProps {
 export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
   activeTab,
   onTabChange,
-  onRecordRouteClick,
-  sessionSummary,
-  onResetSessionSummary,
+  selectedDate,
+  onSelectDate,
+  calendarMonthData,
+  calendarYear,
+  calendarMonth,
+  onPrevMonth,
+  onNextMonth,
+  onRefreshCalendar,
+  onExportCalendar,
   language,
 }) => {
   const isRu = language === 'ru';
@@ -178,12 +192,19 @@ export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
           </div>
         )}
 
-        {/* 3. Session Summary / Analytics in Left Panel */}
+        {/* 3. Calendar Month View in Left Panel */}
         {activeTab === 'summary' && (
-          <StealthHUDSessionSummary
-            data={sessionSummary || null}
+          <CalendarMonthView
+            currentYear={calendarYear}
+            currentMonth={calendarMonth}
+            selectedDate={selectedDate}
+            monthData={calendarMonthData}
+            onSelectDate={onSelectDate}
+            onPrevMonth={onPrevMonth}
+            onNextMonth={onNextMonth}
+            onRefresh={onRefreshCalendar}
+            onExport={onExportCalendar}
             language={language}
-            onReset={onResetSessionSummary}
           />
         )}
 

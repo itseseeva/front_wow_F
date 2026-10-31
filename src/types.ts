@@ -138,6 +138,60 @@ export interface SessionSummaryData {
   timeline?: { time_s: number; kills: number; pace_per_h: number }[];
 }
 
+export interface CalendarRoute {
+  route_id: string;
+  name: string;
+  color_index: number;
+}
+
+export interface CalendarDay {
+  date: string; // 'YYYY-MM-DD' (локальная дата)
+  sessions: number;
+  duration_s: number;
+  nodes: number;
+  routes: CalendarRoute[];
+  problem: boolean; // смерть, застревание и т.п.
+}
+
+export interface CalendarMonthResponse {
+  ok: boolean;
+  error?: string;
+  year: number;
+  month: number; // month 1..12
+  days: CalendarDay[]; // только дни, где были сессии
+  totals: { duration_s: number; sessions: number; nodes: number };
+  routes: CalendarRoute[]; // все маршруты месяца — для легенды
+}
+
+export interface PassInfo {
+  index: number;
+  direction: 'forward' | 'back' | 'loop';
+  duration_s: number;
+  nodes: number;
+  stucks: number;
+}
+
+export interface DaySession {
+  session_id: string;
+  started_at_ms: number;
+  stopped_at_ms: number;
+  route_id: string | null;
+  route_name: string;
+  color_index: number;
+  summary: SessionSummaryData;
+  passes: number;
+  passes_info: PassInfo[];
+  heatmap: boolean; // есть ли карта у сессии
+}
+
+export interface DayResponse {
+  ok: boolean;
+  error?: string;
+  date: string;
+  total: SessionSummaryData | null; // сумма за день; null — сессий нет
+  sessions: DaySession[]; // по времени начала
+}
+
 declare global {
   interface Window {
     pywebview?: {
@@ -166,6 +220,11 @@ declare global {
 
         // Heatmap API
         get_session_heatmap?(): Promise<SessionHeatmapResponse>;
+
+        // Calendar & Session History API
+        get_calendar_month?(year: number, month: number): Promise<CalendarMonthResponse>;
+        get_day?(date: string): Promise<DayResponse>;
+        get_session_heatmap_by_id?(session_id: string, pass_index: number | null): Promise<SessionHeatmapResponse>;
       };
     };
   }

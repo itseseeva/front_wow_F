@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { LineSidebarRouteList } from './components/LineSidebarRouteList';
 import { StealthHUDLeftSidebar, NavTab, RouteItem } from './components/StealthHUDLeftSidebar';
 import { StealthHUDTopToolbar } from './components/StealthHUDTopToolbar';
@@ -12,12 +12,23 @@ import {
 import { SettingsView } from './components/SettingsView';
 import { ComboSequence } from './components/ComboSequence';
 import { ComboChain, DEFAULT_COMBO_CHAINS } from './data/skillsLibrary';
-import { AppSettings, SessionSummaryData } from './types';
+import {
+  AppSettings,
+  SessionSummaryData,
+  CalendarMonthResponse,
+  DayResponse,
+  SessionHeatmapResponse,
+} from './types';
 import { soundFx } from './utils/audio';
 import { SpecularCard } from './components/ui/Specular';
 import { Crosshair, AlertTriangle, X, BarChart3, Clock } from 'lucide-react';
 import { getPywebviewApi } from './utils/pywebviewBridge';
-import { SessionHeatmapCard } from './components/SessionHeatmapCard';
+import { DaySummaryView } from './components/DaySummaryView';
+import {
+  getMockCalendarMonth,
+  getMockDay,
+  getMockSessionHeatmapById,
+} from './data/mockCalendar';
 
 function formatDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
@@ -164,6 +175,25 @@ export const App: React.FC = () => {
   const [sessionSummary, setSessionSummary] = useState<SessionSummaryData | null>(null);
   const recordingTimerRef = useRef<any>(null);
   const recordingRouteIdRef = useRef<string | null>(null);
+
+  // Calendar & Sessions History State
+  const todayDateStr = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }, []);
+
+  const [calendarYear, setCalendarYear] = useState<number>(() => new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState<number>(() => new Date().getMonth() + 1);
+  const [selectedDate, setSelectedDate] = useState<string>(todayDateStr);
+  const [calendarMonthData, setCalendarMonthData] = useState<CalendarMonthResponse | null>(null);
+  const [dayData, setDayData] = useState<DayResponse | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | 'all'>('all');
+  const [selectedPassIndex, setSelectedPassIndex] = useState<number | null>(null);
+  const [activeHeatmap, setActiveHeatmap] = useState<SessionHeatmapResponse | null>(null);
+  const [isHeatmapLoading, setIsHeatmapLoading] = useState<boolean>(false);
 
   useEffect(() => {
     isBotRunningRef.current = isBotRunning;
@@ -680,6 +710,203 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('wowbot:route-record-stopped', handleStopped);
   }, [fetchRoutes, language]);
 
+  // Calendar Data Fetching & Month Navigation
+  const fetchCalendarMonth = useCallback(async (year: number, month: number) => {
+    try {
+      const api = await getPywebviewApi();
+      let res: CalendarMonthResponse | null = null;
+      if (api?.get_calendar_month) {
+        res = await api.get_calendar_month(year, month);
+      } else {
+        res = getMockCalendarMonth(year, month);
+      }
+      if (res && res.ok) {
+        setCalendarMonthData(res);
+      }
+    } catch (err) {
+      console.warn('get_calendar_month error:', err);
+      setCalendarMonthData(getMockCalendarMonth(year, month));
+    }
+  }, []);
+
+  const fetchDayData = useCallback(async (dateStr: string) => {
+    try {
+      const api = await getPywebviewApi();
+      let res: DayResponse | null = null;
+      if (api?.get_day) {
+        res = await api.get_day(dateStr);
+      } else {
+        res = getMockDay(dateStr);
+      }
+      if (res && res.ok) {
+        setDayData(res);
+        setSelectedSessionId('all');
+        setSelectedPassIndex(null);
+      }
+    } catch (err) {
+      console.warn('get_day error:', err);
+      setDayData(getMockDay(dateStr));
+    }
+  }, []);
+
+  const handlePrevMonth = useCallback(() => {
+    setCalendarMonth((prevM) => {
+      if (prevM === 1) {
+        setCalendarYear((prevY) => prevY - 1);
+        return 12;
+      }
+      return prevM - 1;
+    });
+  }, []);
+
+  const handleNextMonth = useCallback(() => {
+    setCalendarMonth((prevM) => {
+      if (prevM === 12) {
+        setCalendarYear((prevY) => prevY + 1);
+        return 1;
+      }
+      return prevM + 1;
+    });
+  }, []);
+
+  // Fetch month data when year or month changes
+  useEffect(() => {
+    fetchCalendarMonth(calendarYear, calendarMonth);
+  }, [calendarYear, calendarMonth, fetchCalendarMonth]);
+
+  // Initial select day logic: today if sessions exist, else last day with sessions
+  useEffect(() => {
+    if (!calendarMonthData) return;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const ym = `${calendarYear}-${pad(calendarMonth)}`;
+
+    setSelectedDate((prevDate) => {
+      if (prevDate && prevDate.startsWith(ym)) {
+        return prevDate;
+      }
+      const todayYm = todayDateStr.slice(0, 7);
+      if (todayYm === ym && calendarMonthData.days.some((d) => d.date === todayDateStr)) {
+        return todayDateStr;
+      }
+      if (calendarMonthData.days.length > 0) {
+        return calendarMonthData.days[calendarMonthData.days.length - 1].date;
+      }
+      return todayDateStr.startsWith(ym) ? todayDateStr : `${ym}-01`;
+    });
+  }, [calendarMonthData, calendarYear, calendarMonth, todayDateStr]);
+
+  // When selectedDate changes, fetch day data
+  useEffect(() => {
+    if (selectedDate) {
+      fetchDayData(selectedDate);
+    }
+  }, [selectedDate, fetchDayData]);
+
+  // Load heatmap when dayData, selectedSessionId, or selectedPassIndex changes
+  useEffect(() => {
+    if (!dayData || !dayData.sessions || dayData.sessions.length === 0) {
+      setActiveHeatmap(null);
+      return;
+    }
+
+    const targetSession = selectedSessionId === 'all'
+      ? dayData.sessions[0]
+      : dayData.sessions.find((s) => s.session_id === selectedSessionId) || dayData.sessions[0];
+
+    if (!targetSession) {
+      setActiveHeatmap(null);
+      return;
+    }
+
+    let isMounted = true;
+    setIsHeatmapLoading(true);
+
+    const loadHeatmap = async () => {
+      try {
+        const api = await getPywebviewApi();
+        let res: SessionHeatmapResponse | null = null;
+        if (api?.get_session_heatmap_by_id) {
+          res = await api.get_session_heatmap_by_id(targetSession.session_id, selectedPassIndex);
+        } else {
+          res = getMockSessionHeatmapById(targetSession.session_id, selectedPassIndex);
+        }
+
+        if (isMounted && res) {
+          setActiveHeatmap(res);
+        }
+      } catch (err) {
+        console.warn('get_session_heatmap_by_id error:', err);
+        if (isMounted) {
+          setActiveHeatmap(getMockSessionHeatmapById(targetSession.session_id, selectedPassIndex));
+        }
+      } finally {
+        if (isMounted) setIsHeatmapLoading(false);
+      }
+    };
+
+    loadHeatmap();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [dayData, selectedSessionId, selectedPassIndex]);
+
+  // Listen to 'wowbot:history-updated' with detail { date: string }
+  useEffect(() => {
+    const handleHistoryUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ date: string }>;
+      const updatedDate = customEvent.detail?.date;
+      if (!updatedDate) return;
+      const [y, m] = updatedDate.split('-').map(Number);
+      if (y === calendarYear && m === calendarMonth) {
+        fetchCalendarMonth(calendarYear, calendarMonth);
+      }
+      if (updatedDate === selectedDate) {
+        fetchDayData(selectedDate);
+      }
+    };
+
+    window.addEventListener('wowbot:history-updated', handleHistoryUpdated);
+    return () => {
+      window.removeEventListener('wowbot:history-updated', handleHistoryUpdated);
+    };
+  }, [calendarYear, calendarMonth, selectedDate, fetchCalendarMonth, fetchDayData]);
+
+  // Listen to 'wowbot:session-heatmap'
+  useEffect(() => {
+    const handleHeatmapEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<SessionHeatmapResponse>;
+      if (customEvent.detail) {
+        setActiveHeatmap(customEvent.detail);
+      }
+    };
+    window.addEventListener('wowbot:session-heatmap', handleHeatmapEvent);
+    return () => window.removeEventListener('wowbot:session-heatmap', handleHeatmapEvent);
+  }, []);
+
+  // Export calendar JSON
+  const handleExportCalendar = useCallback(() => {
+    soundFx.playClick();
+    const payload = {
+      title: 'WoW Forever Calendar History Export',
+      exportedAt: new Date().toISOString(),
+      month: {
+        year: calendarYear,
+        month: calendarMonth,
+        totals: calendarMonthData?.totals,
+        days: calendarMonthData?.days,
+      },
+      selectedDay: dayData,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `wow_history_${calendarYear}_${String(calendarMonth).padStart(2, '0')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [calendarYear, calendarMonth, calendarMonthData, dayData]);
+
   // Listen for backend session summary event: 'wowbot:session-summary'
   useEffect(() => {
     const handleSessionSummaryEvent = (e: Event) => {
@@ -688,13 +915,18 @@ export const App: React.FC = () => {
       setSessionSummary(detail || null);
       setIsBotRunning(false);
       setActiveTab('summary');
+      if (todayDateStr) {
+        setSelectedDate(todayDateStr);
+        fetchDayData(todayDateStr);
+      }
+      fetchCalendarMonth(calendarYear, calendarMonth);
     };
 
     window.addEventListener('wowbot:session-summary', handleSessionSummaryEvent);
     return () => {
       window.removeEventListener('wowbot:session-summary', handleSessionSummaryEvent);
     };
-  }, []);
+  }, [calendarYear, calendarMonth, todayDateStr, fetchDayData, fetchCalendarMonth]);
 
   // Bot Start / Stop
   const handleToggleBot = async () => {
@@ -854,8 +1086,21 @@ export const App: React.FC = () => {
         onSelectRoute={handleSelectRoute}
         onDeleteRoute={handleDeleteRoute}
         onRecordRouteClick={handleStartRouteRecord}
-        sessionSummary={sessionSummary}
-        onResetSessionSummary={() => setSessionSummary(null)}
+        selectedDate={selectedDate}
+        onSelectDate={(newDate) => {
+          setSelectedDate(newDate);
+          fetchDayData(newDate);
+        }}
+        calendarMonthData={calendarMonthData}
+        calendarYear={calendarYear}
+        calendarMonth={calendarMonth}
+        onPrevMonth={handlePrevMonth}
+        onNextMonth={handleNextMonth}
+        onRefreshCalendar={() => {
+          fetchCalendarMonth(calendarYear, calendarMonth);
+          fetchDayData(selectedDate);
+        }}
+        onExportCalendar={handleExportCalendar}
         language={language}
         theme={theme}
       />
@@ -963,145 +1208,20 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* 4. SUMMARY VIEW: Detailed Session Analytics */}
+        {/* 4. SUMMARY VIEW: Detailed Day & Session Analytics linked with Calendar */}
         {activeTab === 'summary' && (
           <div className="relative w-full h-full p-4 sm:p-6 2xl:p-10 pt-16 sm:pt-20 pb-8 flex flex-col justify-start overflow-y-auto animate-assemble">
-            <div className="w-full max-w-4xl 2xl:max-w-5xl mx-auto flex flex-col gap-4">
-              <SpecularCard
-                className="w-full rounded-2xl p-5 2xl:p-7 border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
-              >
-                <div className="flex items-center justify-between pb-3 mb-4 border-b border-black/10 dark:border-white/10">
-                  <div>
-                    <h1 className="text-sm 2xl:text-base font-semibold tracking-wide text-zinc-950 dark:text-white font-mono flex items-center gap-2">
-                      <BarChart3 className="w-4 h-4 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
-                      <span>{isRu ? 'Итоги сессии' : 'Session Summary'}</span>
-                    </h1>
-                    <p className="text-[11px] 2xl:text-xs text-zinc-500 mt-0.5 font-mono">
-                      {sessionSummary
-                        ? (isRu
-                            ? `Завершена в ${new Date(sessionSummary.stopped_at_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                            : `Finished at ${new Date(sessionSummary.stopped_at_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`)
-                        : (isRu ? 'Статистика работы бота' : 'Bot telemetry summary')}
-                    </p>
-                  </div>
-
-                  {sessionSummary && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] 2xl:text-xs font-mono text-zinc-600 dark:text-zinc-400">
-                        {isRu ? 'Длительность: ' : 'Duration: '}
-                        <strong className="text-zinc-950 dark:text-white font-semibold">
-                          {formatDuration(sessionSummary.duration_s)}
-                        </strong>
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {!sessionSummary ? (
-                  <div className="text-center py-16 flex flex-col items-center justify-center gap-3">
-                    <div className="w-12 h-12 rounded-xl border border-dashed border-zinc-400 dark:border-zinc-700 flex items-center justify-center text-zinc-400 dark:text-zinc-500">
-                      <BarChart3 className="w-6 h-6" />
-                    </div>
-                    <span className="text-sm font-mono font-semibold text-zinc-600 dark:text-zinc-400">
-                      {isRu ? 'нет данных' : 'no data'}
-                    </span>
-                    <span className="text-xs font-mono text-zinc-500 max-w-sm text-center leading-relaxed">
-                      {isRu
-                        ? 'Сессия еще не запускалась или данные отсутствуют. Запустите бота для сбора статистики.'
-                        : 'Session has not run or no data is available. Start the bot to gather telemetry.'}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-5">
-                    {/* Metric Cards Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="p-3 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-1">
-                        <span className="text-[11px] font-mono text-zinc-500">{isRu ? 'Длительность' : 'Duration'}</span>
-                        <span className="text-base font-mono font-bold text-zinc-950 dark:text-white">
-                          {formatDuration(sessionSummary.duration_s)}
-                        </span>
-                      </div>
-                      <div className="p-3 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-1">
-                        <span className="text-[11px] font-mono text-zinc-500">{isRu ? 'Узлов собрано' : 'Nodes Gathered'}</span>
-                        <span className="text-base font-mono font-bold text-zinc-950 dark:text-white">
-                          {sessionSummary.kills != null ? sessionSummary.kills : (isRu ? 'нет данных' : 'no data')}
-                        </span>
-                      </div>
-                      <div className="p-3 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-1">
-                        <span className="text-[11px] font-mono text-zinc-500">{isRu ? 'Темп в час' : 'Pace / hour'}</span>
-                        <span className="text-base font-mono font-bold text-zinc-950 dark:text-white">
-                          {sessionSummary.kills_per_hour != null ? `${sessionSummary.kills_per_hour}/ч` : (isRu ? 'нет данных' : 'no data')}
-                        </span>
-                      </div>
-                      <div className="p-3 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-1">
-                        <span className="text-[11px] font-mono text-zinc-500">{isRu ? 'Пауза' : 'Avg Kill Gap'}</span>
-                        <span className="text-base font-mono font-bold text-zinc-950 dark:text-white">
-                          {sessionSummary.avg_kill_gap_s != null ? `${sessionSummary.avg_kill_gap_s}с` : (isRu ? 'нет данных' : 'no data')}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Resource breakdown */}
-                    <div className="p-3.5 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-2.5">
-                      <span className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400">
-                        {isRu ? 'Добытые ресурсы' : 'Extracted Resources'}
-                      </span>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] font-mono text-zinc-500">{isRu ? 'Кориум' : 'Khorium'}</span>
-                          <span className="text-sm font-mono font-semibold text-zinc-950 dark:text-white">
-                            {sessionSummary.khorium != null ? sessionSummary.khorium : (isRu ? 'нет данных' : 'no data')}
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] font-mono text-zinc-500">{isRu ? 'Адамантит' : 'Adamantite'}</span>
-                          <span className="text-sm font-mono font-semibold text-zinc-950 dark:text-white">
-                            {sessionSummary.adamantite != null ? sessionSummary.adamantite : (isRu ? 'нет данных' : 'no data')}
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] font-mono text-zinc-500">{isRu ? 'Оскверн. железо' : 'Fel Iron'}</span>
-                          <span className="text-sm font-mono font-semibold text-zinc-950 dark:text-white">
-                            {sessionSummary.fel_iron != null ? sessionSummary.fel_iron : (isRu ? 'нет данных' : 'no data')}
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] font-mono text-zinc-500">{isRu ? 'Золото' : 'Gold'}</span>
-                          <span className="text-sm font-mono font-semibold text-zinc-950 dark:text-white">
-                            {sessionSummary.gold != null ? `+${sessionSummary.gold.toLocaleString()}g` : (isRu ? 'нет данных' : 'no data')}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Additional info */}
-                    <div className="flex items-center justify-between text-xs font-mono text-zinc-500 pt-2 border-t border-black/10 dark:border-white/10">
-                      <span>
-                        {isRu ? 'Причина остановки:' : 'Stop Reason:'}{' '}
-                        <strong className="text-zinc-800 dark:text-zinc-200">
-                          {sessionSummary.stop_reason || (isRu ? 'нет данных' : 'no data')}
-                        </strong>
-                      </span>
-                      <span>
-                        {isRu ? 'Потеряно целей:' : 'Targets lost:'}{' '}
-                        <strong className="text-zinc-800 dark:text-zinc-200">
-                          {sessionSummary.lost != null ? sessionSummary.lost : (isRu ? 'нет данных' : 'no data')}
-                        </strong>
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </SpecularCard>
-
-              {/* Session Heatmap Card directly below statistics in the same neat container */}
-              {sessionSummary && (
-                <SessionHeatmapCard
-                  summary={sessionSummary}
-                  language={language}
-                  theme={theme}
-                />
-              )}
-            </div>
+            <DaySummaryView
+              selectedDate={selectedDate}
+              dayData={dayData}
+              selectedSessionId={selectedSessionId}
+              onSelectSessionId={setSelectedSessionId}
+              selectedPassIndex={selectedPassIndex}
+              onSelectPassIndex={setSelectedPassIndex}
+              heatmap={activeHeatmap}
+              isHeatmapLoading={isHeatmapLoading}
+              language={language}
+            />
           </div>
         )}
 
