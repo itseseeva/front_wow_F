@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ZoomIn, ZoomOut, RotateCcw, MapPin } from 'lucide-react';
-import { SpecularButton } from './ui/Specular';
 import { soundFx } from '../utils/audio';
 
 interface HeatmapViewerProps {
@@ -36,6 +36,10 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const isDraggingRef = useRef<boolean>(false);
 
+  // Backend generated images place a legend on the right ~22.5% of the canvas.
+  // When detected, we cleanly crop out the right panel so only the pure map is visible.
+  const hasBackendPanel = Boolean(!image.includes('EZF') && (width ? width > 1300 : true));
+
   // Reset to original 1x scale and centered pan
   const handleReset = useCallback(() => {
     soundFx.playClick();
@@ -43,7 +47,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
     setPan({ x: 0, y: 0 });
   }, []);
 
-  // Keyboard navigation: Esc to close
+  // Keyboard navigation: Esc to close, R to reset
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -127,22 +131,23 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
     handleReset();
   };
 
-  return (
+  const viewerContent = (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-[120] bg-black/92 backdrop-blur-md flex flex-col select-none overflow-hidden"
+      className="fixed inset-0 z-[99999] bg-[#09090b] flex flex-col select-none overflow-hidden"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      {/* Top Header Bar */}
+      {/* Top Header Bar: 100% Solid Opaque Zinc-950, cleanly partitioned into Left, Center, and Right */}
       <div
-        className="w-full px-4 py-3 flex items-center justify-between z-10 border-b border-white/[0.08] bg-zinc-950/80 backdrop-blur-sm"
+        className="w-full h-14 px-4 sm:px-6 flex items-center justify-between z-20 border-b border-white/[0.08] bg-[#09090b] shrink-0 relative"
         onMouseDown={(e) => e.stopPropagation()}
       >
+        {/* Left Slot: Route Info */}
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/[0.05] border border-white/[0.08] text-xs font-mono text-zinc-300">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-xs font-mono text-zinc-300">
             <MapPin className="w-3.5 h-3.5 text-zinc-400" />
             <span className="font-semibold text-white tracking-wide">
               {routeName || (isRu ? 'Маршрут сессии' : 'Session Route')}
@@ -156,67 +161,72 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
           )}
         </div>
 
-        {/* Center Zoom Controls */}
-        <div className="flex items-center gap-1.5 font-mono text-xs">
+        {/* Center Slot: Zoom Controls (strictly centered, far away from corners) */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 font-mono text-xs z-10">
           <button
+            type="button"
             onClick={() => {
               soundFx.playClick();
               setScale((prev) => Math.max(1, prev * 0.8));
               if (scale <= 1.25) setPan({ x: 0, y: 0 });
             }}
             disabled={scale <= 1}
-            className="p-1.5 rounded-md border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-30 disabled:pointer-events-none cursor-pointer transition-colors"
+            className="p-1.5 rounded-lg border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-25 disabled:pointer-events-none cursor-pointer transition-colors"
             title={isRu ? 'Отдалить' : 'Zoom out'}
           >
-            <ZoomOut className="w-3.5 h-3.5" />
+            <ZoomOut className="w-4 h-4" />
           </button>
 
-          <span className="px-2 py-1 min-w-[54px] text-center rounded-md bg-white/[0.04] border border-white/[0.08] text-xs font-mono tabular-nums text-zinc-300 font-semibold">
+          <span className="px-2.5 py-1 min-w-[58px] text-center rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs font-mono tabular-nums text-zinc-200 font-semibold">
             {scale.toFixed(1)}×
           </span>
 
           <button
+            type="button"
             onClick={() => {
               soundFx.playClick();
               setScale((prev) => Math.min(6, prev * 1.25));
             }}
             disabled={scale >= 6}
-            className="p-1.5 rounded-md border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-30 disabled:pointer-events-none cursor-pointer transition-colors"
+            className="p-1.5 rounded-lg border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-25 disabled:pointer-events-none cursor-pointer transition-colors"
             title={isRu ? 'Приблизить' : 'Zoom in'}
           >
-            <ZoomIn className="w-3.5 h-3.5" />
+            <ZoomIn className="w-4 h-4" />
           </button>
 
           {scale > 1.05 && (
             <button
+              type="button"
               onClick={handleReset}
-              className="p-1.5 rounded-md border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] cursor-pointer transition-colors ml-1"
+              className="p-1.5 rounded-lg border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] cursor-pointer transition-colors ml-1"
               title={isRu ? 'Сбросить масштаб (1×)' : 'Reset zoom (1×)'}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <RotateCcw className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Close Button */}
-        <div className="flex items-center gap-2">
-          <SpecularButton
-            onClick={() => {
+        {/* Right Slot: Standalone Isolated Close Button - strictly on its own */}
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
               soundFx.playClick();
               onClose();
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.12] bg-white/[0.06] hover:bg-white/[0.12] text-xs font-mono text-zinc-200 hover:text-white cursor-pointer transition-all"
+            className="p-2 rounded-lg bg-white/[0.05] hover:bg-white/[0.12] text-zinc-400 hover:text-white border border-white/[0.1] hover:border-white/20 transition-all cursor-pointer flex items-center justify-center active:scale-95 group"
+            title={isRu ? 'Закрыть просмотр (Esc)' : 'Close viewer (Esc)'}
+            aria-label={isRu ? 'Закрыть' : 'Close'}
           >
-            <X className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{isRu ? 'Закрыть' : 'Close'}</span>
-            <span className="text-[10px] text-zinc-500 hidden sm:inline">(Esc)</span>
-          </SpecularButton>
+            <X className="w-4 h-4 transition-transform group-hover:rotate-90 duration-200 text-zinc-300 group-hover:text-white" />
+          </button>
         </div>
       </div>
 
       {/* Main Interactive Canvas Area */}
       <div
-        className={`flex-1 relative flex items-center justify-center ${
+        className={`flex-1 relative flex items-center justify-center overflow-hidden bg-[#09090b] ${
           isDragging ? 'cursor-grabbing' : scale > 1 ? 'cursor-grab' : 'cursor-default'
         }`}
         onDoubleClick={handleDoubleClick}
@@ -229,26 +239,51 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
           }}
           className="relative max-w-full max-h-full flex items-center justify-center pointer-events-none"
         >
-          <img
-            src={image}
-            alt={routeName || 'Session Heatmap'}
-            draggable={false}
-            className="max-w-[92vw] max-h-[82vh] w-auto h-auto object-contain rounded shadow-2xl border border-white/[0.1]"
-          />
+          {hasBackendPanel ? (
+            /* Clean map portion: right 22.5% info panel is completely cut out */
+            <div
+              className="relative overflow-hidden rounded-lg flex items-center justify-start bg-transparent"
+              style={{
+                height: '82vh',
+                aspectRatio: '0.78',
+                maxWidth: '92vw',
+              }}
+            >
+              <img
+                src={image}
+                alt={routeName || 'Session Heatmap'}
+                draggable={false}
+                className="h-full max-w-none object-cover object-left select-none"
+                style={{
+                  width: '128.5%', // 100 / 0.778 ≈ 128.5%
+                }}
+              />
+            </div>
+          ) : (
+            /* Standalone map without panel (seamless, no container border) */
+            <img
+              src={image}
+              alt={routeName || 'Session Heatmap'}
+              draggable={false}
+              className="max-w-[92vw] max-h-[82vh] w-auto h-auto object-contain select-none"
+            />
+          )}
         </div>
       </div>
 
-      {/* Bottom Hint Banner */}
+      {/* Bottom Hint Banner: 100% Solid Opaque Zinc-950 */}
       <div
-        className="w-full px-4 py-2 border-t border-white/[0.06] bg-zinc-950/70 text-center z-10"
+        className="w-full py-2.5 border-t border-white/[0.08] bg-[#09090b] text-center z-20 shrink-0"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <p className="text-[11px] font-mono text-zinc-400">
+        <p className="text-[11px] font-mono text-zinc-500">
           {isRu
-            ? 'Колёсико — масштаб (1×–6×) • перетаскивание — сдвиг • 2x клик — сброс • Esc — закрыть'
-            : 'Mouse wheel — zoom (1×–6×) • Drag — pan • Double-click — reset • Esc — close'}
+            ? 'Колёсико — масштаб (1×–6×) • Перетаскивание мышью — сдвиг • 2× клик — сброс • Esc — закрыть'
+            : 'Mouse wheel — zoom (1×–6×) • Mouse drag — pan • Double-click — reset • Esc — close'}
         </p>
       </div>
     </div>
   );
+
+  return createPortal(viewerContent, document.body);
 };

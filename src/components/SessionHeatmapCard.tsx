@@ -38,10 +38,15 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
       pollTimerRef.current = null;
     }
 
+    // Direct mock support for interactive test example preview
+    if (summary?.mock_heatmap) {
+      setHeatmap(summary.mock_heatmap);
+      return;
+    }
+
     // Check if pywebview API exists and has get_session_heatmap
     const api = window.pywebview?.api;
     if (!api || typeof api.get_session_heatmap !== 'function') {
-      // Backend does not support heatmap or is old
       return;
     }
 
@@ -98,7 +103,6 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
     // Initial fetch
     fetchHeatmap().then(() => {
       if (!isMounted) return;
-      // If initial fetch resulted in building, start interval
       setHeatmap((current) => {
         if (current?.status === 'building') {
           startPolling();
@@ -129,13 +133,13 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
     return null;
   }
 
-  // 1. Building State
+  // 1. Building State - Compact Skeleton
   if (heatmap.status === 'building') {
     return (
-      <SpecularCard className="p-4 sm:p-5 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-3">
+      <SpecularCard className="p-3 sm:p-4 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Map className="w-4 h-4 text-zinc-500 animate-pulse" />
+            <Map className="w-3.5 h-3.5 text-zinc-500 animate-pulse" />
             <span className="text-xs font-mono font-medium text-zinc-950 dark:text-white uppercase tracking-wider">
               {t.heatmapCardTitle}
             </span>
@@ -146,14 +150,14 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
           </div>
         </div>
 
-        {/* Tactical Skeleton Placeholder with subtle pulse */}
-        <div className="relative w-full aspect-[16/9] min-h-[220px] rounded-lg bg-black/[0.04] dark:bg-white/[0.03] border border-dashed border-black/10 dark:border-white/10 flex flex-col items-center justify-center gap-2 overflow-hidden">
+        {/* Compact skeleton */}
+        <div className="relative w-full h-[180px] sm:h-[220px] rounded-lg bg-black/[0.04] dark:bg-white/[0.03] border border-dashed border-black/10 dark:border-white/10 flex flex-col items-center justify-center gap-1.5 overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.04] to-transparent animate-pulse" />
-          <Loader2 className="w-6 h-6 animate-spin text-zinc-400 dark:text-zinc-500" />
+          <Loader2 className="w-5 h-5 animate-spin text-zinc-400 dark:text-zinc-500" />
           <span className="text-xs font-mono text-zinc-600 dark:text-zinc-400 font-medium">
             {t.heatmapBuilding}
           </span>
-          <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500">
+          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">
             {t.heatmapBuildingSub}
           </span>
         </div>
@@ -161,17 +165,17 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
     );
   }
 
-  // 2. Error State
+  // 2. Error State - Compact
   if (heatmap.status === 'error') {
     return (
-      <SpecularCard className="p-4 sm:p-5 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-3">
+      <SpecularCard className="p-3 sm:p-4 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <Map className="w-4 h-4 text-zinc-500" />
+          <Map className="w-3.5 h-3.5 text-zinc-500" />
           <span className="text-xs font-mono font-medium text-zinc-950 dark:text-white uppercase tracking-wider">
             {t.heatmapCardTitle}
           </span>
         </div>
-        <div className="p-4 rounded-lg bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 flex items-center gap-2.5 text-xs font-mono text-zinc-500">
+        <div className="p-3 rounded-lg bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 flex items-center gap-2 text-xs font-mono text-zinc-500">
           <AlertCircle className="w-4 h-4 text-zinc-400 shrink-0" />
           <span>{heatmap.error || t.heatmapErrorGeneric}</span>
         </div>
@@ -179,61 +183,86 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
     );
   }
 
-  // 3. Ready State
+  // 3. Ready State - Invisible container: only the map itself floats seamlessly
   if (heatmap.status === 'ready' && heatmap.image) {
+    const hasBackendPanel = Boolean(!heatmap.image.includes('EZF') && (heatmap.width ? heatmap.width > 1300 : true));
+
     return (
       <>
-        <SpecularCard className="p-4 sm:p-5 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-3">
-          {/* Header with Route Name and Fullscreen Hint */}
-          <div className="flex items-center justify-between">
+        <div className="w-full flex flex-col gap-1.5 select-none bg-transparent">
+          {/* Minimal Floating Header without any card container */}
+          <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
-              <Map className="w-4 h-4 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
-              <span className="text-xs font-mono font-medium text-zinc-950 dark:text-white uppercase tracking-wider">
+              <Map className="w-3.5 h-3.5 text-zinc-600 dark:text-zinc-400" strokeWidth={1.5} />
+              <span className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
                 {t.heatmapCardTitle}
               </span>
-            </div>
-
-            <div className="flex items-center gap-2">
               {heatmap.route_name && (
-                <span className="px-2 py-0.5 rounded bg-black/[0.04] dark:bg-white/[0.06] border border-black/5 dark:border-white/10 text-[11px] font-mono text-zinc-600 dark:text-zinc-300 font-medium">
-                  {heatmap.route_name}
+                <span className="text-[11px] font-mono text-zinc-500">
+                  · {heatmap.route_name}
                 </span>
               )}
-              <button
-                onClick={() => {
-                  soundFx.playClick();
-                  setIsViewerOpen(true);
-                }}
-                className="p-1 rounded text-zinc-400 hover:text-zinc-950 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                title={isRu ? 'Открыть на весь экран' : 'Open fullscreen'}
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-              </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                soundFx.playClick();
+                setIsViewerOpen(true);
+              }}
+              className="p-1 rounded text-zinc-400 hover:text-zinc-950 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+              title={isRu ? 'Полноэкранный просмотр (зум и сдвиг)' : 'Open fullscreen viewer'}
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
           </div>
 
-          {/* Heatmap Image Container: Full Width, Natural Height, Clickable */}
+          {/* Seamless Invisible Container: no borders, no card background */}
           <div
             onClick={() => {
               soundFx.playClick();
               setIsViewerOpen(true);
             }}
-            className="group relative w-full overflow-hidden rounded-lg border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.02] cursor-zoom-in transition-all hover:border-black/25 dark:hover:border-white/25"
+            className="group relative w-full h-[210px] sm:h-[245px] xl:h-[275px] overflow-hidden rounded-xl cursor-zoom-in transition-all flex items-center justify-center bg-transparent border-0 shadow-none"
           >
-            <img
-              src={heatmap.image}
-              alt={heatmap.route_name || t.heatmapCardTitle}
-              className="w-full h-auto block select-none transition-transform duration-300 group-hover:scale-[1.008]"
-              loading="lazy"
-            />
+            {hasBackendPanel ? (
+              /* Backend Image: The map resides in the left ~77.5% of the image; right 22.5% info panel is completely cut out */
+              <div className="relative h-full flex items-center justify-center overflow-hidden bg-transparent">
+                <div
+                  className="relative h-full overflow-hidden flex items-center justify-start rounded-xl bg-transparent"
+                  style={{
+                    aspectRatio: '0.78',
+                    maxWidth: '100%',
+                  }}
+                >
+                  <img
+                    src={heatmap.image}
+                    alt={heatmap.route_name || t.heatmapCardTitle}
+                    className="h-full max-w-none object-cover object-left select-none transition-transform duration-300 group-hover:scale-[1.01]"
+                    style={{
+                      width: '128.5%', // 100 / 0.778 ≈ 128.5%, cut off the right-side legend panel
+                    }}
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+            ) : (
+              /* App Styled Mock / Standalone Map: Clean full map without container */
+              <img
+                src={heatmap.image}
+                alt={heatmap.route_name || t.heatmapCardTitle}
+                className="max-h-full max-w-full w-auto h-auto object-contain select-none rounded-xl transition-transform duration-300 group-hover:scale-[1.01]"
+                loading="lazy"
+              />
+            )}
 
             {/* Subtle Hover Overlay Hint */}
-            <div className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-md bg-zinc-950/75 backdrop-blur-sm border border-white/10 text-[10.5px] font-mono text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 shadow-lg pointer-events-none">
+            <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-zinc-950/80 backdrop-blur-sm border border-white/10 text-[10px] font-mono text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 pointer-events-none shadow-md">
               <Maximize2 className="w-3 h-3 text-zinc-400" />
-              <span>{isRu ? 'Клик для зума и сдвига' : 'Click to inspect & zoom'}</span>
+              <span>{isRu ? 'Клик для зума' : 'Click to zoom'}</span>
             </div>
           </div>
-        </SpecularCard>
+        </div>
 
         {/* Fullscreen Pan/Zoom Modal Viewer */}
         {isViewerOpen && (

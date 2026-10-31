@@ -15,9 +15,10 @@ import { ComboChain, DEFAULT_COMBO_CHAINS } from './data/skillsLibrary';
 import { AppSettings, SessionSummaryData } from './types';
 import { soundFx } from './utils/audio';
 import { SpecularCard } from './components/ui/Specular';
-import { Crosshair, AlertTriangle, X, BarChart3, Clock } from 'lucide-react';
+import { Crosshair, AlertTriangle, X, BarChart3, Clock, Sparkles, RotateCcw } from 'lucide-react';
 import { getPywebviewApi } from './utils/pywebviewBridge';
 import { SessionHeatmapCard } from './components/SessionHeatmapCard';
+import { getMockSessionSummary } from './utils/mockHeatmap';
 
 function formatDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
@@ -162,8 +163,22 @@ export const App: React.FC = () => {
   const sessionSecondsRef = useRef<number>(sessionSeconds);
   const [activeCasting] = useState<{ chainId: string; stepId: string } | null>(null);
   const [sessionSummary, setSessionSummary] = useState<SessionSummaryData | null>(null);
+  const [isMockSessionActive, setIsMockSessionActive] = useState<boolean>(false);
   const recordingTimerRef = useRef<any>(null);
   const recordingRouteIdRef = useRef<string | null>(null);
+
+  const handleLoadTestExample = useCallback(() => {
+    soundFx.playClick();
+    const mock = getMockSessionSummary();
+    setSessionSummary(mock);
+    setIsMockSessionActive(true);
+  }, []);
+
+  const handleClearTestExample = useCallback(() => {
+    soundFx.playClick();
+    setSessionSummary(null);
+    setIsMockSessionActive(false);
+  }, []);
 
   useEffect(() => {
     isBotRunningRef.current = isBotRunning;
@@ -686,6 +701,7 @@ export const App: React.FC = () => {
       const customEvent = e as CustomEvent<SessionSummaryData | null>;
       const detail = customEvent.detail;
       setSessionSummary(detail || null);
+      setIsMockSessionActive(false);
       setIsBotRunning(false);
       setActiveTab('summary');
     };
@@ -966,142 +982,175 @@ export const App: React.FC = () => {
         {/* 4. SUMMARY VIEW: Detailed Session Analytics */}
         {activeTab === 'summary' && (
           <div className="relative w-full h-full p-4 sm:p-6 2xl:p-10 pt-16 sm:pt-20 pb-8 flex flex-col justify-start overflow-y-auto animate-assemble">
-            <SpecularCard
-              className="w-full max-w-4xl 2xl:max-w-5xl mx-auto rounded-2xl p-5 2xl:p-8 border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
-            >
-              <div className="flex items-center justify-between pb-3 mb-4 border-b border-black/10 dark:border-white/10">
-                <div>
-                  <h1 className="text-sm 2xl:text-base font-semibold tracking-wide text-zinc-950 dark:text-white font-mono flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
-                    <span>{isRu ? 'Итоги сессии' : 'Session Summary'}</span>
-                  </h1>
-                  <p className="text-[11px] 2xl:text-xs text-zinc-500 mt-0.5 font-mono">
-                    {sessionSummary
-                      ? (isRu
-                          ? `Завершена в ${new Date(sessionSummary.stopped_at_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                          : `Finished at ${new Date(sessionSummary.stopped_at_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`)
-                      : (isRu ? 'Статистика работы бота' : 'Bot telemetry summary')}
-                  </p>
+            <div className="w-full max-w-4xl 2xl:max-w-5xl mx-auto flex flex-col gap-4">
+              <SpecularCard
+                className="w-full rounded-2xl p-5 2xl:p-7 border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
+              >
+                <div className="flex items-center justify-between pb-3 mb-4 border-b border-black/10 dark:border-white/10">
+                  <div>
+                    <h1 className="text-sm 2xl:text-base font-semibold tracking-wide text-zinc-950 dark:text-white font-mono flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
+                      <span>{isRu ? 'Итоги сессии' : 'Session Summary'}</span>
+                    </h1>
+                    <p className="text-[11px] 2xl:text-xs text-zinc-500 mt-0.5 font-mono">
+                      {sessionSummary
+                        ? (isMockSessionActive
+                            ? (isRu ? 'Тестовый пример (демонстрация карты и размеров)' : 'Test example (map & layout preview)')
+                            : (isRu
+                                ? `Завершена в ${new Date(sessionSummary.stopped_at_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                                : `Finished at ${new Date(sessionSummary.stopped_at_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`))
+                        : (isRu ? 'Статистика работы бота' : 'Bot telemetry summary')}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {sessionSummary && (
+                      <span className="text-[10px] 2xl:text-xs font-mono text-zinc-600 dark:text-zinc-400">
+                        {isRu ? 'Длительность: ' : 'Duration: '}
+                        <strong className="text-zinc-950 dark:text-white font-semibold">
+                          {formatDuration(sessionSummary.duration_s)}
+                        </strong>
+                      </span>
+                    )}
+
+                    {sessionSummary && (
+                      <button
+                        type="button"
+                        onClick={isMockSessionActive ? handleClearTestExample : handleLoadTestExample}
+                        className="text-[11px] font-mono px-2.5 py-1 rounded-md border border-black/10 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer flex items-center gap-1.5"
+                        title={isMockSessionActive ? (isRu ? 'Очистить тестовые данные' : 'Clear test data') : (isRu ? 'Загрузить тестовый пример' : 'Load test example')}
+                      >
+                        {isMockSessionActive ? (
+                          <>
+                            <RotateCcw className="w-3 h-3 text-zinc-400" />
+                            <span>{isRu ? 'Сбросить тест' : 'Reset test'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3 text-amber-500" />
+                            <span>{isRu ? 'Тестовый пример' : 'Test example'}</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {sessionSummary && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] 2xl:text-xs font-mono text-zinc-600 dark:text-zinc-400">
-                      {isRu ? 'Длительность: ' : 'Duration: '}
-                      <strong className="text-zinc-950 dark:text-white font-semibold">
-                        {formatDuration(sessionSummary.duration_s)}
-                      </strong>
+                {!sessionSummary ? (
+                  <div className="text-center py-12 flex flex-col items-center justify-center gap-3">
+                    <div className="w-12 h-12 rounded-xl border border-dashed border-zinc-400 dark:border-zinc-700 flex items-center justify-center text-zinc-400 dark:text-zinc-500">
+                      <BarChart3 className="w-6 h-6" />
+                    </div>
+                    <span className="text-sm font-mono font-semibold text-zinc-600 dark:text-zinc-400">
+                      {isRu ? 'нет данных' : 'no data'}
                     </span>
+                    <span className="text-xs font-mono text-zinc-500 max-w-sm text-center leading-relaxed">
+                      {isRu
+                        ? 'Сессия еще не запускалась или данные отсутствуют. Нажмите кнопку ниже, чтобы загрузить тестовый пример и оценить реальные размеры карты.'
+                        : 'Session has not run or no data is available. Click below to load a test example and inspect real heatmap dimensions.'}
+                    </span>
+
+                    {/* Test Example Button */}
+                    <button
+                      type="button"
+                      onClick={handleLoadTestExample}
+                      className="mt-2 px-4 py-2 rounded-xl bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 font-mono text-xs font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm flex items-center gap-2 cursor-pointer border border-transparent hover:border-black/20 dark:hover:border-white/20"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{isRu ? 'Тестовый пример (показать карту и размеры)' : 'Test example (show map & layout)'}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-5">
+                    {/* Metric Cards Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-3 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-1">
+                        <span className="text-[11px] font-mono text-zinc-500">{isRu ? 'Длительность' : 'Duration'}</span>
+                        <span className="text-base font-mono font-bold text-zinc-950 dark:text-white">
+                          {formatDuration(sessionSummary.duration_s)}
+                        </span>
+                      </div>
+                      <div className="p-3 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-1">
+                        <span className="text-[11px] font-mono text-zinc-500">{isRu ? 'Узлов собрано' : 'Nodes Gathered'}</span>
+                        <span className="text-base font-mono font-bold text-zinc-950 dark:text-white">
+                          {sessionSummary.kills != null ? sessionSummary.kills : (isRu ? 'нет данных' : 'no data')}
+                        </span>
+                      </div>
+                      <div className="p-3 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-1">
+                        <span className="text-[11px] font-mono text-zinc-500">{isRu ? 'Темп в час' : 'Pace / hour'}</span>
+                        <span className="text-base font-mono font-bold text-zinc-950 dark:text-white">
+                          {sessionSummary.kills_per_hour != null ? `${sessionSummary.kills_per_hour}/ч` : (isRu ? 'нет данных' : 'no data')}
+                        </span>
+                      </div>
+                      <div className="p-3 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-1">
+                        <span className="text-[11px] font-mono text-zinc-500">{isRu ? 'Пауза' : 'Avg Kill Gap'}</span>
+                        <span className="text-base font-mono font-bold text-zinc-950 dark:text-white">
+                          {sessionSummary.avg_kill_gap_s != null ? `${sessionSummary.avg_kill_gap_s}с` : (isRu ? 'нет данных' : 'no data')}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Resource breakdown */}
+                    <div className="p-3.5 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-2.5">
+                      <span className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400">
+                        {isRu ? 'Добытые ресурсы' : 'Extracted Resources'}
+                      </span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] font-mono text-zinc-500">{isRu ? 'Кориум' : 'Khorium'}</span>
+                          <span className="text-sm font-mono font-semibold text-zinc-950 dark:text-white">
+                            {sessionSummary.khorium != null ? sessionSummary.khorium : (isRu ? 'нет данных' : 'no data')}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] font-mono text-zinc-500">{isRu ? 'Адамантит' : 'Adamantite'}</span>
+                          <span className="text-sm font-mono font-semibold text-zinc-950 dark:text-white">
+                            {sessionSummary.adamantite != null ? sessionSummary.adamantite : (isRu ? 'нет данных' : 'no data')}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] font-mono text-zinc-500">{isRu ? 'Оскверн. железо' : 'Fel Iron'}</span>
+                          <span className="text-sm font-mono font-semibold text-zinc-950 dark:text-white">
+                            {sessionSummary.fel_iron != null ? sessionSummary.fel_iron : (isRu ? 'нет данных' : 'no data')}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] font-mono text-zinc-500">{isRu ? 'Золото' : 'Gold'}</span>
+                          <span className="text-sm font-mono font-semibold text-zinc-950 dark:text-white">
+                            {sessionSummary.gold != null ? `+${sessionSummary.gold.toLocaleString()}g` : (isRu ? 'нет данных' : 'no data')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additional info */}
+                    <div className="flex items-center justify-between text-xs font-mono text-zinc-500 pt-2 border-t border-black/10 dark:border-white/10">
+                      <span>
+                        {isRu ? 'Причина остановки:' : 'Stop Reason:'}{' '}
+                        <strong className="text-zinc-800 dark:text-zinc-200">
+                          {sessionSummary.stop_reason || (isRu ? 'нет данных' : 'no data')}
+                        </strong>
+                      </span>
+                      <span>
+                        {isRu ? 'Потеряно целей:' : 'Targets lost:'}{' '}
+                        <strong className="text-zinc-800 dark:text-zinc-200">
+                          {sessionSummary.lost != null ? sessionSummary.lost : (isRu ? 'нет данных' : 'no data')}
+                        </strong>
+                      </span>
+                    </div>
                   </div>
                 )}
-              </div>
+              </SpecularCard>
 
-              {!sessionSummary ? (
-                <div className="text-center py-16 flex flex-col items-center justify-center gap-3">
-                  <div className="w-12 h-12 rounded-xl border border-dashed border-zinc-400 dark:border-zinc-700 flex items-center justify-center text-zinc-400 dark:text-zinc-500">
-                    <BarChart3 className="w-6 h-6" />
-                  </div>
-                  <span className="text-sm font-mono font-semibold text-zinc-600 dark:text-zinc-400">
-                    {isRu ? 'нет данных' : 'no data'}
-                  </span>
-                  <span className="text-xs font-mono text-zinc-500 max-w-sm text-center leading-relaxed">
-                    {isRu
-                      ? 'Сессия еще не запускалась или данные отсутствуют. Запустите бота для сбора статистики.'
-                      : 'Session has not run or no data is available. Start the bot to gather telemetry.'}
-                  </span>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-6">
-                  {/* Metric Cards Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="p-3 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-1">
-                      <span className="text-[11px] font-mono text-zinc-500">{isRu ? 'Длительность' : 'Duration'}</span>
-                      <span className="text-base font-mono font-bold text-zinc-950 dark:text-white">
-                        {formatDuration(sessionSummary.duration_s)}
-                      </span>
-                    </div>
-                    <div className="p-3 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-1">
-                      <span className="text-[11px] font-mono text-zinc-500">{isRu ? 'Узлов собрано' : 'Nodes Gathered'}</span>
-                      <span className="text-base font-mono font-bold text-zinc-950 dark:text-white">
-                        {sessionSummary.kills != null ? sessionSummary.kills : (isRu ? 'нет данных' : 'no data')}
-                      </span>
-                    </div>
-                    <div className="p-3 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-1">
-                      <span className="text-[11px] font-mono text-zinc-500">{isRu ? 'Темп в час' : 'Pace / hour'}</span>
-                      <span className="text-base font-mono font-bold text-zinc-950 dark:text-white">
-                        {sessionSummary.kills_per_hour != null ? `${sessionSummary.kills_per_hour}/ч` : (isRu ? 'нет данных' : 'no data')}
-                      </span>
-                    </div>
-                    <div className="p-3 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-1">
-                      <span className="text-[11px] font-mono text-zinc-500">{isRu ? 'Пауза' : 'Avg Kill Gap'}</span>
-                      <span className="text-base font-mono font-bold text-zinc-950 dark:text-white">
-                        {sessionSummary.avg_kill_gap_s != null ? `${sessionSummary.avg_kill_gap_s}с` : (isRu ? 'нет данных' : 'no data')}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Resource breakdown */}
-                  <div className="p-4 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-3">
-                    <span className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400">
-                      {isRu ? 'Добытые ресурсы' : 'Extracted Resources'}
-                    </span>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[10px] font-mono text-zinc-500">{isRu ? 'Кориум' : 'Khorium'}</span>
-                        <span className="text-sm font-mono font-semibold text-zinc-950 dark:text-white">
-                          {sessionSummary.khorium != null ? sessionSummary.khorium : (isRu ? 'нет данных' : 'no data')}
-                        </span>
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[10px] font-mono text-zinc-500">{isRu ? 'Адамантит' : 'Adamantite'}</span>
-                        <span className="text-sm font-mono font-semibold text-zinc-950 dark:text-white">
-                          {sessionSummary.adamantite != null ? sessionSummary.adamantite : (isRu ? 'нет данных' : 'no data')}
-                        </span>
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[10px] font-mono text-zinc-500">{isRu ? 'Оскверн. железо' : 'Fel Iron'}</span>
-                        <span className="text-sm font-mono font-semibold text-zinc-950 dark:text-white">
-                          {sessionSummary.fel_iron != null ? sessionSummary.fel_iron : (isRu ? 'нет данных' : 'no data')}
-                        </span>
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[10px] font-mono text-zinc-500">{isRu ? 'Золото' : 'Gold'}</span>
-                        <span className="text-sm font-mono font-semibold text-zinc-950 dark:text-white">
-                          {sessionSummary.gold != null ? `+${sessionSummary.gold.toLocaleString()}g` : (isRu ? 'нет данных' : 'no data')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Additional info */}
-                  <div className="flex items-center justify-between text-xs font-mono text-zinc-500 pt-2 border-t border-black/10 dark:border-white/10">
-                    <span>
-                      {isRu ? 'Причина остановки:' : 'Stop Reason:'}{' '}
-                      <strong className="text-zinc-800 dark:text-zinc-200">
-                        {sessionSummary.stop_reason || (isRu ? 'нет данных' : 'no data')}
-                      </strong>
-                    </span>
-                    <span>
-                      {isRu ? 'Потеряно целей:' : 'Targets lost:'}{' '}
-                      <strong className="text-zinc-800 dark:text-zinc-200">
-                        {sessionSummary.lost != null ? sessionSummary.lost : (isRu ? 'нет данных' : 'no data')}
-                      </strong>
-                    </span>
-                  </div>
-                </div>
-              )}
-            </SpecularCard>
-
-            {/* Session Heatmap Card below statistics */}
-            {sessionSummary && (
-              <div className="mt-4">
+              {/* Session Heatmap Card directly below statistics in the same neat container */}
+              {sessionSummary && (
                 <SessionHeatmapCard
                   summary={sessionSummary}
                   language={language}
                   theme={theme}
                 />
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 

@@ -134,6 +134,7 @@ export interface SessionSummaryData {
   adamantite?: number;
   fel_iron?: number;
   gold?: number;
+  mock_heatmap?: SessionHeatmapResponse;
   timeline?: { time_s: number; kills: number; pace_per_h: number }[];
 }
 
