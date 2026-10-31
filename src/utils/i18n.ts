@@ -171,7 +171,16 @@ export const translations = {
     peakPace: 'Пик',
     avgPace: 'Средний',
     exportReport: 'Экспорт отчёта',
+
+    // Heatmap
+    heatmapCardTitle: 'Тепловая карта прогона',
+    heatmapBuilding: 'Рисую тепловую карту…',
+    heatmapBuildingSub: 'Бэкенд формирует координатную карту сессии',
+    heatmapErrorGeneric: 'Не удалось построить тепловую карту',
+    heatmapZoomHint: 'Колёсико — масштаб (1×–6×), перетаскивание — сдвиг, 2x клик — сброс',
+    heatmapFullscreenClose: 'Закрыть просмотр',
   },
+
   en: {
     // Top Bar & Navigation
     logoSubtitle: 'WOW FOREVER',
@@ -341,5 +350,14 @@ export const translations = {
     peakPace: 'Peak',
     avgPace: 'Average',
     exportReport: 'Export Report',
+
+    // Heatmap
+    heatmapCardTitle: 'Session Heatmap',
+    heatmapBuilding: 'Rendering heatmap…',
+    heatmapBuildingSub: 'Backend is computing trajectory coordinates',
+    heatmapErrorGeneric: 'Failed to generate heatmap',
+    heatmapZoomHint: 'Scroll to zoom (1×–6×), drag to pan, double click to reset',
+    heatmapFullscreenClose: 'Close viewer',
   },
 };
+

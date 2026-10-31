@@ -17,6 +17,7 @@ import { soundFx } from './utils/audio';
 import { SpecularCard } from './components/ui/Specular';
 import { Crosshair, AlertTriangle, X, BarChart3, Clock } from 'lucide-react';
 import { getPywebviewApi } from './utils/pywebviewBridge';
+import { SessionHeatmapCard } from './components/SessionHeatmapCard';
 
 function formatDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
@@ -1090,8 +1091,20 @@ export const App: React.FC = () => {
                 </div>
               )}
             </SpecularCard>
+
+            {/* Session Heatmap Card below statistics */}
+            {sessionSummary && (
+              <div className="mt-4">
+                <SessionHeatmapCard
+                  summary={sessionSummary}
+                  language={language}
+                  theme={theme}
+                />
+              </div>
+            )}
           </div>
         )}
+
       </div>
     </div>
   );

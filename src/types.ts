@@ -108,6 +108,18 @@ export interface RoutePreview {
   paths: RoutePath[]; // 3 примера, как бот пройдёт маршрут (каждый раз по-разному)
 }
 
+export interface SessionHeatmapResponse {
+  ok: boolean;
+  status: 'none' | 'building' | 'ready' | 'error';
+  // none — карты нет (сессия короче 10 с, без маршрута или без позиции); building — рисуется;
+  // ready — готова; error — не получилось (текст в error)
+  image?: string;        // data:image/png;base64,... — только при ready
+  width?: number;        // размер картинки в пикселях (порядка 1600×1900, бывает и шире, и уже)
+  height?: number;
+  route_name?: string;   // например «Маршрут 3»
+  error?: string;        // при error — понятный текст для пользователя
+}
+
 export interface SessionSummaryData {
   started_at_ms: number;
   stopped_at_ms: number;
@@ -117,6 +129,7 @@ export interface SessionSummaryData {
   avg_kill_gap_s: number | null;
   lost: number;
   stop_reason: string;
+  heatmap_status?: 'none' | 'building' | 'ready' | 'error';
   khorium?: number;
   adamantite?: number;
   fel_iron?: number;
@@ -149,7 +162,11 @@ declare global {
         // Map Image & Terrain API
         get_map_image?(map_id: number): Promise<MapImageResponse>;
         get_terrain_status?(map_id: number): Promise<{ ok: boolean; error?: string } & Partial<TerrainStatus>>;
+
+        // Heatmap API
+        get_session_heatmap?(): Promise<SessionHeatmapResponse>;
       };
     };
   }
 }
+

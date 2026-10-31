@@ -17,6 +17,7 @@ import {
 import { Language, Theme, translations } from '../utils/i18n';
 import { SpecularCard, SpecularButton } from './ui/Specular';
 import { soundFx } from '../utils/audio';
+import { SessionHeatmapCard } from './SessionHeatmapCard';
 
 interface SessionSummaryModalProps {
   data: SessionSummaryData | null;
@@ -638,9 +639,12 @@ export const SessionSummaryModal: React.FC<SessionSummaryModalProps> = ({
               </div>
             </SpecularCard>
           </div>
+
+          {/* 3. Heatmap Card below statistics */}
+          <SessionHeatmapCard summary={data} language={language} theme={theme} />
         </div>
 
-        {/* 3. FOOTER: Export & Close Action Buttons */}
+        {/* 4. FOOTER: Export & Close Action Buttons */}
         <div className="px-4 sm:px-6 py-3 border-t border-black/10 dark:border-white/[0.08] bg-transparent flex items-center justify-between shrink-0 gap-3">
           <SpecularButton
             onClick={handleExportSummary}
