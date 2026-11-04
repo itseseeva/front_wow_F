@@ -195,18 +195,64 @@ export interface DayResponse {
 
 export type SchedulePhase = 'idle' | 'farm' | 'short_break' | 'long_break' | 'wait_window' | 'day_done' | 'off_day';
 
+export type WeekdayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+export type ScheduleStyleId = 'careful' | 'normal' | 'heavy' | 'custom';
+export type DailySpread = 'low' | 'mid' | 'high';    // «чуть-чуть» / «заметно» / «сильно»
+
+export interface ScheduleWindow {
+  start: string;
+  end: string;
+}
+
+export interface DaySchedule {
+  enabled: boolean;                       // false — выходной
+  windows: ScheduleWindow[];              // 1–4 окна часов, не пересекаются
+  style: ScheduleStyleId;
+  dailyHours: number;                     // норма «около N ч», 0.5–12, шаг 0.5
+  dailySpread: DailySpread;               // насколько каждый день отличается от нормы
+  sessionMinutes: [number, number];       // длина сессии, 10–180 мин
+  shortBreakMinutes: [number, number];    // короткий перерыв (стоит на месте), 1–60 мин
+  longBreakMinutes: [number, number];     // длинный перерыв, 10–240 мин
+  longBreakEvery: [number, number];       // длинный перерыв после каждых N сессий, целые 1–10
+  longBreakLogout: boolean;               // на длинный перерыв выходить в меню персонажей
+}
+
 export interface ScheduleSettings {
   enabled: boolean;
-  sessionMinutes: [number, number];      // длина сессии от–до, 10..240
-  shortBreakMinutes: [number, number];   // короткий перерыв, 1..60
-  longBreakMinutes: [number, number];    // длинный перерыв, 10..240
-  longBreakEvery: [number, number];      // длинный перерыв после каждых N сессий, целые 1..10
-  dailyHours: [number, number];          // норма в день, часы 0.5..12
-  offDayPercent: number;                 // шанс выходного, 0..50
-  windowStart: string;                   // "HH:MM" — с какого времени можно играть
-  windowEnd: string;                     // "HH:MM" — до какого (может быть после полуночи, например "02:00")
-  startJitterMinutes: number;            // 0..120 — начало и конец окна каждый день сдвигаются внутрь случайно
-  longBreakLogout: boolean;              // длинный перерыв — выход в меню персонажей
+  offDayPercent: number;                  // 0–50, случайный выходной поверх выключенных дней
+  days: Record<WeekdayKey, DaySchedule>;
+}
+
+export interface ScheduleStyle {
+  id: 'careful' | 'normal' | 'heavy';
+  title: string;
+  description: string;
+  sessionMinutes: [number, number];
+  shortBreakMinutes: [number, number];
+  longBreakMinutes: [number, number];
+  longBreakEvery: [number, number];
+}
+
+export interface SchedulePreviewSegment {
+  kind: 'farm' | 'short_break' | 'long_break' | 'wait_window';
+  start_ms: number;
+  end_ms: number;
+  minutes: number;
+}
+
+export interface SchedulePreview {
+  ok: boolean;
+  error?: string;
+  date: string;                           // 'YYYY-MM-DD'
+  off: boolean;                           // день выключен — segments пустой
+  daily_hours: [number, number] | null;   // в каких пределах бот будет играть в этот день (с учётом разброса)
+  windows: { start_ms: number; end_ms: number }[];
+  segments: SchedulePreviewSegment[];
+  sessions: number;
+  farm_s: number;
+  start_ms: number | null;
+  end_ms: number | null;
+  timezone: string;                       // например «UTC+03:00»
 }
 
 export interface ScheduleToday {
@@ -217,6 +263,7 @@ export interface ScheduleToday {
   sessions: number;
   start_ms: number;    // когда сегодня можно начать (уже со случайным сдвигом)
   end_ms: number;      // когда сегодня закончить
+  windows: { start_ms: number; end_ms: number }[];
 }
 
 export interface ScheduleStatus {
@@ -228,6 +275,7 @@ export interface ScheduleStatus {
   phase_until_ms: number | null;   // до какого момента текущая фаза
   in_world: boolean | null;        // false — персонаж в меню персонажей
   note: string;                    // пояснение от бэкенда, показать мелко
+  timezone: string;
   today: ScheduleToday | null;
 }
 
@@ -268,6 +316,8 @@ declare global {
 
         // Schedule API
         get_schedule_status?(): Promise<ScheduleStatus>;
+        get_schedule_styles?(): Promise<{ ok: boolean; styles: ScheduleStyle[] }>;
+        preview_schedule_day?(configJson: string, weekday: number, seed: number): Promise<SchedulePreview>;
       };
     };
   }

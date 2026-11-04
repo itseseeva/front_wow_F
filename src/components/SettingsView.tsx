@@ -3,7 +3,7 @@ import {
   RotateCcw,
   Clock,
   AlertTriangle,
-  Check,
+  CalendarClock,
 } from 'lucide-react';
 import { AppSettings, ScheduleSettings } from '../types';
 import { Language, Theme } from '../utils/i18n';
@@ -18,6 +18,7 @@ interface SettingsViewProps {
   scheduleError?: string | null;
   onBack?: () => void;
   onNavigateToRoutes?: () => void;
+  onNavigateToSchedule?: () => void;
   onExportJson?: () => void;
   language?: Language;
   onLanguageChange?: (lang: Language) => void;
@@ -67,6 +68,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   scheduleSettings,
   onScheduleSettingsChange,
   scheduleError,
+  onNavigateToSchedule,
   language = 'ru',
   onToast,
 }) => {
@@ -140,7 +142,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     },
     {
       id: 'interactKey',
-      nameRu: 'Клавиша взаимодействия',
+      nameRu: 'Взаимодействие с целью',
       nameEn: 'Interact Key',
       defaultVal: 'F',
     },
@@ -227,249 +229,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {scheduleSettings.enabled && (
           <div className="flex flex-col gap-2">
-            {/* 1.2 Session Duration (sessionMinutes: [min, max] 10..240) */}
+            {/* 1.2 Off Day Chance (offDayPercent: 0..50) */}
             <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full">
                 <div>
                   <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white">
-                    {isRu ? 'Длина сессии' : 'Session duration'}
+                    {isRu ? 'Шанс случайного выходного' : 'Random day off chance'}
                   </span>
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
-                    {isRu ? 'Случайная длительность непрерывного фарма (10–240 мин)' : 'Random continuous farm duration (10–240 min)'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 font-mono text-xs">
-                  <span className="text-zinc-500">{isRu ? 'от' : 'min'}</span>
-                  <input
-                    type="number"
-                    min={10}
-                    max={240}
-                    value={scheduleSettings.sessionMinutes[0]}
-                    onChange={(e) =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        sessionMinutes: [Math.max(10, Math.min(240, Number(e.target.value) || 10)), scheduleSettings.sessionMinutes[1]],
-                      })
-                    }
-                    className="w-16 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-center text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
-                  />
-                  <span className="text-zinc-500">{isRu ? 'до' : 'max'}</span>
-                  <input
-                    type="number"
-                    min={10}
-                    max={240}
-                    value={scheduleSettings.sessionMinutes[1]}
-                    onChange={(e) =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        sessionMinutes: [scheduleSettings.sessionMinutes[0], Math.max(10, Math.min(240, Number(e.target.value) || 10))],
-                      })
-                    }
-                    className="w-16 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-center text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
-                  />
-                  <span className="text-zinc-500">{isRu ? 'мин' : 'min'}</span>
-                </div>
-              </div>
-            </SpecularCard>
-
-            {/* 1.3 Short Break (shortBreakMinutes: [min, max] 1..60) */}
-            <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full">
-                <div>
-                  <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white">
-                    {isRu ? 'Короткий перерыв' : 'Short break'}
-                  </span>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
-                    {isRu ? 'короткий перерыв — персонаж стоит на месте (1–60 мин)' : 'short break — character stays in place (1–60 min)'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 font-mono text-xs">
-                  <span className="text-zinc-500">{isRu ? 'от' : 'min'}</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={60}
-                    value={scheduleSettings.shortBreakMinutes[0]}
-                    onChange={(e) =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        shortBreakMinutes: [Math.max(1, Math.min(60, Number(e.target.value) || 1)), scheduleSettings.shortBreakMinutes[1]],
-                      })
-                    }
-                    className="w-16 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-center text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
-                  />
-                  <span className="text-zinc-500">{isRu ? 'до' : 'max'}</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={60}
-                    value={scheduleSettings.shortBreakMinutes[1]}
-                    onChange={(e) =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        shortBreakMinutes: [scheduleSettings.shortBreakMinutes[0], Math.max(1, Math.min(60, Number(e.target.value) || 1))],
-                      })
-                    }
-                    className="w-16 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-center text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
-                  />
-                  <span className="text-zinc-500">{isRu ? 'мин' : 'min'}</span>
-                </div>
-              </div>
-            </SpecularCard>
-
-            {/* 1.4 Long Break (longBreakMinutes: [min, max] 10..240) */}
-            <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full">
-                <div>
-                  <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white">
-                    {isRu ? 'Длинный перерыв' : 'Long break'}
-                  </span>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
-                    {isRu ? 'Длительность большого отдыха (10–240 мин)' : 'Duration of large rest break (10–240 min)'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 font-mono text-xs">
-                  <span className="text-zinc-500">{isRu ? 'от' : 'min'}</span>
-                  <input
-                    type="number"
-                    min={10}
-                    max={240}
-                    value={scheduleSettings.longBreakMinutes[0]}
-                    onChange={(e) =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        longBreakMinutes: [Math.max(10, Math.min(240, Number(e.target.value) || 10)), scheduleSettings.longBreakMinutes[1]],
-                      })
-                    }
-                    className="w-16 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-center text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
-                  />
-                  <span className="text-zinc-500">{isRu ? 'до' : 'max'}</span>
-                  <input
-                    type="number"
-                    min={10}
-                    max={240}
-                    value={scheduleSettings.longBreakMinutes[1]}
-                    onChange={(e) =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        longBreakMinutes: [scheduleSettings.longBreakMinutes[0], Math.max(10, Math.min(240, Number(e.target.value) || 10))],
-                      })
-                    }
-                    className="w-16 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-center text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
-                  />
-                  <span className="text-zinc-500">{isRu ? 'мин' : 'min'}</span>
-                </div>
-              </div>
-            </SpecularCard>
-
-            {/* 1.5 Long Break Frequency (longBreakEvery: [min, max] 1..10) */}
-            <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full">
-                <div>
-                  <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white">
-                    {isRu ? 'Частота длинного перерыва' : 'Long break frequency'}
-                  </span>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
-                    {isRu ? 'После каждых N сессий (целые 1–10)' : 'Trigger after every N sessions (1–10)'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 font-mono text-xs">
-                  <span className="text-zinc-500">{isRu ? 'каждые' : 'every'}</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    step={1}
-                    value={scheduleSettings.longBreakEvery[0]}
-                    onChange={(e) =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        longBreakEvery: [Math.max(1, Math.min(10, Math.round(Number(e.target.value) || 1))), scheduleSettings.longBreakEvery[1]],
-                      })
-                    }
-                    className="w-14 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-center text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
-                  />
-                  <span className="text-zinc-500">–</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    step={1}
-                    value={scheduleSettings.longBreakEvery[1]}
-                    onChange={(e) =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        longBreakEvery: [scheduleSettings.longBreakEvery[0], Math.max(1, Math.min(10, Math.round(Number(e.target.value) || 1)))],
-                      })
-                    }
-                    className="w-14 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-center text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
-                  />
-                  <span className="text-zinc-500">{isRu ? 'сессий' : 'sessions'}</span>
-                </div>
-              </div>
-            </SpecularCard>
-
-            {/* 1.6 Daily Hours Budget (dailyHours: [min, max] 0.5..12) */}
-            <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full">
-                <div>
-                  <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white">
-                    {isRu ? 'Норма в день' : 'Daily hours limit'}
-                  </span>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
-                    {isRu ? 'Суммарное игровое время за день (0.5–12 часов)' : 'Total daily playtime budget (0.5–12 hours)'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 font-mono text-xs">
-                  <span className="text-zinc-500">{isRu ? 'от' : 'min'}</span>
-                  <input
-                    type="number"
-                    min={0.5}
-                    max={12}
-                    step={0.5}
-                    value={scheduleSettings.dailyHours[0]}
-                    onChange={(e) =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        dailyHours: [Math.max(0.5, Math.min(12, Number(e.target.value) || 0.5)), scheduleSettings.dailyHours[1]],
-                      })
-                    }
-                    className="w-16 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-center text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
-                  />
-                  <span className="text-zinc-500">{isRu ? 'до' : 'max'}</span>
-                  <input
-                    type="number"
-                    min={0.5}
-                    max={12}
-                    step={0.5}
-                    value={scheduleSettings.dailyHours[1]}
-                    onChange={(e) =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        dailyHours: [scheduleSettings.dailyHours[0], Math.max(0.5, Math.min(12, Number(e.target.value) || 0.5))],
-                      })
-                    }
-                    className="w-16 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-center text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
-                  />
-                  <span className="text-zinc-500">{isRu ? 'ч' : 'hrs'}</span>
-                </div>
-              </div>
-            </SpecularCard>
-
-            {/* 1.7 Off Day Chance (offDayPercent: 0..50) */}
-            <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full">
-                <div>
-                  <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white">
-                    {isRu ? 'Шанс выходного' : 'Day off chance'}
-                  </span>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
-                    {isRu ? 'Вероятность полного дня отдыха (0–50%)' : 'Probability of taking a day off completely (0–50%)'}
+                    {isRu ? 'Вероятность дополнительного дня отдыха (0–50%)' : 'Probability of an additional day off (0–50%)'}
                   </p>
                 </div>
 
@@ -492,112 +260,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </SpecularCard>
 
-            {/* 1.8 Window Start & End ("HH:MM") */}
-            <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full">
+            {/* 1.3 Link to full Week Schedule View */}
+            <SpecularCard className="p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
                 <div>
-                  <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white">
-                    {isRu ? 'Окно игровых часов' : 'Time window'}
+                  <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white flex items-center gap-2">
+                    <CalendarClock className="w-4 h-4 text-zinc-500" />
+                    <span>{isRu ? 'Недельное расписание по дням' : 'Weekly schedule by days'}</span>
                   </span>
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
-                    {isRu ? 'Игровой день 05:00–05:00 (конец может быть после полуночи)' : 'Game day 05:00–05:00 (end can be after midnight)'}
+                    {isRu
+                      ? 'Окна часов (с–до), стили игры и тонкая настройка для каждого дня недели'
+                      : 'Playtime windows, styles, and fine-tuning for each day of the week'}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 font-mono text-xs">
-                  <span className="text-zinc-500">{isRu ? 'с' : 'from'}</span>
-                  <input
-                    type="time"
-                    value={scheduleSettings.windowStart}
-                    onChange={(e) =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        windowStart: e.target.value || '10:00',
-                      })
-                    }
-                    className="h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-center text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
-                  />
-                  <span className="text-zinc-500">{isRu ? 'до' : 'to'}</span>
-                  <input
-                    type="time"
-                    value={scheduleSettings.windowEnd}
-                    onChange={(e) =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        windowEnd: e.target.value || '02:00',
-                      })
-                    }
-                    className="h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-center text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
-                  />
-                </div>
-              </div>
-            </SpecularCard>
-
-            {/* 1.9 Window Jitter (startJitterMinutes: 0..120) */}
-            <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full">
-                <div>
-                  <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white">
-                    {isRu ? 'Случайный сдвиг окна' : 'Window start/end jitter'}
-                  </span>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
-                    {isRu ? 'Начало и конец окна каждый день сдвигаются внутрь случайно (0–120 мин)' : 'Daily random start and end window inward jitter (0–120 min)'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 font-mono text-xs">
-                  <input
-                    type="number"
-                    min={0}
-                    max={120}
-                    value={scheduleSettings.startJitterMinutes}
-                    onChange={(e) =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        startJitterMinutes: Math.max(0, Math.min(120, Number(e.target.value) || 0)),
-                      })
-                    }
-                    className="w-16 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-center text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
-                  />
-                  <span className="text-zinc-500">{isRu ? 'мин' : 'min'}</span>
-                </div>
-              </div>
-            </SpecularCard>
-
-            {/* 1.10 Logout on Long Break & Hints */}
-            <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent">
-              <div className="flex flex-col gap-2 w-full">
-                <div className="flex items-center justify-between w-full">
-                  <div>
-                    <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white">
-                      {isRu ? 'Выход в меню персонажей на длинный перерыв' : 'Logout to character menu on long break'}
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onScheduleSettingsChange({
-                        ...scheduleSettings,
-                        longBreakLogout: !scheduleSettings.longBreakLogout,
-                      })
-                    }
-                    className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
-                      scheduleSettings.longBreakLogout
-                        ? 'border-zinc-950 dark:border-white bg-zinc-950 dark:bg-white text-white dark:text-zinc-950'
-                        : 'border-black/20 dark:border-white/20 bg-transparent text-transparent hover:border-black/40 dark:hover:border-white/40'
-                    }`}
+                {onNavigateToSchedule && (
+                  <SpecularButton
+                    onClick={onNavigateToSchedule}
+                    className="px-3 py-1.5 rounded-lg border border-transparent hover:border-black/15 dark:hover:border-white/[0.15] bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 text-xs font-mono font-semibold cursor-pointer transition-all"
                   >
-                    <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                  </button>
-                </div>
-
-                {/* Hints under fields (RU/EN, as required) */}
-                <div className="flex flex-col gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 border-t border-black/5 dark:border-white/[0.05] pt-2 mt-1">
-                  <p>• {isRu ? 'короткий перерыв — персонаж стоит на месте' : 'short break — character stays in place'}</p>
-                  <p>• {isRu ? 'длинный перерыв и конец дня — выход в меню персонажей; в мир бот входит сам (Enter)' : 'long break and day end — logout to character select; bot enters world automatically (Enter)'}</p>
-                  <p>• {isRu ? 'для выхода в меню нужна английская раскладка в игре' : 'English keyboard layout is required in game to logout'}</p>
-                </div>
+                    <span>{isRu ? 'Открыть расписание' : 'Open Schedule'}</span>
+                  </SpecularButton>
+                )}
               </div>
             </SpecularCard>
           </div>

@@ -36,6 +36,7 @@ import {
   DEFAULT_SCHEDULE_SETTINGS,
   validateScheduleSettings,
   getMockScheduleStatus,
+  normalizeScheduleSettings,
 } from './data/mockSchedule';
 import { ScheduleView } from './components/ScheduleView';
 
@@ -224,7 +225,7 @@ export const App: React.FC = () => {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === 'object') {
-          return { ...DEFAULT_SCHEDULE_SETTINGS, ...parsed };
+          return normalizeScheduleSettings(parsed);
         }
       } catch {}
     }
@@ -447,10 +448,7 @@ export const App: React.FC = () => {
 
               // Restore ScheduleSettings
               if (parsed.schedule && typeof parsed.schedule === 'object') {
-                setScheduleSettings((prev) => ({
-                  ...DEFAULT_SCHEDULE_SETTINGS,
-                  ...parsed.schedule,
-                }));
+                setScheduleSettings(normalizeScheduleSettings(parsed.schedule));
               }
             }
           } else if (res && !res.ok) {
@@ -1269,9 +1267,7 @@ export const App: React.FC = () => {
           onToggleBot={handleToggleBot}
           onExport={handleExportJson}
           onOpenSettings={() => setActiveTab('settings')}
-          onOpenSchedule={() => setActiveTab('schedule')}
           onOpenStats={handleOpenStats}
-          scheduleStatus={scheduleStatus}
         />
 
         {/* 1. ROUTES VIEW: Clean Route Card with Line-Sidebar Rail */}
@@ -1371,6 +1367,7 @@ export const App: React.FC = () => {
                 }}
                 scheduleError={scheduleError}
                 onBack={() => setActiveTab('routes')}
+                onNavigateToSchedule={() => setActiveTab('schedule')}
                 onExportJson={handleExportJson}
                 language={language}
                 onLanguageChange={setLanguage}
