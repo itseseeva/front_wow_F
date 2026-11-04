@@ -1,7 +1,8 @@
-import React from 'react';
 import { Sun, Moon, Download, SlidersHorizontal, BarChart3 } from 'lucide-react';
 import { SpecularButton } from './ui/Specular';
 import { soundFx } from '../utils/audio';
+import { ScheduleStatus } from '../types';
+import { ScheduleHUDCard } from './ScheduleHUDCard';
 
 interface StealthHUDTopToolbarProps {
   language: 'ru' | 'en';
@@ -13,6 +14,8 @@ interface StealthHUDTopToolbarProps {
   onExport: () => void;
   onOpenSettings: () => void;
   onOpenStats?: () => void;
+  onOpenSchedule?: () => void;
+  scheduleStatus?: ScheduleStatus | null;
 }
 
 export const StealthHUDTopToolbar: React.FC<StealthHUDTopToolbarProps> = ({
@@ -25,6 +28,8 @@ export const StealthHUDTopToolbar: React.FC<StealthHUDTopToolbarProps> = ({
   onExport,
   onOpenSettings,
   onOpenStats,
+  onOpenSchedule,
+  scheduleStatus,
 }) => {
   const isRu = language === 'ru';
 
@@ -67,6 +72,16 @@ export const StealthHUDTopToolbar: React.FC<StealthHUDTopToolbarProps> = ({
           <Moon className="w-3.5 h-3.5 stroke-[1.5]" />
         )}
       </button>
+
+      {/* Schedule HUD Card (beside Start/Stop button) */}
+      {scheduleStatus && (
+        <ScheduleHUDCard
+          scheduleStatus={scheduleStatus}
+          language={language}
+          onOpenSchedule={onOpenSchedule}
+          onOpenSettings={onOpenSettings}
+        />
+      )}
 
       {/* 4. Action Button: START / STOP (Ghost Specular Button) */}
       <SpecularButton

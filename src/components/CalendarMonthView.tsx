@@ -3,26 +3,7 @@ import { CalendarMonthResponse, CalendarDay } from '../types';
 import { ChevronLeft, ChevronRight, Download, RotateCcw } from 'lucide-react';
 import { SpecularButton } from './ui/Specular';
 import { soundFx } from '../utils/audio';
-
-function toRoman(num: number): string {
-  if (num <= 0) return '';
-  const romanNumerals: [number, string][] = [
-    [10, 'X'],
-    [9, 'IX'],
-    [5, 'V'],
-    [4, 'IV'],
-    [1, 'I'],
-  ];
-  let result = '';
-  let n = num;
-  for (const [val, sym] of romanNumerals) {
-    while (n >= val) {
-      result += sym;
-      n -= val;
-    }
-  }
-  return result;
-}
+import { toRoman, formatRouteRoman } from '../utils/roman';
 
 interface CalendarMonthViewProps {
   currentYear: number;
@@ -214,7 +195,7 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
             </span>
             <div className="flex flex-col gap-1">
               {monthData.routes.map((r, rIdx) => {
-                const cleanName = r.name.replace(/\s*\([^)]*\)/g, '').trim();
+                const cleanName = formatRouteRoman(r.name.replace(/\s*\([^)]*\)/g, '').trim());
                 return (
                   <div key={r.route_id} className="flex items-center gap-1.5 text-[10px] text-zinc-600 dark:text-zinc-400 truncate font-mono">
                     <span className="text-[9px] font-semibold text-zinc-500 dark:text-zinc-400 w-3 shrink-0">

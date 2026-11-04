@@ -18,6 +18,8 @@ import {
   CalendarMonthResponse,
   DayResponse,
   SessionHeatmapResponse,
+  ScheduleSettings,
+  ScheduleStatus,
 } from './types';
 import { soundFx } from './utils/audio';
 import { SpecularCard } from './components/ui/Specular';
@@ -29,6 +31,13 @@ import {
   getMockDay,
   getMockSessionHeatmapById,
 } from './data/mockCalendar';
+import { toRoman, formatRouteRoman } from './utils/roman';
+import {
+  DEFAULT_SCHEDULE_SETTINGS,
+  validateScheduleSettings,
+  getMockScheduleStatus,
+} from './data/mockSchedule';
+import { ScheduleView } from './components/ScheduleView';
 
 function formatDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
@@ -83,13 +92,18 @@ export const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((r: RouteItem) => ({
+            ...r,
+            name: formatRouteRoman(r.name),
+          }));
+        }
       } catch {}
     }
     return [
       {
         id: 'route_1',
-        name: 'Маршрут 1',
+        name: 'Маршрут I',
         type: 'КРУГ',
         duration: '≈132 с бега • 44 точки',
         points: 44,
@@ -97,7 +111,7 @@ export const App: React.FC = () => {
       },
       {
         id: 'route_2',
-        name: 'Маршрут 2',
+        name: 'Маршрут II',
         type: 'КРУГ',
         duration: '≈145 с бега • 52 точки',
         points: 52,
@@ -105,7 +119,7 @@ export const App: React.FC = () => {
       },
       {
         id: 'route_3',
-        name: 'Маршрут 3',
+        name: 'Маршрут III',
         type: 'ТОЧКА-ТОЧКА',
         duration: '≈98 с бега • 32 точки',
         points: 32,
@@ -203,6 +217,38 @@ export const App: React.FC = () => {
     sessionSecondsRef.current = sessionSeconds;
   }, [sessionSeconds]);
 
+  // Schedule Settings & Status State
+  const [scheduleSettings, setScheduleSettings] = useState<ScheduleSettings>(() => {
+    const saved = localStorage.getItem('wowbot_schedule');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return { ...DEFAULT_SCHEDULE_SETTINGS, ...parsed };
+        }
+      } catch {}
+    }
+    return DEFAULT_SCHEDULE_SETTINGS;
+  });
+
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [scheduleStatus, setScheduleStatus] = useState<ScheduleStatus | null>(() => {
+    return getMockScheduleStatus(isBotRunning, DEFAULT_SCHEDULE_SETTINGS);
+  });
+  const [scheduleToast, setScheduleToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!scheduleToast) return;
+    const timer = setTimeout(() => {
+      setScheduleToast(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [scheduleToast]);
+
+  useEffect(() => {
+    localStorage.setItem('wowbot_schedule', JSON.stringify(scheduleSettings));
+  }, [scheduleSettings]);
+
   // Sync to localStorage
   useEffect(() => {
     localStorage.setItem('wowbot_settings', JSON.stringify(settings));
@@ -216,9 +262,46 @@ export const App: React.FC = () => {
     localStorage.setItem('wowbot_lang', language);
   }, [language]);
 
+  // Fetch schedule status when bot is idle/stopped
+  const fetchScheduleStatus = useCallback(async () => {
+    try {
+      const api = await getPywebviewApi();
+      if (api?.get_schedule_status) {
+        const res = await api.get_schedule_status();
+        if (res && res.ok) {
+          setScheduleStatus(res);
+          return;
+        }
+      }
+      setScheduleStatus(getMockScheduleStatus(isBotRunningRef.current, scheduleSettings));
+    } catch (e) {
+      console.warn('get_schedule_status error:', e);
+      setScheduleStatus(getMockScheduleStatus(isBotRunningRef.current, scheduleSettings));
+    }
+  }, [scheduleSettings]);
+
+  useEffect(() => {
+    if (!isBotRunning) {
+      fetchScheduleStatus();
+    }
+  }, [isBotRunning, fetchScheduleStatus]);
+
   // Backend Bridge: autosave config
   const saveCurrentConfigToBackend = useCallback(
-    async (customChains = chains, customSettings = settings) => {
+    async (
+      customChains = chains,
+      customSettings = settings,
+      customSchedule = scheduleSettings
+    ) => {
+      // Validate schedule before saving
+      const valError = validateScheduleSettings(customSchedule, language === 'ru');
+      if (valError) {
+        setScheduleError(valError);
+        return false;
+      } else {
+        setScheduleError(null);
+      }
+
       const mainChain = customChains[0] || { steps: [] };
       const configObj = {
         settings: {
@@ -240,21 +323,30 @@ export const App: React.FC = () => {
             })),
           },
         ],
+        schedule: customSchedule,
       };
 
       try {
         const api = await getPywebviewApi();
         if (api?.save_config) {
-          await api.save_config(JSON.stringify(configObj, null, 2));
+          const res = await api.save_config(JSON.stringify(configObj, null, 2));
+          if (res && !res.ok) {
+            const errText = res.error || (language === 'ru' ? 'Ошибка сохранения' : 'Save error');
+            setScheduleError(errText.startsWith('Расписание:') ? errText : `Расписание: ${errText}`);
+            return false;
+          } else {
+            setScheduleError(null);
+          }
         }
       } catch (err) {
         console.warn('save_config auto-save warning:', err);
       }
+      return true;
     },
-    [chains, settings]
+    [chains, settings, scheduleSettings, language]
   );
 
-  // Debounced autosave on chain edit (only after initial load_config completes)
+  // Debounced autosave on chain/settings edit (only after initial load_config completes)
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -267,7 +359,7 @@ export const App: React.FC = () => {
       saveCurrentConfigToBackend();
     }, 600);
     return () => clearTimeout(timer);
-  }, [chains, saveCurrentConfigToBackend]);
+  }, [chains, settings, scheduleSettings, saveCurrentConfigToBackend]);
 
   // Fetch routes from backend
   const fetchRoutes = useCallback(async () => {
@@ -279,7 +371,7 @@ export const App: React.FC = () => {
           const isRu = language === 'ru';
           const mapped: RouteItem[] = res.routes.map((r) => ({
             id: r.id,
-            name: r.name,
+            name: formatRouteRoman(r.name),
             type: r.loop ? (isRu ? 'КРУГ' : 'LOOP') : (isRu ? 'ТОЧКА-ТОЧКА' : 'POINT-TO-POINT'),
             duration: isRu
               ? `≈${r.length_s} с бега • ${r.points} точек`
@@ -352,6 +444,14 @@ export const App: React.FC = () => {
                   })
                 );
               }
+
+              // Restore ScheduleSettings
+              if (parsed.schedule && typeof parsed.schedule === 'object') {
+                setScheduleSettings((prev) => ({
+                  ...DEFAULT_SCHEDULE_SETTINGS,
+                  ...parsed.schedule,
+                }));
+              }
             }
           } else if (res && !res.ok) {
             console.warn('load_config error:', res.error);
@@ -384,10 +484,16 @@ export const App: React.FC = () => {
         const status = await api.get_status();
         if (cancelled || !status) return;
 
+        // Take schedule from get_status() if available
+        if (status.schedule !== undefined) {
+          setScheduleStatus(status.schedule);
+        }
+
         // If bot stopped on its own (running === false, but UI is currently in running state)
         if (isBotRunningRef.current && !status.running) {
           setIsBotRunning(false);
           soundFx.playStop();
+          fetchScheduleStatus();
 
           let backendSummary: SessionSummaryData | null = null;
           if (api.get_last_session) {
@@ -475,12 +581,29 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleRenameRoute = async (id: string, newName: string) => {
+    soundFx.playClick();
+    const formatted = formatRouteRoman(newName.trim());
+    setRoutes((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, name: formatted } : r))
+    );
+    try {
+      const api = await getPywebviewApi();
+      if (api?.rename_route) {
+        await api.rename_route(id, formatted);
+      }
+    } catch (e) {
+      console.warn('rename_route error:', e);
+    }
+  };
+
   // Start inline route recording without popup window
   const handleStartRouteRecord = async () => {
     soundFx.playClick();
     const isRu = language === 'ru';
     const newRouteId = `route_${Date.now()}`;
-    const defaultName = isRu ? `Маршрут ${routes.length + 1}` : `Route ${routes.length + 1}`;
+    const romanIndex = toRoman(routes.length + 1);
+    const defaultName = isRu ? `Маршрут ${romanIndex}` : `Route ${romanIndex}`;
 
     const newRoute: RouteItem = {
       id: newRouteId,
@@ -907,26 +1030,52 @@ export const App: React.FC = () => {
     URL.revokeObjectURL(url);
   }, [calendarYear, calendarMonth, calendarMonthData, dayData]);
 
+  // Listen to 'wowbot:schedule-status' (fires on every phase change)
+  useEffect(() => {
+    const handleScheduleStatus = (e: Event) => {
+      const customEvent = e as CustomEvent<ScheduleStatus>;
+      if (customEvent.detail) {
+        setScheduleStatus(customEvent.detail);
+      }
+    };
+    window.addEventListener('wowbot:schedule-status', handleScheduleStatus);
+    return () => window.removeEventListener('wowbot:schedule-status', handleScheduleStatus);
+  }, []);
+
   // Listen for backend session summary event: 'wowbot:session-summary'
   useEffect(() => {
     const handleSessionSummaryEvent = (e: Event) => {
       const customEvent = e as CustomEvent<SessionSummaryData | null>;
       const detail = customEvent.detail;
-      setSessionSummary(detail || null);
-      setIsBotRunning(false);
-      setActiveTab('summary');
-      if (todayDateStr) {
-        setSelectedDate(todayDateStr);
-        fetchDayData(todayDateStr);
+      if (!detail) return;
+
+      if (isBotRunningRef.current) {
+        // Scheduled session completed while bot keeps running:
+        // Do NOT open modal summary! Show brief toast notification.
+        const durMin = Math.max(1, Math.round((detail.duration_s || 0) / 60));
+        const collected = (detail.kills || 0) + (detail.khorium || 0) + (detail.adamantite || 0) + (detail.fel_iron || 0);
+        const toastMsg = language === 'ru'
+          ? `Сессия по расписанию: ${durMin} мин, собрано ${collected}`
+          : `Scheduled session: ${durMin} min, gathered ${collected}`;
+        setScheduleToast(toastMsg);
+      } else {
+        // Bot has stopped: open modal summary
+        setSessionSummary(detail);
+        setIsBotRunning(false);
+        setActiveTab('summary');
+        if (todayDateStr) {
+          setSelectedDate(todayDateStr);
+          fetchDayData(todayDateStr);
+        }
+        fetchCalendarMonth(calendarYear, calendarMonth);
       }
-      fetchCalendarMonth(calendarYear, calendarMonth);
     };
 
     window.addEventListener('wowbot:session-summary', handleSessionSummaryEvent);
     return () => {
       window.removeEventListener('wowbot:session-summary', handleSessionSummaryEvent);
     };
-  }, [calendarYear, calendarMonth, todayDateStr, fetchDayData, fetchCalendarMonth]);
+  }, [calendarYear, calendarMonth, todayDateStr, fetchDayData, fetchCalendarMonth, language]);
 
   // Bot Start / Stop
   const handleToggleBot = async () => {
@@ -936,6 +1085,7 @@ export const App: React.FC = () => {
     if (isBotRunning) {
       soundFx.playStop();
       setIsBotRunning(false);
+      fetchScheduleStatus();
       let backendSummary: SessionSummaryData | null = null;
       if (api?.stop_bot) {
         try {
@@ -1119,7 +1269,9 @@ export const App: React.FC = () => {
           onToggleBot={handleToggleBot}
           onExport={handleExportJson}
           onOpenSettings={() => setActiveTab('settings')}
+          onOpenSchedule={() => setActiveTab('schedule')}
           onOpenStats={handleOpenStats}
+          scheduleStatus={scheduleStatus}
         />
 
         {/* 1. ROUTES VIEW: Clean Route Card with Line-Sidebar Rail */}
@@ -1130,6 +1282,7 @@ export const App: React.FC = () => {
                 routes={routes}
                 activeRouteId={activeRoute?.id || routes[0]?.id || ''}
                 onSelectRoute={handleSelectRoute}
+                onRenameRoute={handleRenameRoute}
                 onDeleteRoute={handleDeleteRoute}
                 onRecordRoute={handleStartRouteRecord}
                 onSaveRecording={handleSaveRecording}
@@ -1174,7 +1327,7 @@ export const App: React.FC = () => {
                 chains={chains}
                 onChainsChange={(newChains) => {
                   setChains(newChains);
-                  saveCurrentConfigToBackend(newChains, settings);
+                  saveCurrentConfigToBackend(newChains, settings, scheduleSettings);
                 }}
                 activeCasting={activeCasting}
                 isBotRunning={isBotRunning}
@@ -1185,7 +1338,21 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* 3. SETTINGS VIEW: Full AppSettings Editor */}
+        {/* 3. SCHEDULE VIEW: Interactive Timeline, Dual-Track Sliders & Presets */}
+        {activeTab === 'schedule' && (
+          <ScheduleView
+            scheduleSettings={scheduleSettings}
+            onScheduleSettingsChange={(newSchedule) => {
+              setScheduleSettings(newSchedule);
+              saveCurrentConfigToBackend(chains, settings, newSchedule);
+            }}
+            scheduleStatus={scheduleStatus}
+            scheduleError={scheduleError}
+            language={language}
+          />
+        )}
+
+        {/* 3. SETTINGS VIEW: Full AppSettings Editor & Farm Schedule */}
         {activeTab === 'settings' && (
           <div className="relative w-full h-full p-4 sm:p-6 2xl:p-10 pt-16 sm:pt-20 pb-8 flex flex-col justify-start overflow-y-auto animate-assemble">
             <SpecularCard
@@ -1195,8 +1362,14 @@ export const App: React.FC = () => {
                 settings={settings}
                 onSettingsChange={(newSettings) => {
                   setSettings(newSettings);
-                  saveCurrentConfigToBackend(chains, newSettings);
+                  saveCurrentConfigToBackend(chains, newSettings, scheduleSettings);
                 }}
+                scheduleSettings={scheduleSettings}
+                onScheduleSettingsChange={(newSchedule) => {
+                  setScheduleSettings(newSchedule);
+                  saveCurrentConfigToBackend(chains, settings, newSchedule);
+                }}
+                scheduleError={scheduleError}
                 onBack={() => setActiveTab('routes')}
                 onExportJson={handleExportJson}
                 language={language}
@@ -1226,6 +1399,21 @@ export const App: React.FC = () => {
         )}
 
       </div>
+
+      {/* Floating Scheduled Session Toast Notification */}
+      {scheduleToast && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl border border-black/15 dark:border-white/15 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md shadow-lg text-xs font-mono text-zinc-950 dark:text-white flex items-center gap-2.5 animate-fadeIn">
+          <span className="w-2 h-2 rounded-full bg-zinc-950 dark:bg-white animate-pulse" />
+          <span>{scheduleToast}</span>
+          <button
+            type="button"
+            onClick={() => setScheduleToast(null)}
+            className="ml-2 text-zinc-400 hover:text-zinc-950 dark:hover:text-white p-0.5 rounded cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

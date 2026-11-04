@@ -1,14 +1,16 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, Trash2, Check, Plus } from 'lucide-react';
+import { Loader2, Trash2, Check, Plus, Pencil, X } from 'lucide-react';
 import { RouteItem } from './StealthHUDLeftSidebar';
 import { SpecularCard, SpecularButton } from './ui/Specular';
 import { soundFx } from '../utils/audio';
+import { formatRouteRoman } from '../utils/roman';
 
 interface LineSidebarRouteListProps {
   routes: RouteItem[];
   activeRouteId: string;
   onSelectRoute: (id: string) => void;
   onDeleteRoute?: (id: string) => void;
+  onRenameRoute?: (id: string, newName: string) => void;
   onRecordRoute?: () => void;
   onSaveRecording?: (id: string) => void;
   onCancelRecording?: (id: string) => void;
@@ -27,6 +29,7 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
   activeRouteId,
   onSelectRoute,
   onDeleteRoute,
+  onRenameRoute,
   onRecordRoute,
   onSaveRecording,
   onCancelRecording,
@@ -35,6 +38,10 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
   const isRu = language === 'ru';
   const containerRef = useRef<HTMLDivElement | null>(null);
   const itemsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Editing route name state
+  const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
+  const [editNameValue, setEditNameValue] = useState<string>('');
 
   // Proximity displacement offsets for each route item (index -> px shift)
   const [proximityOffsets, setProximityOffsets] = useState<Record<string, number>>({});
@@ -107,14 +114,42 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
     setHoveredId(null);
   };
 
+  const handleStartEdit = (e: React.MouseEvent, route: RouteItem) => {
+    e.stopPropagation();
+    soundFx.playClick();
+    setEditingRouteId(route.id);
+    setEditNameValue(getRouteDisplayName(route.name));
+  };
+
+  const handleSaveEdit = (e?: React.MouseEvent | React.FormEvent, routeId?: string) => {
+    if (e) e.stopPropagation();
+    soundFx.playClick();
+    const targetId = routeId || editingRouteId;
+    if (!targetId) return;
+    const trimmed = editNameValue.trim();
+    if (trimmed && onRenameRoute) {
+      onRenameRoute(targetId, trimmed);
+    }
+    setEditingRouteId(null);
+    setEditNameValue('');
+  };
+
+  const handleCancelEdit = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    soundFx.playClick();
+    setEditingRouteId(null);
+    setEditNameValue('');
+  };
+
   const getRouteDisplayName = (name: string) => {
-    if (name.startsWith('Маршрут ') && !isRu) {
-      return name.replace('Маршрут ', 'Route ');
+    const formatted = formatRouteRoman(name);
+    if (formatted.startsWith('Маршрут ') && !isRu) {
+      return formatted.replace('Маршрут ', 'Route ');
     }
-    if (name.startsWith('Route ') && isRu) {
-      return name.replace('Route ', 'Маршрут ');
+    if (formatted.startsWith('Route ') && isRu) {
+      return formatted.replace('Route ', 'Маршрут ');
     }
-    return name;
+    return formatted;
   };
 
   return (
@@ -258,6 +293,42 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
                         )}
                       </div>
                     </div>
+                  ) : editingRouteId === route.id ? (
+                    <div className="flex items-center justify-between w-full" onClick={(e) => e.stopPropagation()}>
+                      {/* Inline Edit Input */}
+                      <input
+                        type="text"
+                        value={editNameValue}
+                        onChange={(e) => setEditNameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === 'Enter') handleSaveEdit(undefined, route.id);
+                          if (e.key === 'Escape') handleCancelEdit();
+                        }}
+                        autoFocus
+                        className="h-7 px-2 py-0.5 rounded border border-zinc-950/40 dark:border-white/40 bg-black/10 dark:bg-white/10 text-xs sm:text-sm font-mono text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white w-48 max-w-[70%]"
+                      />
+
+                      {/* Save & Cancel Actions */}
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <button
+                          type="button"
+                          onClick={(e) => handleSaveEdit(e, route.id)}
+                          className="p-1 rounded text-zinc-950 dark:text-white hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                          title={isRu ? 'Сохранить имя' : 'Save name'}
+                        >
+                          <Check className="w-4 h-4 stroke-[2.5]" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelEdit}
+                          className="p-1 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                          title={isRu ? 'Отмена' : 'Cancel'}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
                   ) : (
                     <div className="flex items-center justify-between w-full">
                       {/* Route Name */}
@@ -273,10 +344,21 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
                         {displayName}
                       </span>
 
-                      {/* Right actions: White Checkmark for active route + Delete icon */}
-                      <div className="flex items-center gap-2 ml-auto">
+                      {/* Right actions: Checkmark for active route (left), Edit pencil (right of checkmark), Delete icon */}
+                      <div className="flex items-center gap-1.5 ml-auto">
                         {isActive && (
                           <Check className="w-4 h-4 text-zinc-950 dark:text-white stroke-[2.5] drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]" />
+                        )}
+
+                        {onRenameRoute && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleStartEdit(e, route)}
+                            className="text-zinc-400 hover:text-zinc-950 dark:hover:text-white cursor-pointer transition-colors p-1.5 rounded opacity-75 group-hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5"
+                            title={isRu ? 'Переименовать маршрут' : 'Rename route'}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
                         )}
 
                         {onDeleteRoute && (

@@ -4,12 +4,13 @@ import {
   Crosshair,
   SlidersHorizontal,
   BarChart3,
+  CalendarClock,
 } from 'lucide-react';
 import { soundFx } from '../utils/audio';
 import { CalendarMonthResponse } from '../types';
 import { CalendarMonthView } from './CalendarMonthView';
 
-export type NavTab = 'routes' | 'rotation' | 'summary' | 'settings';
+export type NavTab = 'routes' | 'rotation' | 'schedule' | 'summary' | 'settings';
 
 export interface RouteItem {
   id: string;
@@ -60,6 +61,19 @@ export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
 }) => {
   const isRu = language === 'ru';
 
+  const NAV_ITEMS: {
+    id: NavTab;
+    labelRu: string;
+    labelEn: string;
+    icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  }[] = [
+    { id: 'routes', labelRu: 'Навигация и фарм', labelEn: 'Navigation & Farm', icon: Route },
+    { id: 'rotation', labelRu: 'Бой / Ротация', labelEn: 'Combat / Rotation', icon: Crosshair },
+    { id: 'schedule', labelRu: 'Расписание', labelEn: 'Schedule', icon: CalendarClock },
+    { id: 'summary', labelRu: 'Статистика', labelEn: 'Statistics', icon: BarChart3 },
+    { id: 'settings', labelRu: 'Настройки', labelEn: 'Settings', icon: SlidersHorizontal },
+  ];
+
   return (
     <aside
       className="relative flex flex-col justify-between select-none border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] rounded-2xl transition-all duration-200 h-[calc(100vh-20px)] sm:h-[calc(100vh-28px)] xl:h-[calc(100vh-36px)] m-2.5 sm:m-3.5 xl:m-4.5 w-[230px] sm:w-[245px] md:w-[260px] lg:w-[275px] xl:w-[290px] 2xl:w-[305px] shrink-0 bg-transparent shadow-none"
@@ -81,75 +95,70 @@ export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
           </span>
         </div>
 
-        {/* 2. Strict Segmented Control Navigation (Routes, Rotation, Summary, Settings) */}
-        <nav className="bg-transparent p-0.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] flex items-center gap-1 transition-all duration-200">
-          {/* Tab 1: Routes */}
-          <button
-            type="button"
-            onClick={() => onTabChange('routes')}
-            className={`flex-1 h-9 rounded-lg flex flex-col items-center justify-center relative transition-all cursor-pointer ${
-              activeTab === 'routes'
-                ? 'text-zinc-950 dark:text-white font-semibold'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
-            }`}
-            title={isRu ? 'Маршруты' : 'Routes'}
-          >
-            <Route className="w-4 h-4" strokeWidth={1.5} />
-            {activeTab === 'routes' && (
-              <span className="w-1 h-1 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.4)] dark:shadow-[0_0_6px_rgba(255,255,255,0.9)] absolute bottom-1" />
-            )}
-          </button>
+        {/* 2. Vertical Fixed Navigation (Sections with Text & White Active Indicator) */}
+        <nav className="relative bg-transparent py-1 flex flex-col gap-1 transition-all duration-200 border-b border-black/10 dark:border-white/10 pb-3">
+          <div className="px-2 pb-1">
+            <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-mono">
+              {isRu ? 'Разделы' : 'Sections'}
+            </span>
+          </div>
 
-          {/* Tab 2: Rotation */}
-          <button
-            type="button"
-            onClick={() => onTabChange('rotation')}
-            className={`flex-1 h-9 rounded-lg flex flex-col items-center justify-center relative transition-all cursor-pointer ${
-              activeTab === 'rotation'
-                ? 'text-zinc-950 dark:text-white font-semibold'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
-            }`}
-            title={isRu ? 'Боевая ротация' : 'Combat Rotation'}
-          >
-            <Crosshair className="w-4 h-4" strokeWidth={1.5} />
-            {activeTab === 'rotation' && (
-              <span className="w-1 h-1 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.4)] dark:shadow-[0_0_6px_rgba(255,255,255,0.9)] absolute bottom-1" />
-            )}
-          </button>
+          <div className="flex flex-col gap-1">
+            {NAV_ITEMS.map((item) => {
+              const isActive = activeTab === item.id;
+              const Icon = item.icon;
 
-          {/* Tab 3: Session Summary / Analytics */}
-          <button
-            type="button"
-            onClick={() => onTabChange('summary')}
-            className={`flex-1 h-9 rounded-lg flex flex-col items-center justify-center relative transition-all cursor-pointer ${
-              activeTab === 'summary'
-                ? 'text-zinc-950 dark:text-white font-semibold'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
-            }`}
-            title={isRu ? 'Итоги сессии' : 'Session Summary'}
-          >
-            <BarChart3 className="w-4 h-4" strokeWidth={1.5} />
-            {activeTab === 'summary' && (
-              <span className="w-1 h-1 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.4)] dark:shadow-[0_0_6px_rgba(255,255,255,0.9)] absolute bottom-1" />
-            )}
-          </button>
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    soundFx.playClick();
+                    onTabChange(item.id);
+                  }}
+                  className={`group/item relative flex items-center h-10 w-full pl-2.5 pr-2 rounded-xl transition-all duration-150 cursor-pointer outline-none ${
+                    isActive
+                      ? 'text-zinc-950 dark:text-white bg-black/[0.04] dark:bg-white/[0.05]'
+                      : 'text-zinc-400 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-100 hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
+                  }`}
+                >
+                  {/* Left White Accent Bar (Pure white in dark theme, replacing blue) */}
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r bg-zinc-950 dark:bg-white shadow-[0_0_8px_rgba(0,0,0,0.5)] dark:shadow-[0_0_8px_rgba(255,255,255,0.9)] transition-all duration-200" />
+                  )}
 
-          {/* Tab 4: Settings */}
-          <button
-            type="button"
-            onClick={() => onTabChange('settings')}
-            className={`flex-1 h-9 rounded-lg flex flex-col items-center justify-center relative transition-all cursor-pointer ${
-              activeTab === 'settings'
-                ? 'text-zinc-950 dark:text-white font-semibold'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
-            }`}
-            title={isRu ? 'Настройки' : 'Settings'}
-          >
-            <SlidersHorizontal className="w-4 h-4" strokeWidth={1.5} />
-            {activeTab === 'settings' && (
-              <span className="w-1 h-1 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.4)] dark:shadow-[0_0_6px_rgba(255,255,255,0.9)] absolute bottom-1" />
-            )}
-          </button>
+                  {/* Icon Column (Icon + Glowing dot below when active) */}
+                  <div className="flex flex-col items-center justify-center w-8 shrink-0 relative">
+                    <Icon
+                      className={`w-5 h-5 transition-transform duration-200 ${
+                        isActive
+                          ? 'text-zinc-950 dark:text-white scale-105'
+                          : 'text-zinc-400 dark:text-zinc-400 group-hover/item:text-zinc-800 dark:group-hover/item:text-zinc-200 group-hover/item:scale-105'
+                      }`}
+                      strokeWidth={isActive ? 2 : 1.75}
+                    />
+                    {/* Glowing dot underneath active icon */}
+                    {isActive && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.5)] dark:shadow-[0_0_8px_rgba(255,255,255,0.95)] mt-0.5 shrink-0" />
+                    )}
+                  </div>
+
+                  {/* Text Label: Always visible and pinned */}
+                  <div className="flex items-center ml-3 min-w-0">
+                    <span
+                      className={`font-mono text-sm tracking-wide whitespace-nowrap truncate transition-colors duration-150 ${
+                        isActive
+                          ? 'text-zinc-950 dark:text-white font-medium'
+                          : 'text-zinc-500 dark:text-zinc-400 group-hover/item:text-zinc-900 dark:group-hover/item:text-zinc-100'
+                      }`}
+                    >
+                      {isRu ? item.labelRu : item.labelEn}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </nav>
 
         {/* Dynamic Sidebar Content */}

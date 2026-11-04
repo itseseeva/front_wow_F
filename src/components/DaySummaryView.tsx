@@ -4,6 +4,7 @@ import { BarChart3, Calendar as CalendarIcon, Clock, Loader2, Maximize2 } from '
 import { SpecularCard } from './ui/Specular';
 import { HeatmapViewer } from './HeatmapViewer';
 import { soundFx } from '../utils/audio';
+import { formatRouteRoman } from '../utils/roman';
 
 interface DaySummaryViewProps {
   selectedDate: string;
@@ -98,7 +99,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
       hour: '2-digit',
       minute: '2-digit',
     });
-    const cleanRouteName = activeSession.route_name.replace(/\s*\([^)]*\)/g, '').trim();
+    const cleanRouteName = formatRouteRoman(activeSession.route_name.replace(/\s*\([^)]*\)/g, '').trim());
     heatmapLabel = isAllDay
       ? `${isRu ? 'карта: ' : 'map: '}${timeStr} · ${cleanRouteName}`
       : `${timeStr} · ${cleanRouteName}`;
@@ -194,7 +195,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                   hour: '2-digit',
                   minute: '2-digit',
                 });
-                const cleanRouteName = s.route_name.replace(/\s*\([^)]*\)/g, '').trim();
+                const cleanRouteName = formatRouteRoman(s.route_name.replace(/\s*\([^)]*\)/g, '').trim());
 
                 return (
                   <button

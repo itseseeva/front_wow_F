@@ -34,6 +34,7 @@ export interface BotStatusResponse {
   chat_running?: boolean;
   ok?: boolean;
   error?: string;
+  schedule?: ScheduleStatus | null;
 }
 
 export interface TerrainStatus {
@@ -192,6 +193,44 @@ export interface DayResponse {
   sessions: DaySession[]; // по времени начала
 }
 
+export type SchedulePhase = 'idle' | 'farm' | 'short_break' | 'long_break' | 'wait_window' | 'day_done' | 'off_day';
+
+export interface ScheduleSettings {
+  enabled: boolean;
+  sessionMinutes: [number, number];      // длина сессии от–до, 10..240
+  shortBreakMinutes: [number, number];   // короткий перерыв, 1..60
+  longBreakMinutes: [number, number];    // длинный перерыв, 10..240
+  longBreakEvery: [number, number];      // длинный перерыв после каждых N сессий, целые 1..10
+  dailyHours: [number, number];          // норма в день, часы 0.5..12
+  offDayPercent: number;                 // шанс выходного, 0..50
+  windowStart: string;                   // "HH:MM" — с какого времени можно играть
+  windowEnd: string;                     // "HH:MM" — до какого (может быть после полуночи, например "02:00")
+  startJitterMinutes: number;            // 0..120 — начало и конец окна каждый день сдвигаются внутрь случайно
+  longBreakLogout: boolean;              // длинный перерыв — выход в меню персонажей
+}
+
+export interface ScheduleToday {
+  date: string;        // 'YYYY-MM-DD' (игровой день начинается в 05:00)
+  off: boolean;        // сегодня выходной
+  budget_s: number;    // норма на сегодня, секунды
+  played_s: number;    // уже сыграно сегодня
+  sessions: number;
+  start_ms: number;    // когда сегодня можно начать (уже со случайным сдвигом)
+  end_ms: number;      // когда сегодня закончить
+}
+
+export interface ScheduleStatus {
+  ok: boolean;
+  error?: string;
+  enabled: boolean;
+  active: boolean;                 // расписание сейчас крутится (бот запущен)
+  phase: SchedulePhase;
+  phase_until_ms: number | null;   // до какого момента текущая фаза
+  in_world: boolean | null;        // false — персонаж в меню персонажей
+  note: string;                    // пояснение от бэкенда, показать мелко
+  today: ScheduleToday | null;
+}
+
 declare global {
   interface Window {
     pywebview?: {
@@ -212,6 +251,7 @@ declare global {
         list_routes?(): Promise<{ ok: boolean; error?: string; routes: RouteInfo[]; active_id: string | null }>;
         get_route_preview?(id: string): Promise<{ ok: boolean; error?: string; preview?: RoutePreview }>;
         delete_route?(id: string): Promise<{ ok: boolean; error?: string }>;
+        rename_route?(id: string, new_name: string): Promise<{ ok: boolean; error?: string }>;
         set_active_route?(id: string | null): Promise<{ ok: boolean; error?: string }>;
 
         // Map Image & Terrain API
@@ -225,6 +265,9 @@ declare global {
         get_calendar_month?(year: number, month: number): Promise<CalendarMonthResponse>;
         get_day?(date: string): Promise<DayResponse>;
         get_session_heatmap_by_id?(session_id: string, pass_index: number | null): Promise<SessionHeatmapResponse>;
+
+        // Schedule API
+        get_schedule_status?(): Promise<ScheduleStatus>;
       };
     };
   }

@@ -20,9 +20,9 @@ export const ROUTE_PALETTE = [
 ];
 
 export const MOCK_CALENDAR_ROUTES: CalendarRoute[] = [
-  { route_id: 'route_1', name: 'Маршрут 1', color_index: 0 },
-  { route_id: 'route_2', name: 'Маршрут 2', color_index: 1 },
-  { route_id: 'route_3', name: 'Маршрут 3', color_index: 2 },
+  { route_id: 'route_1', name: 'Маршрут I', color_index: 0 },
+  { route_id: 'route_2', name: 'Маршрут II', color_index: 1 },
+  { route_id: 'route_3', name: 'Маршрут III', color_index: 2 },
 ];
 
 /**
@@ -124,7 +124,7 @@ export function getMockDay(dateStr: string): DayResponse {
     started_at_ms: baseTime,
     stopped_at_ms: baseTime + 2360 * 1000,
     route_id: 'route_3',
-    route_name: 'Маршрут 3',
+    route_name: 'Маршрут III',
     color_index: 2, // Amber/Rust
     summary: session1Summary,
     passes: 7,
@@ -159,7 +159,7 @@ export function getMockDay(dateStr: string): DayResponse {
     started_at_ms: baseTime2,
     stopped_at_ms: baseTime2 + 1625 * 1000,
     route_id: 'route_1',
-    route_name: 'Маршрут 1',
+    route_name: 'Маршрут I',
     color_index: 0, // Emerald
     summary: session2Summary,
     passes: 4,
