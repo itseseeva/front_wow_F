@@ -34,6 +34,72 @@ export const SpecularTimePicker: React.FC<SpecularTimePickerProps> = ({
 
   const hInputRef = useRef<HTMLInputElement>(null);
   const mInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hoursRef = useRef<HTMLDivElement>(null);
+  const minutesRef = useRef<HTMLDivElement>(null);
+
+  const stateRef = useRef({ hours, minutes, formatH, formatM, disabled, onChange });
+  useEffect(() => {
+    stateRef.current = { hours, minutes, formatH, formatM, disabled, onChange };
+  }, [hours, minutes, formatH, formatM, disabled, onChange]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      // Intercept and prevent the outer page/application from scrolling
+      e.preventDefault();
+      e.stopPropagation();
+
+      const {
+        hours: curH,
+        minutes: curM,
+        formatH: curFH,
+        formatM: curFM,
+        disabled: curDisabled,
+        onChange: curOnChange,
+      } = stateRef.current;
+
+      if (curDisabled) return;
+
+      const delta = e.deltaY < 0 ? 1 : -1;
+      soundFx.playClick();
+
+      const isMinutes = minutesRef.current?.contains(e.target as Node);
+      const isHours = hoursRef.current?.contains(e.target as Node);
+
+      if (isMinutes) {
+        let nextM = curM + delta * 5;
+        if (nextM < 0) nextM = 55;
+        else if (nextM >= 60) nextM = 0;
+        else nextM = Math.round(nextM / 5) * 5;
+        curOnChange(`${curFH}:${String(nextM).padStart(2, '0')}`);
+      } else if (isHours) {
+        const nextH = (curH + delta + 24) % 24;
+        curOnChange(`${String(nextH).padStart(2, '0')}:${curFM}`);
+      } else {
+        // Hovered elsewhere on the time picker: decide based on cursor position
+        const rect = el.getBoundingClientRect();
+        const isRightHalf = (e.clientX - rect.left) > rect.width / 2;
+        if (isRightHalf) {
+          let nextM = curM + delta * 5;
+          if (nextM < 0) nextM = 55;
+          else if (nextM >= 60) nextM = 0;
+          else nextM = Math.round(nextM / 5) * 5;
+          curOnChange(`${curFH}:${String(nextM).padStart(2, '0')}`);
+        } else {
+          const nextH = (curH + delta + 24) % 24;
+          curOnChange(`${String(nextH).padStart(2, '0')}:${curFM}`);
+        }
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isEditingH) setTempH(formatH);
@@ -77,17 +143,9 @@ export const SpecularTimePicker: React.FC<SpecularTimePickerProps> = ({
     onChange(`${formatH}:${String(val).padStart(2, '0')}`);
   };
 
-  const handleWheel = (e: React.WheelEvent, isH: boolean) => {
-    e.preventDefault();
-    if (isH) {
-      stepHour(e.deltaY < 0 ? 1 : -1);
-    } else {
-      stepMinute(e.deltaY < 0 ? 1 : -1);
-    }
-  };
-
   return (
     <div
+      ref={containerRef}
       className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-xl bg-black/60 border border-white/15 hover:border-white/35 text-xs font-mono text-white shadow-sm transition-all select-none ${
         disabled ? 'opacity-40 pointer-events-none' : ''
       } ${className}`}
@@ -95,8 +153,8 @@ export const SpecularTimePicker: React.FC<SpecularTimePickerProps> = ({
     >
       {/* Hours Stepper / Input */}
       <div
+        ref={hoursRef}
         className="flex items-center group relative cursor-pointer"
-        onWheel={(e) => handleWheel(e, true)}
         title="Колесо мыши или клик: изменить часы"
       >
         {isEditingH ? (
@@ -165,8 +223,8 @@ export const SpecularTimePicker: React.FC<SpecularTimePickerProps> = ({
 
       {/* Minutes Stepper / Input */}
       <div
+        ref={minutesRef}
         className="flex items-center group relative cursor-pointer"
-        onWheel={(e) => handleWheel(e, false)}
         title="Колесо мыши или клик: изменить минуты"
       >
         {isEditingM ? (

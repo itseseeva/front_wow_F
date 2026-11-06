@@ -3,7 +3,6 @@ import { CalendarMonthResponse, CalendarDay } from '../types';
 import { ChevronLeft, ChevronRight, Download, RotateCcw } from 'lucide-react';
 import { SpecularButton } from './ui/Specular';
 import { soundFx } from '../utils/audio';
-import { toRoman, formatRouteRoman } from '../utils/roman';
 
 interface CalendarMonthViewProps {
   currentYear: number;
@@ -170,15 +169,16 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
                     {dayNum}
                   </span>
 
-                  {/* Roman numerals for route count & problem marker */}
-                  <div className="flex items-center justify-center gap-0.5 mt-0.5 h-2">
-                    {hasSessions && routeCount > 0 && (
-                      <span className="text-[8.5px] font-mono leading-none tracking-tight text-zinc-700 dark:text-zinc-300 font-semibold select-none">
-                        {toRoman(routeCount)}
-                      </span>
+                  {/* Activity & status white circle indicators (no Roman numerals, white circles) */}
+                  <div className="flex items-center justify-center gap-1 mt-0.5 h-2">
+                    {hasSessions && !dayData?.problem && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_5px_rgba(255,255,255,0.7)] shrink-0" />
                     )}
                     {dayData?.problem && (
-                      <span className="w-1 h-1 rounded-full bg-red-500 shrink-0 animate-pulse ml-0.5" title="Problem" />
+                      <span
+                        className="w-1.5 h-1.5 rounded-full bg-white dark:bg-white shadow-[0_0_8px_rgba(255,255,255,0.95)] border border-black/20 dark:border-white/40 shrink-0 animate-pulse"
+                        title={isRu ? 'Проблема / сбой' : 'Problem'}
+                      />
                     )}
                   </div>
                 </button>
@@ -195,11 +195,19 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
             </span>
             <div className="flex flex-col gap-1">
               {monthData.routes.map((r, rIdx) => {
-                const cleanName = formatRouteRoman(r.name.replace(/\s*\([^)]*\)/g, '').trim());
+                const cleanName = r.name
+                  .replace(/\s*\([^)]*\)/g, '')
+                  .replace(/Маршрут\s+I\b/gi, 'Маршрут 1')
+                  .replace(/Маршрут\s+II\b/gi, 'Маршрут 2')
+                  .replace(/Маршрут\s+III\b/gi, 'Маршрут 3')
+                  .replace(/Route\s+I\b/gi, 'Route 1')
+                  .replace(/Route\s+II\b/gi, 'Route 2')
+                  .replace(/Route\s+III\b/gi, 'Route 3')
+                  .trim();
                 return (
                   <div key={r.route_id} className="flex items-center gap-1.5 text-[10px] text-zinc-600 dark:text-zinc-400 truncate font-mono">
                     <span className="text-[9px] font-semibold text-zinc-500 dark:text-zinc-400 w-3 shrink-0">
-                      {toRoman(rIdx + 1)}
+                      {rIdx + 1}
                     </span>
                     <span className="truncate">{cleanName}</span>
                   </div>

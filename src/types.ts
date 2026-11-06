@@ -215,6 +215,7 @@ export interface DaySchedule {
   longBreakMinutes: [number, number];     // длинный перерыв, 10–240 мин
   longBreakEvery: [number, number];       // длинный перерыв после каждых N сессий, целые 1–10
   longBreakLogout: boolean;               // на длинный перерыв выходить в меню персонажей
+  longBreaks?: boolean;
 }
 
 export interface ScheduleSettings {
