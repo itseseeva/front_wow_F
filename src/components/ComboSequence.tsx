@@ -63,6 +63,8 @@ export const ComboSequence: React.FC<Props> = ({
     steps: [],
   };
 
+  const hasWaterStep = currentChain.steps.some((s) => s.stepType === 'water');
+
   // Active step being configured in bottom docked editor (Open by default on slot 1)
   const [editingStep, setEditingStep] = useState<{ chainId: string; stepId: string } | null>(() => {
     if (currentChain && currentChain.steps.length > 0) {
@@ -206,12 +208,26 @@ export const ComboSequence: React.FC<Props> = ({
 
   // Create a new step with captured key and open docked editor panel
   const handleCreateStepWithKey = (chainId: string, key: string, stepType: 'skill' | 'water' = 'skill') => {
+    const upKey = key.toUpperCase();
+    if (stepType === 'water') {
+      const clash = currentChain.steps.some((s) => s.stepType !== 'water' && s.key.toUpperCase() === upKey);
+      if (clash) {
+        setIsAddingNewStep(null);
+        return;
+      }
+    } else {
+      const clash = currentChain.steps.some((s) => s.stepType === 'water' && s.key.toUpperCase() === upKey);
+      if (clash) {
+        setIsAddingNewStep(null);
+        return;
+      }
+    }
     soundFx.playClick();
     const nextIdx = currentChain.steps.length + 1;
     const newStepId = `step_${Date.now()}_${stepType}_${nextIdx}`;
     const newStep: ChainStep = {
       id: newStepId,
-      key: key.toUpperCase(),
+      key: upKey,
       castTimeSeconds: stepType === 'water' ? 0 : 1.5,
       skillCooldownSeconds: 0,
       repeatCount: 1,
@@ -248,13 +264,30 @@ export const ComboSequence: React.FC<Props> = ({
 
   // Quick key update from slot keypress: saves key and opens editing panel
   const handleUpdateStepKey = (chainId: string, stepId: string, newKey: string) => {
+    const upKey = newKey.toUpperCase();
+    const targetStep = currentChain.steps.find((s) => s.id === stepId);
+    if (targetStep) {
+      if (targetStep.stepType === 'water') {
+        const clash = currentChain.steps.some((s) => s.id !== stepId && s.stepType !== 'water' && s.key.toUpperCase() === upKey);
+        if (clash) {
+          setActiveCapturingStepId(null);
+          return;
+        }
+      } else {
+        const clash = currentChain.steps.some((s) => s.id !== stepId && s.stepType === 'water' && s.key.toUpperCase() === upKey);
+        if (clash) {
+          setActiveCapturingStepId(null);
+          return;
+        }
+      }
+    }
     const updated = chains.map((c) => {
       if (c.id !== chainId) return c;
       return {
         ...c,
         steps: c.steps.map((s) => {
           if (s.id !== stepId) return s;
-          return { ...s, key: newKey.toUpperCase(), actionType: 'press' as const };
+          return { ...s, key: upKey, actionType: 'press' as const };
         }),
       };
     });
@@ -498,43 +531,45 @@ export const ComboSequence: React.FC<Props> = ({
           </button>
         )}
 
-        {/* Special Blue Dashed '+' Button for Water / Mana regen - morphs coolly into glowing 'ЖМИ' on click */}
-        {isAddingNewStep === 'water' ? (
-          <button
-            ref={addingBtnRef}
-            type="button"
-            tabIndex={0}
-            autoFocus
-            onBlur={() => setIsAddingNewStep(null)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setIsAddingNewStep(null);
-                return;
-              }
-              const captured = getPhysicalKeyFromEvent(e);
-              if (captured !== null) {
-                e.preventDefault();
-                e.stopPropagation();
-                handleCreateStepWithKey(currentChain.id, captured, 'water');
-              }
-            }}
-            className="w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg border-2 border-blue-400 bg-blue-500/20 text-blue-300 shadow-[0_0_14px_rgba(59,130,246,0.5)] scale-105 animate-pulse font-mono font-bold text-[11px] sm:text-xs flex items-center justify-center cursor-pointer shrink-0 transition-all outline-none"
-            title={isRu ? 'Нажмите клавишу для слота воды (Esc для отмены)' : 'Press key for water slot (Esc to cancel)'}
-          >
-            {isRu ? 'ЖМИ' : 'PRESS'}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              soundFx.playClick();
-              setIsAddingNewStep('water');
-            }}
-            title={isRu ? 'Добавить слот для воды (манареген)' : 'Add water/mana slot'}
-            className="w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg border border-dashed border-blue-500/60 hover:border-blue-400 hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 transition-all flex items-center justify-center cursor-pointer shrink-0 relative group"
-          >
-            <Plus className="w-4 h-4 stroke-[1.5] text-blue-400 group-hover:scale-110 transition-transform" />
-          </button>
+        {/* Special Blue Dashed '+' Button for Water / Mana regen - only if no water slot exists yet */}
+        {!hasWaterStep && (
+          isAddingNewStep === 'water' ? (
+            <button
+              ref={addingBtnRef}
+              type="button"
+              tabIndex={0}
+              autoFocus
+              onBlur={() => setIsAddingNewStep(null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setIsAddingNewStep(null);
+                  return;
+                }
+                const captured = getPhysicalKeyFromEvent(e);
+                if (captured !== null) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleCreateStepWithKey(currentChain.id, captured, 'water');
+                }
+              }}
+              className="w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg border-2 border-blue-400 bg-blue-500/20 text-blue-300 shadow-[0_0_14px_rgba(59,130,246,0.5)] scale-105 animate-pulse font-mono font-bold text-[11px] sm:text-xs flex items-center justify-center cursor-pointer shrink-0 transition-all outline-none"
+              title={isRu ? 'Нажмите клавишу для слота воды (Esc для отмены)' : 'Press key for water slot (Esc to cancel)'}
+            >
+              {isRu ? 'ЖМИ' : 'PRESS'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                soundFx.playClick();
+                setIsAddingNewStep('water');
+              }}
+              title={isRu ? 'Добавить слот для воды (манареген)' : 'Add water/mana slot'}
+              className="w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg border border-dashed border-blue-500/60 hover:border-blue-400 hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 transition-all flex items-center justify-center cursor-pointer shrink-0 relative group"
+            >
+              <Plus className="w-4 h-4 stroke-[1.5] text-blue-400 group-hover:scale-110 transition-transform" />
+            </button>
+          )
         )}
       </div>
 

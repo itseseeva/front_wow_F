@@ -150,6 +150,8 @@ export const App: React.FC = () => {
               independent: Boolean(s.independent),
               skillCooldownSeconds: s.skillCooldownSeconds != null ? Number(s.skillCooldownSeconds) : 0,
               hpBelowPercent: s.hpBelowPercent != null ? Number(s.hpBelowPercent) : null,
+              stepType: s.stepType === 'water' ? 'water' : 'skill',
+              mpBelowPercent: s.mpBelowPercent != null ? Number(s.mpBelowPercent) : null,
               actionType: 'press' as const,
             })),
           }));
@@ -321,6 +323,8 @@ export const App: React.FC = () => {
               repeatCount: s.repeatCount ?? 1,
               independent: Boolean(s.independent),
               hpBelowPercent: s.hpBelowPercent != null ? Number(s.hpBelowPercent) : null,
+              stepType: s.stepType === 'water' ? 'water' : 'skill',
+              mpBelowPercent: s.mpBelowPercent != null ? Number(s.mpBelowPercent) : null,
             })),
           },
         ],
@@ -439,6 +443,8 @@ export const App: React.FC = () => {
                         repeatCount: step.repeatCount ?? 1,
                         independent: Boolean(step.independent),
                         hpBelowPercent: step.hpBelowPercent != null ? Number(step.hpBelowPercent) : null,
+                        stepType: step.stepType === 'water' ? 'water' : 'skill',
+                        mpBelowPercent: step.mpBelowPercent != null ? Number(step.mpBelowPercent) : null,
                         actionType: 'press' as const,
                       })),
                     };

@@ -66,6 +66,7 @@ export function createDefaultDaySchedule(styleId: ScheduleStyleId = 'normal'): D
     dailySpread: 'mid',
     sessionMinutes: [...preset.sessionMinutes],
     shortBreakMinutes: [...preset.shortBreakMinutes],
+    longBreaks: true,
     longBreakMinutes: [...preset.longBreakMinutes],
     longBreakEvery: [...preset.longBreakEvery],
     longBreakLogout: true,
@@ -112,6 +113,7 @@ export function normalizeScheduleSettings(raw: any): ScheduleSettings {
       dailySpread,
       sessionMinutes: Array.isArray(raw.sessionMinutes) && raw.sessionMinutes.length === 2 ? raw.sessionMinutes : [45, 90],
       shortBreakMinutes: Array.isArray(raw.shortBreakMinutes) && raw.shortBreakMinutes.length === 2 ? raw.shortBreakMinutes : [4, 10],
+      longBreaks: raw.longBreaks ?? true,
       longBreakMinutes: Array.isArray(raw.longBreakMinutes) && raw.longBreakMinutes.length === 2 ? raw.longBreakMinutes : [30, 60],
       longBreakEvery: Array.isArray(raw.longBreakEvery) && raw.longBreakEvery.length === 2 ? raw.longBreakEvery : [2, 4],
       longBreakLogout: raw.longBreakLogout ?? true,
@@ -151,6 +153,7 @@ export function normalizeScheduleSettings(raw: any): ScheduleSettings {
         dailySpread,
         sessionMinutes: Array.isArray(rawDay.sessionMinutes) && rawDay.sessionMinutes.length === 2 ? rawDay.sessionMinutes : [45, 90],
         shortBreakMinutes: Array.isArray(rawDay.shortBreakMinutes) && rawDay.shortBreakMinutes.length === 2 ? rawDay.shortBreakMinutes : [4, 10],
+        longBreaks: rawDay.longBreaks ?? true,
         longBreakMinutes: Array.isArray(rawDay.longBreakMinutes) && rawDay.longBreakMinutes.length === 2 ? rawDay.longBreakMinutes : [30, 60],
         longBreakEvery: Array.isArray(rawDay.longBreakEvery) && rawDay.longBreakEvery.length === 2 ? rawDay.longBreakEvery : [2, 4],
         longBreakLogout: rawDay.longBreakLogout ?? true,
@@ -284,25 +287,27 @@ export function validateScheduleSettings(settings: ScheduleSettings, isRu = true
         : `Schedule: ${dayName}: short break must be 1–60 min (min ≤ max)`;
     }
 
-    const [lbMin, lbMax] = day.longBreakMinutes;
-    if (lbMin < 10 || lbMax > 240 || lbMin > lbMax) {
-      return isRu
-        ? `Расписание: ${dayName}: длинный перерыв должен быть 10–240 мин (от ≤ до)`
-        : `Schedule: ${dayName}: long break must be 10–240 min (min ≤ max)`;
-    }
+    if (day.longBreaks !== false) {
+      const [lbMin, lbMax] = day.longBreakMinutes;
+      if (lbMin < 10 || lbMax > 240 || lbMin > lbMax) {
+        return isRu
+          ? `Расписание: ${dayName}: длинный перерыв должен быть 10–240 мин (от ≤ до)`
+          : `Schedule: ${dayName}: long break must be 10–240 min (min ≤ max)`;
+      }
 
-    // Constraint: shortBreakMinutes[1] <= longBreakMinutes[0]
-    if (sbMax > lbMin) {
-      return isRu
-        ? `Расписание: ${dayName}: короткий перерыв (до ${sbMax}м) не может быть длиннее длинного перерыва (от ${lbMin}м)`
-        : `Schedule: ${dayName}: short break (up to ${sbMax}m) cannot be longer than long break (from ${lbMin}m)`;
-    }
+      // Constraint: shortBreakMinutes[1] <= longBreakMinutes[0]
+      if (sbMax > lbMin) {
+        return isRu
+          ? `Расписание: ${dayName}: короткий перерыв (до ${sbMax}м) не может быть длиннее длинного перерыва (от ${lbMin}м)`
+          : `Schedule: ${dayName}: short break (up to ${sbMax}m) cannot be longer than long break (from ${lbMin}m)`;
+      }
 
-    const [lbeMin, lbeMax] = day.longBreakEvery;
-    if (lbeMin < 1 || lbeMax > 10 || lbeMin > lbeMax) {
-      return isRu
-        ? `Расписание: ${dayName}: частота длинного перерыва должна быть 1–10 сессий (от ≤ до)`
-        : `Schedule: ${dayName}: long break frequency must be 1–10 sessions (min ≤ max)`;
+      const [lbeMin, lbeMax] = day.longBreakEvery;
+      if (lbeMin < 1 || lbeMax > 10 || lbeMin > lbeMax) {
+        return isRu
+          ? `Расписание: ${dayName}: частота длинного перерыва должна быть 1–10 сессий (от ≤ до)`
+          : `Schedule: ${dayName}: long break frequency must be 1–10 sessions (min ≤ max)`;
+      }
     }
   }
 
@@ -476,7 +481,7 @@ export async function mockPreviewScheduleDay(
       if (remainingFarmMin <= 0 || curMs >= win.end_ms) break;
 
       // Break segment
-      const isLongBreak = sessionCounter % longBreakEveryCounter === 0;
+      const isLongBreak = day.longBreaks !== false && sessionCounter % longBreakEveryCounter === 0;
       let breakMin = 0;
       let kind: 'short_break' | 'long_break' = 'short_break';
 
