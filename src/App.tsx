@@ -20,6 +20,7 @@ import {
   SessionHeatmapResponse,
   ScheduleSettings,
   ScheduleStatus,
+  RoutesChangedDetail,
 } from './types';
 import { soundFx } from './utils/audio';
 import { SpecularCard } from './components/ui/Specular';
@@ -173,6 +174,7 @@ export const App: React.FC = () => {
     let pause = 'PAUSE';
     let herbSearch = 'F9';
     let oreSearch = 'F10';
+    let autoRouteMinutes = 30;
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -185,6 +187,7 @@ export const App: React.FC = () => {
         if (parsed.pauseKey) pause = parsed.pauseKey;
         if (parsed.herbSearchKey !== undefined) herbSearch = parsed.herbSearchKey;
         if (parsed.oreSearchKey !== undefined) oreSearch = parsed.oreSearchKey;
+        if (parsed.autoRouteMinutes != null) autoRouteMinutes = Number(parsed.autoRouteMinutes);
       } catch (e) {}
     }
     return {
@@ -198,6 +201,7 @@ export const App: React.FC = () => {
       pauseKey: pause,
       herbSearchKey: herbSearch,
       oreSearchKey: oreSearch,
+      autoRouteMinutes,
     };
   });
 
@@ -338,6 +342,7 @@ export const App: React.FC = () => {
           pauseKey: customSettings.pauseKey || 'PAUSE',
           herbSearchKey: customSettings.herbSearchKey !== undefined ? customSettings.herbSearchKey : 'F9',
           oreSearchKey: customSettings.oreSearchKey !== undefined ? customSettings.oreSearchKey : 'F10',
+          autoRouteMinutes: customSettings.autoRouteMinutes != null ? Number(customSettings.autoRouteMinutes) : 30,
         },
         chains: [
           {
@@ -402,6 +407,7 @@ export const App: React.FC = () => {
           const mapped: RouteItem[] = res.routes.map((r) => ({
             id: r.id,
             name: formatRouteRoman(r.name),
+            region: r.region ?? null,
             type: r.loop ? (isRu ? 'КРУГ' : 'LOOP') : (isRu ? 'ТОЧКА-ТОЧКА' : 'POINT-TO-POINT'),
             duration: isRu
               ? `≈${r.length_s} с бега • ${r.points} точек`
@@ -454,6 +460,7 @@ export const App: React.FC = () => {
                   pauseKey: parsed.settings.pauseKey ?? prev.pauseKey,
                   herbSearchKey: parsed.settings.herbSearchKey ?? prev.herbSearchKey,
                   oreSearchKey: parsed.settings.oreSearchKey ?? prev.oreSearchKey,
+                  autoRouteMinutes: parsed.settings.autoRouteMinutes != null ? Number(parsed.settings.autoRouteMinutes) : (prev.autoRouteMinutes ?? 30),
                 }));
               }
 
@@ -872,6 +879,24 @@ export const App: React.FC = () => {
 
     window.addEventListener('wowbot:route-record-stopped', handleStopped);
     return () => window.removeEventListener('wowbot:route-record-stopped', handleStopped);
+  }, [fetchRoutes, language]);
+
+  // Listen for 'wowbot:routes-changed'
+  useEffect(() => {
+    const handleRoutesChanged = (e: any) => {
+      const detail: RoutesChangedDetail | undefined = e?.detail;
+      fetchRoutes();
+      if (detail?.reason === 'autoroute') {
+        const isRu = language === 'ru';
+        const name = detail.name || (isRu ? 'Автомаршрут' : 'Auto Route');
+        setScheduleToast(
+          isRu ? `Бот построил автомаршрут: ${name}` : `Bot built auto route: ${name}`
+        );
+      }
+    };
+
+    window.addEventListener('wowbot:routes-changed', handleRoutesChanged);
+    return () => window.removeEventListener('wowbot:routes-changed', handleRoutesChanged);
   }, [fetchRoutes, language]);
 
   // Calendar Data Fetching & Month Navigation

@@ -160,6 +160,21 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
     fetchRoutes();
   }, [fetchRoutes]);
 
+  useEffect(() => {
+    const handleRoutesChanged = (e: any) => {
+      fetchRoutes();
+      if (e?.detail?.reason === 'autoroute') {
+        const name = e.detail.name || (language === 'ru' ? 'Автомаршрут' : 'Auto Route');
+        onToast({
+          type: 'info',
+          message: language === 'ru' ? `Бот построил автомаршрут: ${name}` : `Bot built auto route: ${name}`,
+        });
+      }
+    };
+    window.addEventListener('wowbot:routes-changed', handleRoutesChanged);
+    return () => window.removeEventListener('wowbot:routes-changed', handleRoutesChanged);
+  }, [fetchRoutes, language, onToast]);
+
   // Clamp startIndex when routes change
   useEffect(() => {
     if (routes.length <= 2) {
@@ -505,6 +520,11 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
                             isDark ? 'text-[#f5d17f] drop-shadow-sm' : 'text-[#422206]'
                           }`}>
                             {route.name}
+                            {route.region && (
+                              <span className="text-zinc-400 dark:text-zinc-500 font-normal font-sans text-xs ml-1.5">
+                                ({route.region})
+                              </span>
+                            )}
                           </h4>
                           {route.loop ? (
                             <span className={`text-[8.5px] px-2 py-0.5 rounded font-fantasy font-bold shrink-0 border ${

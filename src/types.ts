@@ -28,6 +28,7 @@ export interface AppSettings {
   pauseKey?: string;
   herbSearchKey?: string;
   oreSearchKey?: string;
+  autoRouteMinutes?: number;
 }
 
 
@@ -75,9 +76,17 @@ export interface RouteRecordStoppedDetail {
 // Точка маршрута — доли карты зоны WoW: x, y от 0 до 1, y растёт ВНИЗ (как на карте мира).
 export type RoutePoint = [number, number];
 
+export interface RoutesChangedDetail {
+  reason: 'autoroute' | 'regions';
+  route_id?: string;
+  map_id?: number;
+  name?: string;
+}
+
 export interface RouteInfo {
   id: string; // имя файла маршрута (латиница/цифры), передавать обратно как есть
   name: string; // имя, которое ввёл пользователь
+  region?: string | null; // название зоны маршрута, как в игре (например «Темные берега»); null — ещё не известно
   map_id: number | null; // номер карты игры
   points: number; // сколько точек
   length_s: number; // длина круга в секундах бега

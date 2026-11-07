@@ -261,7 +261,8 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
     e.stopPropagation();
     soundFx.playClick();
     setEditingRouteId(route.id);
-    setEditNameValue(getRouteDisplayName(route.name));
+    const cleanName = route.name.replace(/\s*\([^)]*\)$/, '').trim();
+    setEditNameValue(getRouteDisplayName(cleanName));
   };
 
   const handleSaveEdit = (e?: React.MouseEvent | React.FormEvent, routeId?: string) => {
@@ -439,7 +440,12 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
                           <div className="flex items-center gap-2.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(255,255,255,0.8)] animate-ping" />
                             <span className="font-mono text-xs sm:text-sm 2xl:text-base text-zinc-950 dark:text-white font-medium">
-                              {displayName}
+                              <span>{displayName}</span>
+                              {route.region && (
+                                <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1.5">
+                                  ({route.region})
+                                </span>
+                              )}
                             </span>
                             <span className="text-[10px] sm:text-xs font-mono text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 ml-1">
                               <Loader2 className="w-3 h-3 animate-spin text-zinc-500 dark:text-zinc-400" />
@@ -515,17 +521,26 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
                         </div>
                       ) : (
                         <div className="flex items-center justify-between w-full">
-                          {/* Route Name */}
+                          {/* Route Name: Name (Region) with region in muted color */}
                           <span
-                            className={`font-mono text-xs sm:text-sm 2xl:text-base tracking-wide transition-colors duration-150 truncate ${
+                            onDoubleClick={(e) => {
+                              if (onRenameRoute) handleStartEdit(e, route);
+                            }}
+                            className={`font-mono text-xs sm:text-sm 2xl:text-base tracking-wide transition-colors duration-150 truncate cursor-pointer ${
                               isActive
                                 ? 'text-zinc-950 dark:text-white font-semibold'
                                 : isHovered
                                 ? 'text-zinc-800 dark:text-zinc-200'
                                 : 'text-zinc-500'
                             }`}
+                            title={isRu ? 'Двойной клик для переименования' : 'Double click to rename'}
                           >
-                            {displayName}
+                            <span>{displayName}</span>
+                            {route.region && (
+                              <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1.5">
+                                ({route.region})
+                              </span>
+                            )}
                           </span>
 
                           {/* Right actions: Checkmark for active route (left), Edit pencil (right of checkmark), Delete icon */}

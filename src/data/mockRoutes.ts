@@ -35,6 +35,7 @@ export const MOCK_ROUTES: RouteInfo[] = [
   {
     id: 'murloc_circle',
     name: 'Берег мурлоков (Круг)',
+    region: 'Темные берега',
     map_id: 1436,
     points: 52,
     length_s: 175,
@@ -46,6 +47,7 @@ export const MOCK_ROUTES: RouteInfo[] = [
   {
     id: 'durotar_canyon',
     name: 'Дуротар - Каньон (Линейный)',
+    region: 'Дуротар',
     map_id: 1411,
     points: 38,
     length_s: 110,
@@ -57,6 +59,7 @@ export const MOCK_ROUTES: RouteInfo[] = [
   {
     id: 'barrens_oasis',
     name: 'Степи - Оазис Слез (Круг)',
+    region: 'Степи',
     map_id: 1413,
     points: 44,
     length_s: 148,
@@ -68,6 +71,7 @@ export const MOCK_ROUTES: RouteInfo[] = [
   {
     id: 'ashenvale_patrol',
     name: 'Ясеневый лес - Застава (Линейный)',
+    region: 'Ясеневый лес',
     map_id: 1440,
     points: 46,
     length_s: 162,

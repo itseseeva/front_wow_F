@@ -3,7 +3,7 @@ import {
   RotateCcw,
   Clock,
   AlertTriangle,
-  CalendarClock,
+  Route,
 } from 'lucide-react';
 import { AppSettings, ScheduleSettings } from '../types';
 import { Language, Theme } from '../utils/i18n';
@@ -167,6 +167,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       pauseKey: 'PAUSE',
       herbSearchKey: 'F9',
       oreSearchKey: 'F10',
+      autoRouteMinutes: 30,
     });
     if (onToast) {
       onToast(isRu ? 'Настройки сброшены' : 'Defaults restored');
@@ -338,38 +339,66 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               </div>
             </SpecularCard>
-
-            {/* 1.3 Link to full Week Schedule View */}
-            <SpecularCard className="p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
-                <div>
-                  <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white flex items-center gap-2">
-                    <CalendarClock className="w-4 h-4 text-zinc-500" />
-                    <span>{isRu ? 'Недельное расписание по дням' : 'Weekly schedule by days'}</span>
-                  </span>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
-                    {isRu
-                      ? 'Окна часов (с–до), стили игры и тонкая настройка для каждого дня недели'
-                      : 'Playtime windows, styles, and fine-tuning for each day of the week'}
-                  </p>
-                </div>
-
-                {onNavigateToSchedule && (
-                  <SpecularButton
-                    onClick={onNavigateToSchedule}
-                    className="px-3 py-1.5 rounded-lg border border-transparent hover:border-black/15 dark:hover:border-white/[0.15] bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 text-xs font-mono font-semibold cursor-pointer transition-all"
-                  >
-                    <span>{isRu ? 'Открыть расписание' : 'Open Schedule'}</span>
-                  </SpecularButton>
-                )}
-              </div>
-            </SpecularCard>
           </div>
         )}
       </div>
 
       {/* =========================================================================
-          SECTION 2: GLOBAL HOTKEYS & KEYBINDS
+          SECTION 2: АВТОМАРШРУТ (Auto Route Settings)
+          ========================================================================= */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between pb-2 border-b border-black/10 dark:border-white/[0.08]">
+          <div className="flex items-center gap-2">
+            <Route className="w-4 h-4 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
+            <h2 className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white">
+              {isRu ? 'Автоматический маршрут' : 'Auto route'}
+            </h2>
+          </div>
+        </div>
+
+        <SpecularCard className="p-3 sm:p-3.5 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent">
+          <div className="flex flex-col gap-2.5 w-full">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white">
+                {isRu ? 'Длина автомаршрута, мин' : 'Auto route length, min'}
+              </span>
+              <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-zinc-950 dark:text-white bg-black/5 dark:bg-white/10 px-2.5 py-1 rounded-lg">
+                <span>{settings.autoRouteMinutes ?? 30}</span>
+                <span className="text-zinc-500 font-normal">{isRu ? 'мин' : 'min'}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-mono text-zinc-400">30</span>
+              <input
+                type="range"
+                min={30}
+                max={120}
+                step={5}
+                value={settings.autoRouteMinutes ?? 30}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  onSettingsChange({
+                    ...settings,
+                    autoRouteMinutes: val,
+                  });
+                }}
+                className="flex-1 accent-zinc-950 dark:accent-white cursor-pointer h-1.5 bg-black/10 dark:bg-white/15 rounded-full"
+              />
+              <span className="text-[11px] font-mono text-zinc-400">120</span>
+            </div>
+
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono leading-snug">
+              {isRu
+                ? 'Если рядом нет записанного маршрута, бот сам построит круг по местам руды и трав от места запуска (около минуты стоит на месте) и сохранит его как «Автомаршрут»'
+                : 'If there is no recorded route nearby, the bot will automatically build a loop along ore and herb spots from the start location (stands still for ~1 minute) and save it as "Auto Route"'}
+            </p>
+          </div>
+        </SpecularCard>
+      </div>
+
+      {/* =========================================================================
+          SECTION 3: GLOBAL HOTKEYS & KEYBINDS
           ========================================================================= */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between pb-2 border-b border-black/10 dark:border-white/[0.08]">

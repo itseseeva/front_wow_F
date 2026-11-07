@@ -99,10 +99,14 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
       hour: '2-digit',
       minute: '2-digit',
     });
-    const cleanRouteName = formatRouteRoman(activeSession.route_name.replace(/\s*\([^)]*\)/g, '').trim());
+    const match = activeSession.route_name.match(/^(.*?)\s*\(([^)]+)\)$/);
+    const baseName = match ? match[1] : activeSession.route_name;
+    const regionName = match ? match[2] : null;
+    const cleanRouteName = formatRouteRoman(baseName.trim());
+    const fullRouteName = regionName ? `${cleanRouteName} (${regionName})` : cleanRouteName;
     heatmapLabel = isAllDay
-      ? `${isRu ? 'карта: ' : 'map: '}${timeStr} · ${cleanRouteName}`
-      : `${timeStr} · ${cleanRouteName}`;
+      ? `${isRu ? 'карта: ' : 'map: '}${timeStr} · ${fullRouteName}`
+      : `${timeStr} · ${fullRouteName}`;
   }
 
   // Active pass info if a pass is selected
@@ -195,7 +199,10 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                   hour: '2-digit',
                   minute: '2-digit',
                 });
-                const cleanRouteName = formatRouteRoman(s.route_name.replace(/\s*\([^)]*\)/g, '').trim());
+                const match = s.route_name.match(/^(.*?)\s*\(([^)]+)\)$/);
+                const baseName = match ? match[1] : s.route_name;
+                const regionName = match ? match[2] : null;
+                const cleanRouteName = formatRouteRoman(baseName.trim());
 
                 return (
                   <button
@@ -212,7 +219,14 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                         : 'border-black/10 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'
                     }`}
                   >
-                    <span>{timeStr} · {cleanRouteName}</span>
+                    <span>
+                      {timeStr} · {cleanRouteName}
+                      {regionName && (
+                        <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1">
+                          ({regionName})
+                        </span>
+                      )}
+                    </span>
                   </button>
                 );
               })}

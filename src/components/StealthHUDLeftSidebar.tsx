@@ -19,6 +19,7 @@ export interface RouteItem {
   duration: string;
   points: number;
   active: boolean;
+  region?: string | null;
   isCreating?: boolean;
   isRecording?: boolean;
   recordingSeconds?: number;

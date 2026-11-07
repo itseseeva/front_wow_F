@@ -1116,7 +1116,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                   <div
                     onClick={() => {
                       soundFx.playClick();
-                      const nextVal = scheduleSettings.offDayPercent === 10 ? 0 : 10;
+                      const nextVal = (scheduleSettings.offDayPercent ?? 0) > 0 ? 0 : 10;
                       onScheduleSettingsChange({
                         ...scheduleSettings,
                         offDayPercent: nextVal,
@@ -1126,12 +1126,12 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                   >
                     <div
                       className={`w-4 h-4 rounded mt-0.5 flex items-center justify-center border transition-all ${
-                        scheduleSettings.offDayPercent === 10
+                        (scheduleSettings.offDayPercent ?? 0) > 0
                           ? 'bg-white border-white text-black'
                           : 'border-zinc-600 bg-transparent text-transparent'
                       }`}
                     >
-                      {scheduleSettings.offDayPercent === 10 && <Check className="w-3 h-3 stroke-[3]" />}
+                      {(scheduleSettings.offDayPercent ?? 0) > 0 && <Check className="w-3 h-3 stroke-[3]" />}
                     </div>
                     <div className="flex flex-col">
                       <div className="flex items-center gap-2">

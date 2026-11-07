@@ -83,7 +83,7 @@ export function createDefaultDaysRecord(): Record<WeekdayKey, DaySchedule> {
 
 export const DEFAULT_SCHEDULE_SETTINGS: ScheduleSettings = {
   enabled: true,
-  offDayPercent: 10,
+  offDayPercent: 0,
   days: createDefaultDaysRecord(),
 };
 
@@ -96,7 +96,7 @@ export function normalizeScheduleSettings(raw: any): ScheduleSettings {
   }
 
   const enabled = raw.enabled ?? true;
-  const offDayPercent = typeof raw.offDayPercent === 'number' ? Math.max(0, Math.min(50, raw.offDayPercent)) : 10;
+  const offDayPercent = typeof raw.offDayPercent === 'number' ? Math.max(0, Math.min(50, raw.offDayPercent)) : 0;
 
   // Check if legacy flat schedule (no days object)
   if (!raw.days || typeof raw.days !== 'object') {
