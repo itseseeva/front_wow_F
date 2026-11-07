@@ -237,6 +237,10 @@ export const mockStopRouteRecord = async (
 // In-memory mock sessions for terrain building simulation (~40s)
 const mockTerrainSessions: Record<number, { startedAt: number; finishedEventFired?: boolean }> = {};
 
+export const mockResetTerrainSession = (map_id: number = 1436) => {
+  mockTerrainSessions[map_id] = { startedAt: Date.now(), finishedEventFired: false };
+};
+
 export const mockGetTerrainStatus = async (
   map_id: number
 ): Promise<{ ok: boolean; error?: string } & Partial<TerrainStatus>> => {

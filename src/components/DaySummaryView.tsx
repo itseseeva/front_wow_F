@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { DayResponse, SessionHeatmapResponse, LootStatus, ScheduleStatus } from '../types';
+import { DayResponse, SessionHeatmapResponse, LootStatus, ScheduleStatus, TerrainStatus } from '../types';
+import { getPywebviewApi } from '../utils/pywebviewBridge';
+import { mockGetTerrainStatus } from '../data/mockRoutes';
 import {
   BarChart3,
   Calendar as CalendarIcon,
@@ -84,6 +86,34 @@ function getPluralRoutes(n: number, isRu: boolean): string {
   return `${n} маршрутов`;
 }
 
+function formatRemainingTime(seconds: number | null | undefined, isRu: boolean): string {
+  if (seconds == null) return isRu ? 'оцениваю…' : 'calculating…';
+  if (seconds <= 0) return isRu ? 'менее 1 сек' : '< 1 sec';
+  if (seconds < 60) return isRu ? `~${seconds} сек` : `~${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (s === 0) return isRu ? `~${m} мин` : `~${m}m`;
+  return isRu ? `~${m} мин ${s} сек` : `~${m}m ${s}s`;
+}
+
+function getTerrainStageTitle(
+  stage: 'tiles' | 'models' | 'grid' | null,
+  isRu: boolean,
+  hasRoute: boolean
+): string {
+  if (!hasRoute) {
+    if (stage === 'tiles') return isRu ? 'Скачивание карты местности персонажа…' : 'Downloading character zone tiles…';
+    if (stage === 'models') return isRu ? 'Анализ геометрии и объектов вокруг игрока…' : 'Analyzing geometry & obstacles near player…';
+    if (stage === 'grid') return isRu ? 'Построение маршрута по положению персонажа…' : 'Building navigation route from player location…';
+    return isRu ? 'Построение маршрута по положению персонажа…' : 'Building route based on character location…';
+  } else {
+    if (stage === 'tiles') return isRu ? 'Скачивание карты зоны…' : 'Downloading zone tiles…';
+    if (stage === 'models') return isRu ? 'Обработка деревьев и объектов зоны…' : 'Processing trees & obstacles…';
+    if (stage === 'grid') return isRu ? 'Построение навигационной сетки…' : 'Compiling navigation mesh…';
+    return isRu ? 'Подготовка маршрута зоны…' : 'Preparing route terrain…';
+  }
+}
+
 export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
   selectedDate,
   dayData,
@@ -141,6 +171,79 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Terrain & dynamic auto-route building state
+  const [terrainStatus, setTerrainStatus] = useState<TerrainStatus | null>(null);
+
+  // Subscribe to wowbot:terrain-status window events
+  useEffect(() => {
+    const handleTerrain = (e: any) => {
+      const detail: TerrainStatus = e?.detail;
+      if (detail) {
+        setTerrainStatus(prev => {
+          const incomingProg = typeof detail.progress === 'number' ? Math.max(0, Math.min(1, detail.progress)) : 0;
+          const finalProg = detail.status === 'ready' ? 1 : Math.max(prev?.progress ?? 0, incomingProg);
+          return {
+            ...detail,
+            progress: finalProg,
+          };
+        });
+      }
+    };
+    window.addEventListener('wowbot:terrain-status', handleTerrain);
+    return () => window.removeEventListener('wowbot:terrain-status', handleTerrain);
+  }, []);
+
+  // Poll terrain / auto-route status while building or running without a route
+  useEffect(() => {
+    const isBuilding = isBotRunning && (!activeRoute || terrainStatus?.status === 'building');
+    if (!isBuilding) return;
+
+    let isMounted = true;
+    const mapId = terrainStatus?.map_id || 1436;
+
+    const poll = async () => {
+      try {
+        let res: { ok: boolean; error?: string } & Partial<TerrainStatus>;
+        const api = await getPywebviewApi();
+        if (api?.get_terrain_status) {
+          res = await api.get_terrain_status(mapId);
+        } else {
+          res = await mockGetTerrainStatus(mapId);
+        }
+
+        if (!isMounted) return;
+
+        if (res && res.status) {
+          setTerrainStatus(prev => {
+            const incomingProg = typeof res.progress === 'number' ? Math.max(0, Math.min(1, res.progress)) : 0;
+            const finalProg = res.status === 'ready' ? 1 : Math.max(prev?.progress ?? 0, incomingProg);
+            return {
+              map_id: res.map_id ?? mapId,
+              status: res.status as any,
+              stage: (res.stage as any) ?? prev?.stage ?? 'tiles',
+              done: res.done ?? prev?.done ?? 0,
+              total: res.total ?? prev?.total ?? 100,
+              progress: finalProg,
+              elapsed_s: res.elapsed_s ?? prev?.elapsed_s ?? 0,
+              eta_s: res.eta_s !== undefined ? res.eta_s : prev?.eta_s ?? null,
+              error: res.error ?? null,
+              source: res.source ?? prev?.source ?? null,
+            };
+          });
+        }
+      } catch (err) {
+        console.warn('Poll terrain status error:', err);
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 1000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isBotRunning, activeRoute, terrainStatus?.status, terrainStatus?.map_id]);
 
   // Card «До перерыва»: countdown to phase_until_ms based on phase
   let breakValueNode: React.ReactNode = '—';
@@ -554,21 +657,96 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="py-12 flex flex-col items-center justify-center text-center gap-3 font-mono">
-                    <div className="flex items-center justify-center w-10 h-10 text-zinc-500">
-                      <Radio className="w-5 h-5 animate-pulse" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                        {isRu ? 'Сканирование местности и поиск жил / трав' : 'Scanning terrain & seeking nodes'}
-                      </h4>
-                      <p className="text-[11px] text-zinc-500 max-w-md mt-1 leading-relaxed">
-                        {isRu
-                          ? 'Бот патрулирует маршрут. Как только ресурс будет собран, он появится в этой таблице с подсчётом цены на аукционе.'
-                          : 'Bot is patrolling. As soon as nodes are collected, they will stream into this table with auction valuations.'}
-                      </p>
-                    </div>
-                  </div>
+                  (() => {
+                    const hasActiveFixedRoute = Boolean(activeRoute && activeRoute.id);
+                    const isAutoRouteBuilding = isBotRunning && (!hasActiveFixedRoute || terrainStatus?.status === 'building');
+                    const currentProg = terrainStatus?.progress ?? 0;
+                    const percent = Math.min(100, Math.max(0, Math.round(currentProg * 100)));
+                    const isReady = terrainStatus?.status === 'ready' || percent >= 100;
+                    const stageTitle = isReady
+                      ? (isRu ? 'Маршрут построен • поиск жил и трав' : 'Route generated • seeking nodes')
+                      : getTerrainStageTitle(terrainStatus?.stage ?? 'tiles', isRu, hasActiveFixedRoute);
+                    const etaSeconds = terrainStatus?.eta_s;
+
+                    return (
+                      <div className="py-12 flex flex-col items-center justify-center text-center gap-3 font-mono">
+                        <div className="flex items-center justify-center w-10 h-10 text-zinc-500">
+                          <Radio className="w-5 h-5 animate-pulse" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                            {isRu ? 'Сканирование местности и поиск жил / трав' : 'Scanning terrain & seeking nodes'}
+                          </h4>
+                          <p className="text-[11px] text-zinc-500 max-w-md mt-1 leading-relaxed">
+                            {isRu
+                              ? (!hasActiveFixedRoute
+                                  ? 'Запуск без готового маршрута: бот сканирует окружение и строит оптимальный путь от координат персонажа.'
+                                  : 'Бот патрулирует маршрут. Как только ресурс будет собран, он появится в этой таблице с подсчётом цены на аукционе.')
+                              : (!hasActiveFixedRoute
+                                  ? 'Running without pre-recorded route: compiling optimal path around character coordinates.'
+                                  : 'Bot is patrolling. As soon as nodes are collected, they will stream into this table with auction valuations.')}
+                          </p>
+                        </div>
+
+                        {/* Real dynamic progress bar with percentage, stage info & ETA */}
+                        {isAutoRouteBuilding && (
+                          <div className="mt-4 w-full max-w-md p-3.5 rounded-xl border border-zinc-200/90 dark:border-zinc-800/90 bg-zinc-50/70 dark:bg-zinc-900/60 shadow-xs backdrop-blur-xs flex flex-col gap-2.5 text-left animate-assemble">
+                            {/* Top Row: Stage & Percentage */}
+                            <div className="flex items-center justify-between gap-3 text-xs">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="relative flex h-2 w-2 shrink-0">
+                                  <span
+                                    className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                                      isReady ? 'bg-emerald-400' : 'bg-blue-400'
+                                    }`}
+                                  />
+                                  <span
+                                    className={`relative inline-flex rounded-full h-2 w-2 ${
+                                      isReady ? 'bg-emerald-500' : 'bg-blue-500'
+                                    }`}
+                                  />
+                                </span>
+                                <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">
+                                  {stageTitle}
+                                </span>
+                              </div>
+                              <span className="font-bold text-xs font-mono text-zinc-950 dark:text-white tabular-nums shrink-0">
+                                {percent}%
+                              </span>
+                            </div>
+
+                            {/* Progress Bar Track */}
+                            <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden relative">
+                              <div
+                                className={`h-full transition-all duration-300 ease-out rounded-full relative ${
+                                  isReady
+                                    ? 'bg-emerald-500'
+                                    : 'bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-400'
+                                }`}
+                                style={{ width: `${Math.max(3, percent)}%` }}
+                              >
+                                {!isReady && <div className="absolute inset-0 bg-white/25 animate-pulse" />}
+                              </div>
+                            </div>
+
+                            {/* Bottom Row: Steps / Objects count & Time Remaining */}
+                            <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono pt-0.5">
+                              <span className="tabular-nums">
+                                {terrainStatus?.total
+                                  ? `${terrainStatus.done} / ${terrainStatus.total}`
+                                  : (isRu ? 'Калибровка сетки…' : 'Calibrating grid…')}
+                              </span>
+                              <span className="text-zinc-600 dark:text-zinc-300 font-medium tabular-nums">
+                                {isReady
+                                  ? (isRu ? 'Готово • Патрулирование' : 'Ready • Patrolling')
+                                  : `${isRu ? 'Осталось ждать:' : 'Time remaining:'} ${formatRemainingTime(etaSeconds, isRu)}`}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
                 )}
               </div>
             ) : (

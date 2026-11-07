@@ -8,6 +8,7 @@ import {
   mockStopRouteRecord,
   mockSetActiveRoute,
   mockDeleteRoute,
+  mockResetTerrainSession,
 } from './data/mockRoutes';
 import { SettingsView } from './components/SettingsView';
 import { ComboSequence } from './components/ComboSequence';
@@ -1242,24 +1243,42 @@ export const App: React.FC = () => {
 
       // In browser preview: dispatch mock live loot for testing
       if (!api?.start_bot && typeof window !== 'undefined') {
-        setTimeout(() => {
-          window.dispatchEvent(
-            new CustomEvent('wowbot:loot', {
-              detail: {
-                items: [
-                  { item_id: 22785, name: 'Оскверненная трава', count: 4, price: 4500, value: 18000, vendor: 250 },
-                  { item_id: 23424, name: 'Руда оскверненного железа', count: 6, price: 3200, value: 19200, vendor: 200 },
-                ],
-                earned_copper: 37200,
-                earned_complete: true,
-              },
-            })
-          );
-        }, 2500);
+        if (activeRoute) {
+          setTimeout(() => {
+            window.dispatchEvent(
+              new CustomEvent('wowbot:loot', {
+                detail: {
+                  items: [
+                    { item_id: 22785, name: 'Оскверненная трава', count: 4, price: 4500, value: 18000, vendor: 250 },
+                    { item_id: 23424, name: 'Руда оскверненного железа', count: 6, price: 3200, value: 19200, vendor: 200 },
+                  ],
+                  earned_copper: 37200,
+                  earned_complete: true,
+                },
+              })
+            );
+          }, 2500);
+        } else {
+          // Without active route: terrain & dynamic route build (~40s) before loot begins
+          setTimeout(() => {
+            window.dispatchEvent(
+              new CustomEvent('wowbot:loot', {
+                detail: {
+                  items: [
+                    { item_id: 22785, name: 'Оскверненная трава', count: 2, price: 4500, value: 9000, vendor: 250 },
+                  ],
+                  earned_copper: 9000,
+                  earned_complete: true,
+                },
+              })
+            );
+          }, 42000);
+        }
       }
 
-      // In browser mock mode without route: simulate waiting for zone terrain
+      // In browser mock mode without route: simulate waiting for zone terrain and auto-route
       if (!api?.start_bot && !activeRoute && typeof window !== 'undefined') {
+        mockResetTerrainSession(1436);
         window.dispatchEvent(
           new CustomEvent('wowbot:terrain-status', {
             detail: {
