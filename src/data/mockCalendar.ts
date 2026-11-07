@@ -8,6 +8,7 @@ import {
   SessionSummaryData,
 } from '../types';
 import { generateMockHeatmapImage } from '../utils/mockHeatmap';
+import { MOCK_LOOT_ROWS } from './mockPrices';
 
 // Palette of 6 route colors requested by contract
 export const ROUTE_PALETTE = [
@@ -117,6 +118,10 @@ export function getMockDay(dateStr: string): DayResponse {
     adamantite: 23,
     fel_iron: 41,
     gold: 1450,
+    loot: MOCK_LOOT_ROWS,
+    earned_copper: 746600, // 74з 66с
+    earned_complete: false,
+    loot_lost: 0,
   };
 
   const session1: DaySession = {
@@ -180,6 +185,10 @@ export function getMockDay(dateStr: string): DayResponse {
     adamantite: 23,
     fel_iron: 97,
     gold: 2430,
+    loot: MOCK_LOOT_ROWS,
+    earned_copper: 1248000, // 124з 80с
+    earned_complete: false,
+    loot_lost: 0,
   };
 
   return {

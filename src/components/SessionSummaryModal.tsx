@@ -18,6 +18,7 @@ import { Language, Theme, translations } from '../utils/i18n';
 import { SpecularCard, SpecularButton } from './ui/Specular';
 import { soundFx } from '../utils/audio';
 import { SessionHeatmapCard } from './SessionHeatmapCard';
+import { MoneyBadge } from '../utils/money';
 
 interface SessionSummaryModalProps {
   data: SessionSummaryData | null;
@@ -639,6 +640,77 @@ export const SessionSummaryModal: React.FC<SessionSummaryModalProps> = ({
               </div>
             </SpecularCard>
           </div>
+
+          {/* 2b. Gathering Loot Table: ONLY show if loot exists and is not empty */}
+          {data.loot && data.loot.length > 0 && (
+            <SpecularCard className="p-3.5 sm:p-4 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col gap-3 font-mono">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400">
+                  {isRu ? 'Добыча сбора' : 'Gathering Loot'}
+                </span>
+                <span className="text-[11px] text-zinc-500">
+                  {data.loot.length} {isRu ? 'поз.' : 'items'}
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-black/10 dark:border-white/10 text-[10px] text-zinc-400 uppercase tracking-wider">
+                      <th className="pb-2 font-normal">{isRu ? 'Название' : 'Item'}</th>
+                      <th className="pb-2 font-normal text-right">{isRu ? 'Кол-во' : 'Count'}</th>
+                      <th className="pb-2 font-normal text-right">{isRu ? 'Цена за шт.' : 'Price each'}</th>
+                      <th className="pb-2 font-normal text-right">{isRu ? 'Сумма' : 'Total'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/5 dark:divide-white/5">
+                    {data.loot.map((item) => {
+                      const displayName = item.name || (isRu ? `Предмет #${item.item_id}` : `Item #${item.item_id}`);
+                      return (
+                        <tr key={item.item_id} className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
+                          <td className="py-1.5 pr-2 font-medium text-zinc-900 dark:text-zinc-100 truncate max-w-[200px]" title={displayName}>
+                            {displayName}
+                          </td>
+                          <td className="py-1.5 px-2 text-right text-zinc-500 tabular-nums whitespace-nowrap">
+                            ×{item.count}
+                          </td>
+                          <td className="py-1.5 px-2 text-right tabular-nums whitespace-nowrap">
+                            <MoneyBadge copper={item.price} language={language} />
+                          </td>
+                          <td className="py-1.5 pl-2 text-right font-semibold tabular-nums whitespace-nowrap">
+                            <MoneyBadge copper={item.value} language={language} />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Footer with Earned Total & Notes */}
+              <div className="pt-2.5 border-t border-black/10 dark:border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-zinc-600 dark:text-zinc-400">
+                    {isRu ? 'Заработано: ' : 'Earned: '}
+                  </span>
+                  <strong className="text-sm font-bold">
+                    <MoneyBadge copper={data.earned_copper} language={language} />
+                  </strong>
+                  {data.earned_complete === false && (
+                    <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-normal">
+                      {isRu ? '(не у всех предметов есть цена)' : '(not all items have a price)'}
+                    </span>
+                  )}
+                </div>
+
+                {data.loot_lost != null && data.loot_lost > 0 && (
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                    {isRu ? `не посчитано предметов: ${data.loot_lost}` : `uncounted items: ${data.loot_lost}`}
+                  </span>
+                )}
+              </div>
+            </SpecularCard>
+          )}
 
           {/* 3. Heatmap Card below statistics */}
           <SessionHeatmapCard summary={data} language={language} theme={theme} />

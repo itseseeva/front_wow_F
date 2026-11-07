@@ -29,6 +29,34 @@ export interface AppSettings {
   herbSearchKey?: string;
   oreSearchKey?: string;
   autoRouteMinutes?: number;
+  auctionHouseId?: number | null;
+}
+
+export interface LootRow {
+  item_id: number;
+  name: string | null;
+  count: number;
+  price: number | null;
+  value: number | null;
+  vendor: number | null;
+}
+
+export interface LootStatus {
+  items: LootRow[];
+  earned_copper: number | null;
+  earned_complete: boolean;
+}
+
+export interface PriceStatus {
+  configured: boolean;
+  keys_error: string | null;
+  region: string | null;
+  house_id: number | null;
+  houses: { id: number; name: string }[];
+  updated_at_ms: number | null;
+  loading: boolean;
+  error: string | null;
+  items: number;
 }
 
 
@@ -148,6 +176,10 @@ export interface SessionSummaryData {
   gold?: number;
   mock_heatmap?: SessionHeatmapResponse;
   timeline?: { time_s: number; kills: number; pace_per_h: number }[];
+  loot?: LootRow[];
+  earned_copper?: number | null;
+  earned_complete?: boolean;
+  loot_lost?: number;
 }
 
 export interface CalendarRoute {
@@ -330,6 +362,10 @@ declare global {
         get_schedule_status?(): Promise<ScheduleStatus>;
         get_schedule_styles?(): Promise<{ ok: boolean; styles: ScheduleStyle[] }>;
         preview_schedule_day?(configJson: string, weekday: number, seed: number): Promise<SchedulePreview>;
+
+        // Auction & Prices API
+        get_price_status?(): Promise<{ ok: boolean } & PriceStatus>;
+        refresh_prices?(): Promise<{ ok: boolean } & PriceStatus>;
       };
     };
   }

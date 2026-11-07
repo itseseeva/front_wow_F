@@ -21,6 +21,7 @@ import {
   ScheduleSettings,
   ScheduleStatus,
   RoutesChangedDetail,
+  LootStatus,
 } from './types';
 import { soundFx } from './utils/audio';
 import { SpecularCard } from './components/ui/Specular';
@@ -175,6 +176,7 @@ export const App: React.FC = () => {
     let herbSearch = 'F9';
     let oreSearch = 'F10';
     let autoRouteMinutes = 30;
+    let auctionHouseId: number | null = null;
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -188,6 +190,7 @@ export const App: React.FC = () => {
         if (parsed.herbSearchKey !== undefined) herbSearch = parsed.herbSearchKey;
         if (parsed.oreSearchKey !== undefined) oreSearch = parsed.oreSearchKey;
         if (parsed.autoRouteMinutes != null) autoRouteMinutes = Number(parsed.autoRouteMinutes);
+        if (parsed.auctionHouseId !== undefined) auctionHouseId = parsed.auctionHouseId != null ? Number(parsed.auctionHouseId) : null;
       } catch (e) {}
     }
     return {
@@ -202,7 +205,15 @@ export const App: React.FC = () => {
       herbSearchKey: herbSearch,
       oreSearchKey: oreSearch,
       autoRouteMinutes,
+      auctionHouseId,
     };
+  });
+
+  // Live Gathering Loot State (Window event 'wowbot:loot')
+  const [lootStatus, setLootStatus] = useState<LootStatus>({
+    items: [],
+    earned_copper: null,
+    earned_complete: true,
   });
 
   const rawLoadedSettingsRef = useRef<Record<string, any>>({});
@@ -343,6 +354,7 @@ export const App: React.FC = () => {
           herbSearchKey: customSettings.herbSearchKey !== undefined ? customSettings.herbSearchKey : 'F9',
           oreSearchKey: customSettings.oreSearchKey !== undefined ? customSettings.oreSearchKey : 'F10',
           autoRouteMinutes: customSettings.autoRouteMinutes != null ? Number(customSettings.autoRouteMinutes) : 30,
+          auctionHouseId: customSettings.auctionHouseId !== undefined ? (customSettings.auctionHouseId != null ? Number(customSettings.auctionHouseId) : null) : null,
         },
         chains: [
           {
@@ -461,6 +473,7 @@ export const App: React.FC = () => {
                   herbSearchKey: parsed.settings.herbSearchKey ?? prev.herbSearchKey,
                   oreSearchKey: parsed.settings.oreSearchKey ?? prev.oreSearchKey,
                   autoRouteMinutes: parsed.settings.autoRouteMinutes != null ? Number(parsed.settings.autoRouteMinutes) : (prev.autoRouteMinutes ?? 30),
+                  auctionHouseId: parsed.settings.auctionHouseId !== undefined ? (parsed.settings.auctionHouseId != null ? Number(parsed.settings.auctionHouseId) : null) : (prev.auctionHouseId ?? null),
                 }));
               }
 
@@ -899,6 +912,19 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('wowbot:routes-changed', handleRoutesChanged);
   }, [fetchRoutes, language]);
 
+  // Listen for live gathering loot status: 'wowbot:loot'
+  useEffect(() => {
+    const handleLootEvent = (e: any) => {
+      const detail: LootStatus | undefined = e?.detail;
+      if (detail && Array.isArray(detail.items)) {
+        setLootStatus(detail);
+      }
+    };
+
+    window.addEventListener('wowbot:loot', handleLootEvent);
+    return () => window.removeEventListener('wowbot:loot', handleLootEvent);
+  }, []);
+
   // Calendar Data Fetching & Month Navigation
   const fetchCalendarMonth = useCallback(async (year: number, month: number) => {
     try {
@@ -1115,6 +1141,9 @@ export const App: React.FC = () => {
       const detail = customEvent.detail;
       if (!detail) return;
 
+      // Reset live gathering loot counter on session summary
+      setLootStatus({ items: [], earned_copper: null, earned_complete: true });
+
       if (isBotRunningRef.current) {
         // Scheduled session completed while bot keeps running:
         // Do NOT open modal summary! Show brief toast notification.
@@ -1202,7 +1231,32 @@ export const App: React.FC = () => {
       setGlobalError(null);
       soundFx.playStart();
       setSessionSeconds(0);
+      setLootStatus({ items: [], earned_copper: null, earned_complete: true });
       setIsBotRunning(true);
+      if (todayDateStr) {
+        setSelectedDate(todayDateStr);
+        fetchDayData(todayDateStr);
+      }
+      setSelectedSessionId('live');
+      setActiveTab('summary');
+
+      // In browser preview: dispatch mock live loot for testing
+      if (!api?.start_bot && typeof window !== 'undefined') {
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent('wowbot:loot', {
+              detail: {
+                items: [
+                  { item_id: 22785, name: 'Оскверненная трава', count: 4, price: 4500, value: 18000, vendor: 250 },
+                  { item_id: 23424, name: 'Руда оскверненного железа', count: 6, price: 3200, value: 19200, vendor: 200 },
+                ],
+                earned_copper: 37200,
+                earned_complete: true,
+              },
+            })
+          );
+        }, 2500);
+      }
 
       // In browser mock mode without route: simulate waiting for zone terrain
       if (!api?.start_bot && !activeRoute && typeof window !== 'undefined') {
@@ -1317,7 +1371,12 @@ export const App: React.FC = () => {
           ========================================================================= */}
       <StealthHUDLeftSidebar
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={(tab) => {
+          if (tab === 'summary' && isBotRunning) {
+            setSelectedSessionId('live');
+          }
+          setActiveTab(tab);
+        }}
         routes={routes}
         onSelectRoute={handleSelectRoute}
         onDeleteRoute={handleDeleteRoute}
@@ -1339,6 +1398,8 @@ export const App: React.FC = () => {
         onExportCalendar={handleExportCalendar}
         language={language}
         theme={theme}
+        isBotRunning={isBotRunning}
+        lootStatus={lootStatus}
       />
 
       {/* =========================================================================
@@ -1483,6 +1544,12 @@ export const App: React.FC = () => {
               heatmap={activeHeatmap}
               isHeatmapLoading={isHeatmapLoading}
               language={language}
+              isBotRunning={isBotRunning}
+              sessionSeconds={sessionSeconds}
+              lootStatus={lootStatus}
+              activeRoute={activeRoute}
+              scheduleStatus={scheduleStatus}
+              onStopBot={handleToggleBot}
             />
           </div>
         )}

@@ -4,11 +4,16 @@ import {
   Clock,
   AlertTriangle,
   Route,
+  Coins,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
-import { AppSettings, ScheduleSettings } from '../types';
+import { AppSettings, ScheduleSettings, PriceStatus } from '../types';
 import { Language, Theme } from '../utils/i18n';
 import { SpecularCard, SpecularButton } from './ui/Specular';
 import { DEFAULT_SCHEDULE_SETTINGS } from '../data/mockSchedule';
+import { getPywebviewApi } from '../utils/pywebviewBridge';
+import { mockGetPriceStatus, mockRefreshPrices } from '../data/mockPrices';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -96,6 +101,67 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const isRu = language === 'ru';
   const [capturingId, setCapturingId] = useState<keyof AppSettings | null>(null);
+  const [priceStatus, setPriceStatus] = useState<PriceStatus | null>(null);
+  const [isPriceLoading, setIsPriceLoading] = useState(false);
+
+  // Auction prices: fetch on mount and listen to 'wowbot:prices'
+  useEffect(() => {
+    let isMounted = true;
+    const loadPrices = async () => {
+      try {
+        const api = await getPywebviewApi();
+        let res;
+        if (api?.get_price_status) {
+          res = await api.get_price_status();
+        } else {
+          res = await mockGetPriceStatus();
+        }
+        if (isMounted && res && res.ok) {
+          setPriceStatus(res);
+        }
+      } catch (e) {
+        console.warn('get_price_status error:', e);
+      }
+    };
+
+    loadPrices();
+
+    const handlePrices = (e: any) => {
+      const detail: PriceStatus | undefined = e?.detail;
+      if (detail) {
+        setPriceStatus(detail);
+      }
+    };
+
+    window.addEventListener('wowbot:prices', handlePrices);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('wowbot:prices', handlePrices);
+    };
+  }, []);
+
+  const handleRefreshPrices = async () => {
+    setIsPriceLoading(true);
+    try {
+      const api = await getPywebviewApi();
+      let res;
+      if (api?.refresh_prices) {
+        res = await api.refresh_prices();
+      } else {
+        res = await mockRefreshPrices();
+      }
+      if (res && res.ok) {
+        setPriceStatus(res);
+        if (onToast) {
+          onToast(isRu ? 'Цены аукциона обновлены' : 'Auction prices updated');
+        }
+      }
+    } catch (e) {
+      console.warn('refresh_prices error:', e);
+    } finally {
+      setIsPriceLoading(false);
+    }
+  };
 
   // Global listener for capturing keypress
   useEffect(() => {
@@ -168,6 +234,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       herbSearchKey: 'F9',
       oreSearchKey: 'F10',
       autoRouteMinutes: 30,
+      auctionHouseId: null,
     });
     if (onToast) {
       onToast(isRu ? 'Настройки сброшены' : 'Defaults restored');
@@ -398,7 +465,126 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* =========================================================================
-          SECTION 3: GLOBAL HOTKEYS & KEYBINDS
+          SECTION 3: ЦЕНЫ АУКЦИОНА (Auction Prices)
+          ========================================================================= */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between pb-2 border-b border-black/10 dark:border-white/[0.08]">
+          <div className="flex items-center gap-2">
+            <Coins className="w-4 h-4 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
+            <h2 className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white">
+              {isRu ? 'Цены аукциона' : 'Auction prices'}
+            </h2>
+          </div>
+
+          {priceStatus?.configured && (
+            <SpecularButton
+              onClick={handleRefreshPrices}
+              disabled={isPriceLoading || priceStatus.loading}
+              className="px-2.5 py-1.5 rounded-lg border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent text-zinc-500 hover:text-zinc-950 dark:hover:text-white transition-all cursor-pointer flex items-center gap-1.5 text-xs font-mono disabled:opacity-50"
+              title={isRu ? 'Обновить цены аукциона' : 'Refresh auction prices'}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isPriceLoading || priceStatus.loading ? 'animate-spin' : ''}`} strokeWidth={1.5} />
+              <span>{isRu ? 'Обновить цены' : 'Refresh prices'}</span>
+            </SpecularButton>
+          )}
+        </div>
+
+        {!priceStatus ? (
+          <SpecularCard className="p-4 rounded-xl border border-transparent bg-transparent">
+            <div className="flex items-center gap-2 text-xs font-mono text-zinc-500">
+              <Loader2 className="w-4 h-4 animate-spin text-zinc-400" />
+              <span>{isRu ? 'Загрузка статуса аукциона…' : 'Loading auction status…'}</span>
+            </div>
+          </SpecularCard>
+        ) : !priceStatus.configured ? (
+          <SpecularCard className="p-3.5 sm:p-4 rounded-xl border border-amber-500/25 bg-amber-500/5 flex flex-col gap-2 font-mono">
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-xs font-semibold">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{priceStatus.keys_error || (isRu ? 'Ключи Blizzard API не настроены' : 'Blizzard API keys not configured')}</span>
+            </div>
+            <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+              {isRu
+                ? 'Скопируй .env.example в .env (папка бота) и впиши ключи API Blizzard'
+                : 'Copy .env.example to .env (bot folder) and enter Blizzard API keys'}
+            </p>
+          </SpecularCard>
+        ) : (
+          <SpecularCard className="p-3.5 sm:p-4 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col gap-3 font-mono">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-zinc-950 dark:text-white">
+                  {isRu ? 'Аукционный дом' : 'Auction House'}
+                </span>
+                <span className="text-[11px] text-zinc-500">
+                  {isRu ? 'Регион: ' : 'Region: '}
+                  <strong className="text-zinc-800 dark:text-zinc-200 uppercase font-semibold">
+                    {priceStatus.region || '—'}
+                  </strong>
+                </span>
+              </div>
+
+              <div className="relative">
+                <select
+                  value={settings.auctionHouseId ?? priceStatus.house_id ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value === '' ? null : Number(e.target.value);
+                    onSettingsChange({
+                      ...settings,
+                      auctionHouseId: val,
+                    });
+                  }}
+                  className="w-full sm:w-64 px-3 py-1.5 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-xs font-mono text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white cursor-pointer"
+                >
+                  {priceStatus.houses.length === 0 && (
+                    <option value="">{isRu ? 'Нет доступных домов' : 'No houses available'}</option>
+                  )}
+                  {priceStatus.houses.map((house) => (
+                    <option key={house.id} value={house.id} className="bg-zinc-900 text-white">
+                      {house.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-black/10 dark:border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-zinc-500">
+              <div className="flex items-center gap-2">
+                <span>
+                  {isRu ? 'Цены обновлены: ' : 'Prices updated: '}
+                  <strong className="text-zinc-800 dark:text-zinc-200">
+                    {priceStatus.updated_at_ms
+                      ? new Date(priceStatus.updated_at_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : (isRu ? 'ещё нет' : 'not yet')}
+                  </strong>
+                </span>
+
+                {priceStatus.items > 0 && (
+                  <>
+                    <span>·</span>
+                    <span>{priceStatus.items} {isRu ? 'предметов' : 'items'}</span>
+                  </>
+                )}
+              </div>
+
+              {(isPriceLoading || priceStatus.loading) && (
+                <div className="flex items-center gap-1.5 text-amber-500 font-semibold animate-pulse">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>{isRu ? 'обновляю…' : 'updating…'}</span>
+                </div>
+              )}
+            </div>
+
+            {priceStatus.error && (
+              <div className="text-[11px] text-red-500 dark:text-red-400 font-medium pt-1">
+                {priceStatus.error}
+              </div>
+            )}
+          </SpecularCard>
+        )}
+      </div>
+
+      {/* =========================================================================
+          SECTION 4: GLOBAL HOTKEYS & KEYBINDS
           ========================================================================= */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between pb-2 border-b border-black/10 dark:border-white/[0.08]">

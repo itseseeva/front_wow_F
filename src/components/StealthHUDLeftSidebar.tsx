@@ -7,8 +7,9 @@ import {
   CalendarClock,
 } from 'lucide-react';
 import { soundFx } from '../utils/audio';
-import { CalendarMonthResponse } from '../types';
+import { CalendarMonthResponse, LootStatus } from '../types';
 import { CalendarMonthView } from './CalendarMonthView';
+import { MoneyBadge } from '../utils/money';
 
 export type NavTab = 'routes' | 'rotation' | 'schedule' | 'summary' | 'settings';
 
@@ -44,6 +45,8 @@ interface StealthHUDLeftSidebarProps {
   onExportCalendar: () => void;
   language: 'ru' | 'en';
   theme?: 'dark' | 'light';
+  isBotRunning?: boolean;
+  lootStatus?: LootStatus | null;
 }
 
 export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
@@ -59,6 +62,8 @@ export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
   onRefreshCalendar,
   onExportCalendar,
   language,
+  isBotRunning,
+  lootStatus,
 }) => {
   const isRu = language === 'ru';
 
