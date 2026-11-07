@@ -295,129 +295,107 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
         ) : (
           <div className="flex flex-col gap-6">
             {/* 3. Chip Selector Row: frameless text tabs */}
-            <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-none font-mono text-xs">
-              {isBotRunning && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    soundFx.playClick();
-                    onSelectSessionId('live');
-                    onSelectPassIndex(null);
-                  }}
-                  className={`py-1 transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
-                    isLiveSelected
-                      ? 'text-zinc-950 dark:text-white font-semibold underline underline-offset-8 decoration-zinc-400 dark:decoration-zinc-400'
-                      : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
-                  }`}
-                >
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-zinc-900 dark:bg-white opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-zinc-950 dark:bg-white"></span>
-                  </span>
-                  <span>{isRu ? 'LIVE · Текущая сессия' : 'LIVE · Active Session'}</span>
-                </button>
-              )}
-
-              {hasSessions && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    soundFx.playClick();
-                    onSelectSessionId('all');
-                    onSelectPassIndex(null);
-                  }}
-                  className={`py-1 transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-                    isAllDay
-                      ? 'text-zinc-950 dark:text-white font-semibold underline underline-offset-8 decoration-zinc-400 dark:decoration-zinc-400'
-                      : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
-                  }`}
-                >
-                  <span>{isRu ? 'Весь день' : 'All Day'}</span>
-                </button>
-              )}
-
-              {sessions.map((s) => {
-                const isSelected = !isLiveSelected && selectedSessionId === s.session_id;
-                const timeStr = new Date(s.started_at_ms).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                });
-                const match = s.route_name.match(/^(.*?)\s*\(([^)]+)\)$/);
-                const baseName = match ? match[1] : s.route_name;
-                const regionName = match ? match[2] : null;
-                const cleanRouteName = formatRouteRoman(baseName.trim());
-
-                return (
+            <div className="flex items-center justify-between gap-3 overflow-x-auto pb-1 scrollbar-none font-mono text-xs border-b border-black/5 dark:border-white/5">
+              <div className="flex items-center gap-3 overflow-x-auto scrollbar-none">
+                {isBotRunning && (
                   <button
-                    key={s.session_id}
                     type="button"
                     onClick={() => {
                       soundFx.playClick();
-                      onSelectSessionId(s.session_id);
+                      onSelectSessionId('live');
                       onSelectPassIndex(null);
                     }}
-                    className={`py-1 transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-                      isSelected
+                    className={`py-1 transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+                      isLiveSelected
                         ? 'text-zinc-950 dark:text-white font-semibold underline underline-offset-8 decoration-zinc-400 dark:decoration-zinc-400'
                         : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
                     }`}
                   >
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-zinc-900 dark:bg-white opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-zinc-950 dark:bg-white"></span>
+                    </span>
                     <span>
-                      {timeStr} · {cleanRouteName}
-                      {regionName && (
-                        <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1">
-                          ({regionName})
-                        </span>
-                      )}
+                      LIVE · {activeRoute ? `${formatRouteRoman(activeRoute.name)}${activeRoute.region ? ` (${activeRoute.region})` : ''}` : (isRu ? 'Текущая сессия' : 'Active Session')}
                     </span>
                   </button>
-                );
-              })}
+                )}
+
+                {hasSessions && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundFx.playClick();
+                      onSelectSessionId('all');
+                      onSelectPassIndex(null);
+                    }}
+                    className={`py-1 transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                      isAllDay
+                        ? 'text-zinc-950 dark:text-white font-semibold underline underline-offset-8 decoration-zinc-400 dark:decoration-zinc-400'
+                        : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    <span>{isRu ? 'Весь день' : 'All Day'}</span>
+                  </button>
+                )}
+
+                {sessions.map((s) => {
+                  const isSelected = !isLiveSelected && selectedSessionId === s.session_id;
+                  const timeStr = new Date(s.started_at_ms).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+                  const match = s.route_name.match(/^(.*?)\s*\(([^)]+)\)$/);
+                  const baseName = match ? match[1] : s.route_name;
+                  const regionName = match ? match[2] : null;
+                  const cleanRouteName = formatRouteRoman(baseName.trim());
+
+                  return (
+                    <button
+                      key={s.session_id}
+                      type="button"
+                      onClick={() => {
+                        soundFx.playClick();
+                        onSelectSessionId(s.session_id);
+                        onSelectPassIndex(null);
+                      }}
+                      className={`py-1 transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'text-zinc-950 dark:text-white font-semibold underline underline-offset-8 decoration-zinc-400 dark:decoration-zinc-400'
+                          : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+                      }`}
+                    >
+                      <span>
+                        {timeStr} · {cleanRouteName}
+                        {regionName && (
+                          <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1">
+                            ({regionName})
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {isBotRunning && onStopBot && isLiveSelected && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundFx.playClick();
+                    onStopBot();
+                  }}
+                  className="px-2.5 py-1 text-zinc-500 hover:text-red-500 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ml-auto"
+                >
+                  <Square className="w-3 h-3 fill-current" />
+                  <span>{isRu ? 'Остановить' : 'Stop Bot'}</span>
+                </button>
+              )}
             </div>
 
             {/* LIVE TELEMETRY VIEW (immediately open, no container boxes) */}
             {isLiveSelected ? (
               <div className="flex flex-col gap-6 animate-fadeIn">
-                {/* Live Session Active Banner (frameless) */}
-                <div className="flex items-center justify-between gap-3 font-mono py-1">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="relative flex h-2 w-2 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-zinc-900 dark:bg-white opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-zinc-950 dark:bg-white"></span>
-                    </span>
-                    <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs uppercase tracking-wider font-semibold text-zinc-950 dark:text-white">
-                          {isRu ? 'Бот активен' : 'Bot Active'}
-                        </span>
-                        <span className="text-xs text-zinc-400 dark:text-zinc-500">•</span>
-                        <span className="text-xs text-zinc-800 dark:text-zinc-200 font-medium truncate">
-                          {activeRoute
-                            ? `${formatRouteRoman(activeRoute.name)}${activeRoute.region ? ` (${activeRoute.region})` : ''}`
-                            : (isRu ? 'Свободный сбор (без маршрута)' : 'Free gathering (no route)')}
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-zinc-500">
-                        {isRu ? 'Статистика обновляется на лету во время фарма' : 'Live telemetry streaming in real time'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {onStopBot && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        soundFx.playClick();
-                        onStopBot();
-                      }}
-                      className="px-2.5 py-1 text-zinc-500 hover:text-zinc-950 dark:hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-                    >
-                      <Square className="w-3 h-3 fill-current" />
-                      <span>{isRu ? 'Остановить' : 'Stop Bot'}</span>
-                    </button>
-                  )}
-                </div>
-
                 {/* Live 5 Metric Cards (frameless columns, no boxes) */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 py-1 font-mono">
                   {/* 1. Duration */}

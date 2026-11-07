@@ -431,7 +431,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     type="number"
                     min={0}
                     max={50}
-                    value={scheduleSettings.offDayPercent}
+                    value={scheduleSettings.offDayPercent ?? 0}
                     onChange={(e) =>
                       onScheduleSettingsChange({
                         ...scheduleSettings,
