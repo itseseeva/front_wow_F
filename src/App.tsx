@@ -537,21 +537,23 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Route Selection & Deletion Handlers
+  // Route Selection & Deletion Handlers (allow playing without route on re-clicking selected route)
   const handleSelectRoute = async (id: string) => {
     soundFx.playClick();
+    const isAlreadyActive = routes.some((r) => r.id === id && r.active);
+    const targetId = isAlreadyActive ? null : id;
     try {
       const api = await getPywebviewApi();
       let res: { ok: boolean; error?: string } | null = null;
       if (api?.set_active_route) {
-        res = await api.set_active_route(id);
+        res = await api.set_active_route(targetId as any);
       } else {
-        res = await mockSetActiveRoute(id);
+        res = await mockSetActiveRoute(targetId);
       }
 
       if (res && res.ok) {
         setRoutes((prev) =>
-          prev.map((r) => ({ ...r, active: r.id === id }))
+          prev.map((r) => ({ ...r, active: targetId !== null && r.id === targetId }))
         );
       } else {
         const errMsg = res?.error || (language === 'ru' ? 'Не удалось выбрать маршрут' : 'Failed to select route');
@@ -728,6 +730,10 @@ export const App: React.FC = () => {
           }
         } else {
           await fetchRoutes();
+        }
+
+        if (res.terrain && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('wowbot:terrain-status', { detail: res.terrain }));
         }
       }
     } catch (err) {
@@ -1141,6 +1147,26 @@ export const App: React.FC = () => {
       soundFx.playStart();
       setSessionSeconds(0);
       setIsBotRunning(true);
+
+      // In browser mock mode without route: simulate waiting for zone terrain
+      if (!api?.start_bot && !activeRoute && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('wowbot:terrain-status', {
+            detail: {
+              map_id: 1436,
+              status: 'building',
+              stage: 'tiles',
+              done: 0,
+              total: 24,
+              progress: 0,
+              elapsed_s: 0,
+              eta_s: 40,
+              error: null,
+              source: null,
+            },
+          })
+        );
+      }
     }
   };
 
@@ -1207,7 +1233,7 @@ export const App: React.FC = () => {
   };
 
   const isRu = language === 'ru';
-  const activeRoute = routes.find((r) => r.active) || routes[0];
+  const activeRoute = routes.find((r) => r.active) || null;
 
   return (
     <div
@@ -1282,7 +1308,7 @@ export const App: React.FC = () => {
             <div className="w-full max-w-5xl 2xl:max-w-7xl mx-auto flex flex-col gap-4">
               <LineSidebarRouteList
                 routes={routes}
-                activeRouteId={activeRoute?.id || routes[0]?.id || ''}
+                activeRouteId={activeRoute?.id || ''}
                 onSelectRoute={handleSelectRoute}
                 onRenameRoute={handleRenameRoute}
                 onDeleteRoute={handleDeleteRoute}

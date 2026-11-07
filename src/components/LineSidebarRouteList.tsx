@@ -4,6 +4,9 @@ import { RouteItem } from './StealthHUDLeftSidebar';
 import { SpecularCard, SpecularButton } from './ui/Specular';
 import { soundFx } from '../utils/audio';
 import { formatRouteRoman } from '../utils/roman';
+import { TerrainStatus } from '../types';
+import { getPywebviewApi } from '../utils/pywebviewBridge';
+import { mockGetTerrainStatus } from '../data/mockRoutes';
 
 interface LineSidebarRouteListProps {
   routes: RouteItem[];
@@ -22,6 +25,31 @@ function formatSeconds(totalSeconds: number): string {
   const mins = Math.floor(s / 60);
   const secs = s % 60;
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+
+
+function getStageTitle(
+  stage: string | null | undefined,
+  done: number | undefined,
+  total: number | undefined,
+  isRu: boolean
+): string {
+  let label = '';
+  if (stage === 'tiles') {
+    label = isRu ? 'Скачиваю карту зоны' : 'Downloading zone tiles';
+  } else if (stage === 'models') {
+    label = isRu ? 'Скачиваю деревья и дома' : 'Downloading trees & buildings';
+  } else if (stage === 'grid') {
+    label = isRu ? 'Строю сетку' : 'Building navmesh grid';
+  } else {
+    label = isRu ? 'Подготовка карты' : 'Preparing terrain map';
+  }
+
+  if (done != null && total != null && total > 0 && done > 0) {
+    return `${label} (${done} ${isRu ? 'из' : 'of'} ${total})`;
+  }
+  return label;
 }
 
 export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
@@ -46,6 +74,121 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
   // Proximity displacement offsets for each route item (index -> px shift)
   const [proximityOffsets, setProximityOffsets] = useState<Record<string, number>>({});
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  // Terrain status for minimalist progress bar embedded under route
+  const [terrainStatus, setTerrainStatus] = useState<TerrainStatus | null>(null);
+  const [showTerrainBar, setShowTerrainBar] = useState<boolean>(false);
+
+  // Requirement: percentage never decreases in one session, only show if we saw 'building'
+  const hasSeenBuildingRef = useRef<boolean>(false);
+  const highestProgressRef = useRef<number>(0);
+  const currentMapIdRef = useRef<number | null>(null);
+  const dismissTimerRef = useRef<any>(null);
+
+  const applyTerrainUpdate = useCallback((detail: TerrainStatus) => {
+    if (!detail) return;
+
+    if (currentMapIdRef.current !== detail.map_id) {
+      currentMapIdRef.current = detail.map_id;
+      highestProgressRef.current = 0;
+      hasSeenBuildingRef.current = false;
+    }
+
+    if (detail.status === 'building') {
+      hasSeenBuildingRef.current = true;
+      setShowTerrainBar(true);
+      if (dismissTimerRef.current) {
+        clearTimeout(dismissTimerRef.current);
+        dismissTimerRef.current = null;
+      }
+    } else if (detail.status === 'ready') {
+      if (!hasSeenBuildingRef.current) {
+        return;
+      }
+      setShowTerrainBar(true);
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+      dismissTimerRef.current = setTimeout(() => {
+        setShowTerrainBar(false);
+        hasSeenBuildingRef.current = false;
+        setTerrainStatus(null);
+      }, 3000);
+    } else if (detail.status === 'error') {
+      if (hasSeenBuildingRef.current) {
+        setShowTerrainBar(true);
+      }
+    } else if (detail.status === 'none') {
+      setShowTerrainBar(false);
+    }
+
+    const incomingProg = typeof detail.progress === 'number' ? Math.max(0, Math.min(1, detail.progress)) : 0;
+    const finalProg = detail.status === 'ready' ? 1 : Math.max(highestProgressRef.current, incomingProg);
+    highestProgressRef.current = finalProg;
+
+    setTerrainStatus({
+      ...detail,
+      progress: finalProg,
+    });
+  }, []);
+
+  // Window event listener
+  useEffect(() => {
+    const handleTerrain = (e: any) => {
+      const detail: TerrainStatus = e?.detail;
+      if (detail) {
+        applyTerrainUpdate(detail);
+      }
+    };
+    window.addEventListener('wowbot:terrain-status', handleTerrain);
+    return () => {
+      window.removeEventListener('wowbot:terrain-status', handleTerrain);
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+    };
+  }, [applyTerrainUpdate]);
+
+  // 1-second polling while status === 'building'
+  useEffect(() => {
+    if (!showTerrainBar || !terrainStatus || terrainStatus.status !== 'building') {
+      return;
+    }
+
+    let isMounted = true;
+    const poll = async () => {
+      try {
+        let res: { ok: boolean; error?: string } & Partial<TerrainStatus>;
+        const api = await getPywebviewApi();
+        if (api?.get_terrain_status) {
+          res = await api.get_terrain_status(terrainStatus.map_id);
+        } else {
+          res = await mockGetTerrainStatus(terrainStatus.map_id);
+        }
+
+        if (!isMounted) return;
+
+        if (res && res.status) {
+          applyTerrainUpdate({
+            map_id: res.map_id ?? terrainStatus.map_id,
+            status: res.status,
+            stage: res.stage ?? terrainStatus.stage,
+            done: res.done ?? terrainStatus.done,
+            total: res.total ?? terrainStatus.total,
+            progress: res.progress ?? terrainStatus.progress,
+            elapsed_s: res.elapsed_s ?? terrainStatus.elapsed_s,
+            eta_s: res.eta_s !== undefined ? res.eta_s : terrainStatus.eta_s,
+            error: res.error ?? null,
+            source: res.source ?? terrainStatus.source,
+          });
+        }
+      } catch (err) {
+        console.warn('Terrain poll warning:', err);
+      }
+    };
+
+    const interval = window.setInterval(poll, 1000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [showTerrainBar, terrainStatus?.map_id, terrainStatus?.status, applyTerrainUpdate]);
 
   // Active line indicator position
   const [indicatorStyle, setIndicatorStyle] = useState<{ top: number; height: number; opacity: number }>({
@@ -82,14 +225,14 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, [updateActiveIndicator, routes]);
 
-  // Cursor proximity handler inspired by React Bits Line Sidebar
+  // Cursor proximity handler
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const container = containerRef.current;
     if (!container) return;
 
     const mouseY = e.clientY;
     const newOffsets: Record<string, number> = {};
-    const proximityRadius = 90; // px threshold for proximity effect
+    const proximityRadius = 90;
 
     routes.forEach((route) => {
       const el = itemsRef.current.get(route.id);
@@ -152,237 +295,362 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
     return formatted;
   };
 
+  // Target route under which the terrain bar appears
+  const targetRouteIdForTerrain =
+    routes.find((r) => r.id === activeRouteId)?.id ||
+    routes[0]?.id ||
+    null;
+
+  const isReady = terrainStatus?.status === 'ready';
+  const isError = terrainStatus?.status === 'error';
+  const barPercent = isReady ? 100 : Math.min(100, Math.max(0, Math.floor((terrainStatus?.progress ?? 0) * 100)));
+
   return (
-    <SpecularCard className="w-full rounded-2xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent shadow-none p-4 sm:p-5 2xl:p-7 select-none transition-all duration-200">
-      {/* Title / Section Header (minimal sentence-case, borderless) */}
-      <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-transparent">
-        <div className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.3)] dark:shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
-          <h2 className="text-xs sm:text-sm font-mono font-medium text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
-            {isRu ? 'Маршруты' : 'Routes'}
-          </h2>
+    <>
+      {/* Light diagonal stripes moving CSS animation matching attachment screenshot */}
+      <style>{`
+        @keyframes terrainStripeScroll {
+          0% {
+            background-position: 0 0;
+          }
+          100% {
+            background-position: 24px 0;
+          }
+        }
+        .terrain-animated-stripes {
+          background-image: repeating-linear-gradient(
+            45deg,
+            #ffffff,
+            #ffffff 6px,
+            #9ca3af 6px,
+            #9ca3af 12px
+          );
+          background-size: 24px 24px;
+          animation: terrainStripeScroll 0.9s linear infinite;
+        }
+      `}</style>
+
+      <SpecularCard className="w-full rounded-2xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent shadow-none p-4 sm:p-5 2xl:p-7 select-none transition-all duration-200">
+        {/* Title / Section Header */}
+        <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-transparent">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.3)] dark:shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
+            <h2 className="text-xs sm:text-sm font-mono font-medium text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
+              {isRu ? 'Маршруты' : 'Routes'}
+            </h2>
+          </div>
+
+          {onRecordRoute && (
+            <SpecularButton
+              onClick={() => {
+                soundFx.playClick();
+                onRecordRoute();
+              }}
+              className="h-8 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all active:scale-95 shadow-none"
+            >
+              <Plus className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white" />
+              <span>{isRu ? 'Записать маршрут' : 'Record Route'}</span>
+            </SpecularButton>
+          )}
         </div>
 
-        {onRecordRoute && (
-          <SpecularButton
-            onClick={() => {
-              soundFx.playClick();
-              onRecordRoute();
-            }}
-            className="h-8 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all active:scale-95 shadow-none"
-          >
-            <Plus className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white" />
-            <span>{isRu ? 'Записать маршрут' : 'Record Route'}</span>
-          </SpecularButton>
-        )}
-      </div>
+        {/* React Bits Line Sidebar Container */}
+        <div
+          ref={containerRef}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          className="relative flex flex-col py-2 pl-4 pr-2"
+        >
+          {/* Continuous Guide Line Rail (hidden when routes is empty) */}
+          {routes.length > 0 && (
+            <div className="absolute left-[7px] top-1 bottom-1 w-[1px] bg-black/[0.12] dark:bg-white/[0.1]" />
+          )}
 
-      {/* React Bits Line Sidebar Container */}
-      <div
-        ref={containerRef}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        className="relative flex flex-col py-2 pl-4 pr-2"
-      >
-        {/* Continuous Guide Line Rail (hidden when routes is empty) */}
-        {routes.length > 0 && (
-          <div className="absolute left-[7px] top-1 bottom-1 w-[1px] bg-black/[0.12] dark:bg-white/[0.1]" />
-        )}
+          {/* Dynamic Sliding Active Line Indicator (hidden when routes is empty) */}
+          {routes.length > 0 && indicatorStyle.opacity > 0 && (
+            <div
+              className="absolute left-[6.5px] w-[2px] bg-zinc-950 dark:bg-white shadow-[0_0_8px_rgba(0,0,0,0.35)] dark:shadow-[0_0_8px_rgba(255,255,255,0.9)] rounded-full transition-all duration-250 ease-out pointer-events-none"
+              style={{
+                transform: `translateY(${indicatorStyle.top}px)`,
+                height: `${indicatorStyle.height}px`,
+                opacity: indicatorStyle.opacity,
+              }}
+            />
+          )}
 
-        {/* Dynamic Sliding Active Line Indicator (hidden when routes is empty) */}
-        {routes.length > 0 && indicatorStyle.opacity > 0 && (
-          <div
-            className="absolute left-[6.5px] w-[2px] bg-zinc-950 dark:bg-white shadow-[0_0_8px_rgba(0,0,0,0.35)] dark:shadow-[0_0_8px_rgba(255,255,255,0.9)] rounded-full transition-all duration-250 ease-out pointer-events-none"
-            style={{
-              transform: `translateY(${indicatorStyle.top}px)`,
-              height: `${indicatorStyle.height}px`,
-              opacity: indicatorStyle.opacity,
-            }}
-          />
-        )}
+          {/* Empty state when no routes exist */}
+          {routes.length === 0 ? (
+            <div className="py-8 text-center text-xs font-mono text-zinc-500 dark:text-zinc-500">
+              {isRu ? 'Нет маршрутов' : 'No routes available'}
+            </div>
+          ) : (
+            /* Route Items List */
+            <div className="flex flex-col gap-1.5 sm:gap-2 relative z-10">
+              {routes.map((route) => {
+                const isActive = route.id === activeRouteId;
+                const isHovered = hoveredId === route.id;
+                const isCreating = route.isCreating;
+                const offset = proximityOffsets[route.id] || 0;
+                const displayName = getRouteDisplayName(route.name);
 
-        {/* Empty state when no routes exist */}
-        {routes.length === 0 ? (
-          <div className="py-8 text-center text-xs font-mono text-zinc-500 dark:text-zinc-500">
-            {isRu ? 'Нет маршрутов' : 'No routes available'}
-          </div>
-        ) : (
-          /* Route Items List */
-          <div className="flex flex-col gap-1.5 sm:gap-2 relative z-10">
-            {routes.map((route, routeIndex) => {
-              const isActive = route.id === activeRouteId;
-              const isHovered = hoveredId === route.id;
-              const isCreating = route.isCreating;
-              const offset = proximityOffsets[route.id] || 0;
-              const displayName = getRouteDisplayName(route.name);
+                // Show thin terrain progress bar directly under the target route
+                const isTargetForTerrain =
+                  route.id === targetRouteIdForTerrain ||
+                  (isCreating && showTerrainBar);
+                const shouldRenderTerrainHere = showTerrainBar && terrainStatus && isTargetForTerrain;
 
-              return (
-                <div
-                  key={route.id}
-                  ref={(el) => {
-                    if (el) itemsRef.current.set(route.id, el);
-                    else itemsRef.current.delete(route.id);
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => !isCreating && onSelectRoute(route.id)}
-                  onKeyDown={(e) => {
-                    if ((e.key === 'Enter' || e.key === ' ') && !isCreating) {
-                      e.preventDefault();
-                      onSelectRoute(route.id);
-                    }
-                  }}
-                  onMouseEnter={() => setHoveredId(route.id)}
-                  className="group relative flex items-center justify-between h-10 sm:h-11 2xl:h-12 w-full pl-5 pr-3 text-left transition-all duration-150 ease-out cursor-pointer outline-none bg-transparent"
-                  style={{
-                    transform: `translateX(${offset}px)`,
-                  }}
-                >
-                  {/* Horizontal Tick from line rail */}
-                  <span
-                    className={`absolute left-[-9px] h-[1px] transition-all duration-200 ${
-                      isActive
-                        ? 'w-3.5 bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.3)] dark:shadow-[0_0_6px_rgba(255,255,255,0.8)]'
-                        : isHovered
-                        ? 'w-3 bg-zinc-700 dark:bg-zinc-300'
-                        : 'w-2 bg-black/20 dark:bg-white/20'
-                    }`}
-                  />
-
-                  {route.isRecording || isCreating ? (
-                    /* Route recording / creation loading state directly next to route name */
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(255,255,255,0.8)] animate-ping" />
-                        <span className="font-mono text-xs sm:text-sm 2xl:text-base text-zinc-950 dark:text-white font-medium">
-                          {displayName}
-                        </span>
-                        <span className="text-[10px] sm:text-xs font-mono text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 ml-1">
-                          <Loader2 className="w-3 h-3 animate-spin text-zinc-500 dark:text-zinc-400" />
-                          <span>{isRu ? 'идёт запись...' : 'recording...'}</span>
-                          {route.recordingSeconds != null && route.recordingSeconds > 0 && (
-                            <span className="text-zinc-400 font-mono">({formatSeconds(route.recordingSeconds)})</span>
-                          )}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 ml-auto">
-                        {onSaveRecording && route.isRecording && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSaveRecording(route.id);
-                            }}
-                            className="px-2.5 py-0.5 rounded text-[11px] font-mono bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors cursor-pointer active:scale-95 shadow-sm"
-                          >
-                            {isRu ? 'Сохранить' : 'Save'}
-                          </button>
-                        )}
-                        {onCancelRecording && route.isRecording && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onCancelRecording(route.id);
-                            }}
-                            className="px-2 py-0.5 rounded text-[11px] font-mono text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
-                          >
-                            {isRu ? 'Отмена' : 'Cancel'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ) : editingRouteId === route.id ? (
-                    <div className="flex items-center justify-between w-full" onClick={(e) => e.stopPropagation()}>
-                      {/* Inline Edit Input */}
-                      <input
-                        type="text"
-                        value={editNameValue}
-                        onChange={(e) => setEditNameValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          e.stopPropagation();
-                          if (e.key === 'Enter') handleSaveEdit(undefined, route.id);
-                          if (e.key === 'Escape') handleCancelEdit();
-                        }}
-                        autoFocus
-                        className="h-7 px-2 py-0.5 rounded border border-zinc-950/40 dark:border-white/40 bg-black/10 dark:bg-white/10 text-xs sm:text-sm font-mono text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white w-48 max-w-[70%]"
+                return (
+                  <div key={route.id} className="flex flex-col w-full">
+                    {/* Route item row */}
+                    <div
+                      ref={(el) => {
+                        if (el) itemsRef.current.set(route.id, el);
+                        else itemsRef.current.delete(route.id);
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => !isCreating && onSelectRoute(route.id)}
+                      onKeyDown={(e) => {
+                        if ((e.key === 'Enter' || e.key === ' ') && !isCreating) {
+                          e.preventDefault();
+                          onSelectRoute(route.id);
+                        }
+                      }}
+                      onMouseEnter={() => setHoveredId(route.id)}
+                      className="group relative flex items-center justify-between h-10 sm:h-11 2xl:h-12 w-full pl-5 pr-3 text-left transition-all duration-150 ease-out cursor-pointer outline-none bg-transparent"
+                      style={{
+                        transform: `translateX(${offset}px)`,
+                      }}
+                    >
+                      {/* Horizontal Tick from line rail */}
+                      <span
+                        className={`absolute left-[-9px] h-[1px] transition-all duration-200 ${
+                          isActive
+                            ? 'w-3.5 bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.3)] dark:shadow-[0_0_6px_rgba(255,255,255,0.8)]'
+                            : isHovered
+                            ? 'w-3 bg-zinc-700 dark:bg-zinc-300'
+                            : 'w-2 bg-black/20 dark:bg-white/20'
+                        }`}
                       />
 
-                      {/* Save & Cancel Actions */}
-                      <div className="flex items-center gap-1.5 ml-auto">
-                        <button
-                          type="button"
-                          onClick={(e) => handleSaveEdit(e, route.id)}
-                          className="p-1 rounded text-zinc-950 dark:text-white hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
-                          title={isRu ? 'Сохранить имя' : 'Save name'}
-                        >
-                          <Check className="w-4 h-4 stroke-[2.5]" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCancelEdit}
-                          className="p-1 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
-                          title={isRu ? 'Отмена' : 'Cancel'}
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between w-full">
-                      {/* Route Name */}
-                      <span
-                        className={`font-mono text-xs sm:text-sm 2xl:text-base tracking-wide transition-colors duration-150 truncate ${
-                          isActive
-                            ? 'text-zinc-950 dark:text-white font-semibold'
-                            : isHovered
-                            ? 'text-zinc-800 dark:text-zinc-200'
-                            : 'text-zinc-500'
-                        }`}
-                      >
-                        {displayName}
-                      </span>
+                      {route.isRecording ? (
+                        /* Route recording state */
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(255,255,255,0.8)] animate-ping" />
+                            <span className="font-mono text-xs sm:text-sm 2xl:text-base text-zinc-950 dark:text-white font-medium">
+                              {displayName}
+                            </span>
+                            <span className="text-[10px] sm:text-xs font-mono text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 ml-1">
+                              <Loader2 className="w-3 h-3 animate-spin text-zinc-500 dark:text-zinc-400" />
+                              <span>{isRu ? 'идёт запись...' : 'recording...'}</span>
+                              {route.recordingSeconds != null && route.recordingSeconds > 0 && (
+                                <span className="text-zinc-400 font-mono">({formatSeconds(route.recordingSeconds)})</span>
+                              )}
+                            </span>
+                          </div>
 
-                      {/* Right actions: Checkmark for active route (left), Edit pencil (right of checkmark), Delete icon */}
-                      <div className="flex items-center gap-1.5 ml-auto">
-                        {isActive && (
-                          <Check className="w-4 h-4 text-zinc-950 dark:text-white stroke-[2.5] drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]" />
-                        )}
-
-                        {onRenameRoute && (
-                          <button
-                            type="button"
-                            onClick={(e) => handleStartEdit(e, route)}
-                            className="text-zinc-400 hover:text-zinc-950 dark:hover:text-white cursor-pointer transition-colors p-1.5 rounded opacity-75 group-hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5"
-                            title={isRu ? 'Переименовать маршрут' : 'Rename route'}
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-
-                        {onDeleteRoute && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
+                          <div className="flex items-center gap-2 ml-auto">
+                            {onSaveRecording && route.isRecording && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSaveRecording(route.id);
+                                }}
+                                className="px-2.5 py-0.5 rounded text-[11px] font-mono bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors cursor-pointer active:scale-95 shadow-sm"
+                              >
+                                {isRu ? 'Сохранить' : 'Save'}
+                              </button>
+                            )}
+                            {onCancelRecording && route.isRecording && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onCancelRecording(route.id);
+                                }}
+                                className="px-2 py-0.5 rounded text-[11px] font-mono text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
+                              >
+                                {isRu ? 'Отмена' : 'Cancel'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : editingRouteId === route.id ? (
+                        <div className="flex items-center justify-between w-full" onClick={(e) => e.stopPropagation()}>
+                          {/* Inline Edit Input */}
+                          <input
+                            type="text"
+                            value={editNameValue}
+                            onChange={(e) => setEditNameValue(e.target.value)}
+                            onKeyDown={(e) => {
                               e.stopPropagation();
-                              onDeleteRoute(route.id);
+                              if (e.key === 'Enter') handleSaveEdit(undefined, route.id);
+                              if (e.key === 'Escape') handleCancelEdit();
                             }}
-                            className="text-zinc-400 hover:text-red-500 dark:hover:text-red-400 cursor-pointer transition-colors p-1.5 rounded"
-                            title={isRu ? 'Удалить' : 'Delete'}
+                            autoFocus
+                            className="h-7 px-2 py-0.5 rounded border border-zinc-950/40 dark:border-white/40 bg-black/10 dark:bg-white/10 text-xs sm:text-sm font-mono text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white w-48 max-w-[70%]"
+                          />
+
+                          {/* Save & Cancel Actions */}
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            <button
+                              type="button"
+                              onClick={(e) => handleSaveEdit(e, route.id)}
+                              className="p-1 rounded text-zinc-950 dark:text-white hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                              title={isRu ? 'Сохранить имя' : 'Save name'}
+                            >
+                              <Check className="w-4 h-4 stroke-[2.5]" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleCancelEdit}
+                              className="p-1 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                              title={isRu ? 'Отмена' : 'Cancel'}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between w-full">
+                          {/* Route Name */}
+                          <span
+                            className={`font-mono text-xs sm:text-sm 2xl:text-base tracking-wide transition-colors duration-150 truncate ${
+                              isActive
+                                ? 'text-zinc-950 dark:text-white font-semibold'
+                                : isHovered
+                                ? 'text-zinc-800 dark:text-zinc-200'
+                                : 'text-zinc-500'
+                            }`}
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
+                            {displayName}
+                          </span>
+
+                          {/* Right actions: Checkmark for active route (left), Edit pencil (right of checkmark), Delete icon */}
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            {isActive && (
+                              <Check className="w-4 h-4 text-zinc-950 dark:text-white stroke-[2.5] drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]" />
+                            )}
+
+                            {onRenameRoute && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleStartEdit(e, route)}
+                                className="text-zinc-400 hover:text-zinc-950 dark:hover:text-white cursor-pointer transition-colors p-1.5 rounded opacity-75 group-hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5"
+                                title={isRu ? 'Переименовать маршрут' : 'Rename route'}
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            {onDeleteRoute && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeleteRoute(route.id);
+                                }}
+                                className="text-zinc-400 hover:text-red-500 dark:hover:text-red-400 cursor-pointer transition-colors p-1.5 rounded"
+                                title={isRu ? 'Удалить' : 'Delete'}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
+
+                    {/* ULTRA-MINIMALIST thin progress bar & text line directly under the route (no card / no modal) */}
+                    {shouldRenderTerrainHere && (
+                      <div className="w-full pl-5 pr-3 pt-1.5 pb-2 flex flex-col gap-1.5 animate-fadeIn">
+                        {/* Thin progress bar line */}
+                        <div className="w-full h-[3px] bg-white/[0.12] rounded-full overflow-hidden relative">
+                          <div
+                            style={{ width: `${barPercent}%` }}
+                            className={`h-full rounded-full transition-[width] duration-800 ease-linear ${
+                              isError
+                                ? 'bg-red-500'
+                                : isReady
+                                ? 'bg-white shadow-[0_0_6px_rgba(255,255,255,0.7)]'
+                                : 'terrain-animated-stripes shadow-[0_0_6px_rgba(255,255,255,0.5)]'
+                            }`}
+                          />
+                        </div>
+
+                        {/* Single row of text directly below the bar */}
+                        <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 select-none">
+                          <span className="truncate">
+                            {isError ? (
+                              <span className="text-red-400">
+                                {terrainStatus.error || (isRu ? 'Ошибка сборки карты зоны' : 'Error building terrain')}
+                              </span>
+                            ) : isReady ? (
+                              <span className="text-zinc-200">
+                                {isRu ? 'Карта местности готова — бот продолжает' : 'Terrain map ready — bot continuing'}
+                              </span>
+                            ) : (
+                              getStageTitle(terrainStatus.stage, terrainStatus.done, terrainStatus.total, isRu)
+                            )}
+                          </span>
+
+                          {!isError && (
+                            <span className="shrink-0 ml-3 text-[11px] font-mono text-white font-medium">
+                              {barPercent}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Fallback thin progress bar if no routes exist at all */}
+          {routes.length === 0 && showTerrainBar && terrainStatus && (
+            <div className="w-full pl-5 pr-3 pt-1.5 pb-2 flex flex-col gap-1.5 animate-fadeIn">
+              <div className="w-full h-[3px] bg-white/[0.12] rounded-full overflow-hidden relative">
+                <div
+                  style={{ width: `${barPercent}%` }}
+                  className={`h-full rounded-full transition-[width] duration-800 ease-linear ${
+                    isError
+                      ? 'bg-red-500'
+                      : isReady
+                      ? 'bg-white shadow-[0_0_6px_rgba(255,255,255,0.7)]'
+                      : 'terrain-animated-stripes shadow-[0_0_6px_rgba(255,255,255,0.5)]'
+                  }`}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 select-none">
+                <span className="truncate">
+                  {isError ? (
+                    <span className="text-red-400">
+                      {terrainStatus.error || (isRu ? 'Ошибка сборки карты зоны' : 'Error building terrain')}
+                    </span>
+                  ) : isReady ? (
+                    <span className="text-zinc-200">
+                      {isRu ? 'Карта местности готова — бот продолжает' : 'Terrain map ready — bot continuing'}
+                    </span>
+                  ) : (
+                    getStageTitle(terrainStatus.stage, terrainStatus.done, terrainStatus.total, isRu)
                   )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </SpecularCard>
+                </span>
+
+                {!isError && (
+                  <span className="shrink-0 ml-3 text-[11px] font-mono text-white font-medium">
+                    {barPercent}%
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </SpecularCard>
+    </>
   );
 };

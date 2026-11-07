@@ -221,6 +221,12 @@ export const mockStopRouteRecord = async (
     source: null,
   };
 
+  if (typeof window !== 'undefined') {
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('wowbot:terrain-status', { detail: initialTerrain }));
+    }, 20);
+  }
+
   return { ok: true, route: newRoute, terrain: initialTerrain };
 };
 
