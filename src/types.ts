@@ -26,6 +26,8 @@ export interface AppSettings {
   interactKey?: string;
   clearTargetKey?: string;
   pauseKey?: string;
+  herbSearchKey?: string;
+  oreSearchKey?: string;
 }
 
 

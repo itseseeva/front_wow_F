@@ -167,12 +167,24 @@ export const App: React.FC = () => {
     let prevKey = 'H';
     let zoomIn = 'PAGEUP';
     let zoomOut = 'PAGEDOWN';
+    let startStop = 'F5';
+    let interact = 'G';
+    let clearTarget = 'ESC';
+    let pause = 'PAUSE';
+    let herbSearch = 'F9';
+    let oreSearch = 'F10';
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.previousTargetKey) prevKey = parsed.previousTargetKey;
         if (parsed.minimapZoomInKey) zoomIn = parsed.minimapZoomInKey;
         if (parsed.minimapZoomOutKey) zoomOut = parsed.minimapZoomOutKey;
+        if (parsed.startStopKey) startStop = parsed.startStopKey;
+        if (parsed.interactKey !== undefined) interact = parsed.interactKey;
+        if (parsed.clearTargetKey) clearTarget = parsed.clearTargetKey;
+        if (parsed.pauseKey) pause = parsed.pauseKey;
+        if (parsed.herbSearchKey !== undefined) herbSearch = parsed.herbSearchKey;
+        if (parsed.oreSearchKey !== undefined) oreSearch = parsed.oreSearchKey;
       } catch (e) {}
     }
     return {
@@ -180,6 +192,12 @@ export const App: React.FC = () => {
       mode: 'gather',
       minimapZoomInKey: zoomIn,
       minimapZoomOutKey: zoomOut,
+      startStopKey: startStop,
+      interactKey: interact,
+      clearTargetKey: clearTarget,
+      pauseKey: pause,
+      herbSearchKey: herbSearch,
+      oreSearchKey: oreSearch,
     };
   });
 
@@ -309,10 +327,17 @@ export const App: React.FC = () => {
       const configObj = {
         settings: {
           ...rawLoadedSettingsRef.current,
+          ...customSettings,
           previousTargetKey: customSettings.previousTargetKey || 'H',
           mode: 'gather',
           minimapZoomInKey: customSettings.minimapZoomInKey || 'PAGEUP',
           minimapZoomOutKey: customSettings.minimapZoomOutKey || 'PAGEDOWN',
+          startStopKey: customSettings.startStopKey || 'F5',
+          interactKey: customSettings.interactKey || 'G',
+          clearTargetKey: customSettings.clearTargetKey || 'ESC',
+          pauseKey: customSettings.pauseKey || 'PAUSE',
+          herbSearchKey: customSettings.herbSearchKey !== undefined ? customSettings.herbSearchKey : 'F9',
+          oreSearchKey: customSettings.oreSearchKey !== undefined ? customSettings.oreSearchKey : 'F10',
         },
         chains: [
           {
@@ -423,6 +448,12 @@ export const App: React.FC = () => {
                   mode: 'gather',
                   minimapZoomInKey: parsed.settings.minimapZoomInKey ?? prev.minimapZoomInKey,
                   minimapZoomOutKey: parsed.settings.minimapZoomOutKey ?? prev.minimapZoomOutKey,
+                  startStopKey: parsed.settings.startStopKey ?? prev.startStopKey,
+                  interactKey: parsed.settings.interactKey ?? prev.interactKey,
+                  clearTargetKey: parsed.settings.clearTargetKey ?? prev.clearTargetKey,
+                  pauseKey: parsed.settings.pauseKey ?? prev.pauseKey,
+                  herbSearchKey: parsed.settings.herbSearchKey ?? prev.herbSearchKey,
+                  oreSearchKey: parsed.settings.oreSearchKey ?? prev.oreSearchKey,
                 }));
               }
 
@@ -1390,6 +1421,9 @@ export const App: React.FC = () => {
                 settings={settings}
                 onSettingsChange={(newSettings) => {
                   setSettings(newSettings);
+                  try {
+                    localStorage.setItem('wowbot_settings', JSON.stringify(newSettings));
+                  } catch {}
                   saveCurrentConfigToBackend(chains, newSettings, scheduleSettings);
                 }}
                 scheduleSettings={scheduleSettings}
@@ -1405,6 +1439,7 @@ export const App: React.FC = () => {
                 onLanguageChange={setLanguage}
                 theme={theme}
                 onThemeChange={setTheme}
+                onToast={(msg) => setScheduleToast(msg)}
               />
             </SpecularCard>
           </div>

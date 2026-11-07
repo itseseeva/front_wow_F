@@ -38,6 +38,15 @@ const getPhysicalKeyFromEvent = (e: KeyboardEvent): string | null => {
     return e.key.toUpperCase();
   }
 
+  if (e.key === 'PageUp' || e.code === 'PageUp') return 'PAGEUP';
+  if (e.key === 'PageDown' || e.code === 'PageDown') return 'PAGEDOWN';
+  if (e.key === 'Home' || e.code === 'Home') return 'HOME';
+  if (e.key === 'End' || e.code === 'End') return 'END';
+  if (e.key === 'Insert' || e.code === 'Insert') return 'INSERT';
+
+  if (e.key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract') return '-';
+  if (e.key === '=' || e.code === 'Equal') return '=';
+
   let keyStr = e.key.toUpperCase();
   if (e.code.startsWith('Key')) {
     keyStr = e.code.replace('Key', '');
@@ -52,13 +61,26 @@ const getPhysicalKeyFromEvent = (e: KeyboardEvent): string | null => {
   else if (e.key === 'ArrowLeft') keyStr = 'LEFT';
   else if (e.key === 'ArrowRight') keyStr = 'RIGHT';
 
-  return keyStr.slice(0, 7);
+  return keyStr.slice(0, 8);
+};
+
+// Search key validator: A–Z, 0–9, '-', '=', F1–F12, PAGEUP, PAGEDOWN, HOME, END, INSERT, DELETE
+export const isValidSearchKey = (key: string): boolean => {
+  if (!key) return true;
+  if (/^[A-Z]$/.test(key)) return true;
+  if (/^[0-9]$/.test(key)) return true;
+  if (key === '-' || key === '=') return true;
+  if (/^F([1-9]|1[0-2])$/.test(key)) return true;
+  if (['PAGEUP', 'PAGEDOWN', 'HOME', 'END', 'INSERT', 'DELETE'].includes(key)) return true;
+  return false;
 };
 
 interface KeybindItem {
   id: keyof AppSettings;
   nameRu: string;
   nameEn: string;
+  hintRu: string;
+  hintEn: string;
   defaultVal: string;
 }
 
@@ -83,9 +105,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       e.preventDefault();
       e.stopPropagation();
 
+      const isSearchBind = capturingId === 'herbSearchKey' || capturingId === 'oreSearchKey';
+
+      // Backspace or Delete clears the bind (value '')
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        onSettingsChange({
+          ...settings,
+          [capturingId]: '',
+        });
+        setCapturingId(null);
+        if (onToast) {
+          onToast('[—]');
+        }
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        setCapturingId(null);
+        return;
+      }
+
       const keyName = getPhysicalKeyFromEvent(e);
       if (keyName === null) {
         setCapturingId(null);
+        return;
+      }
+
+      // Requirement 5: search keys only accept A–Z, 0–9, '-', '=', F1–F12, PAGEUP, PAGEDOWN, HOME, END, INSERT, DELETE
+      if (isSearchBind && !isValidSearchKey(keyName)) {
+        setCapturingId(null);
+        if (onToast) {
+          onToast(isRu ? 'Эту клавишу бот нажать не может' : 'The bot cannot press this key');
+        }
         return;
       }
 
@@ -104,16 +155,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [capturingId, settings, onSettingsChange, onToast]);
+  }, [capturingId, settings, onSettingsChange, onToast, isRu]);
 
   const handleResetDefaults = () => {
     onSettingsChange({
       ...settings,
       previousTargetKey: 'H',
       startStopKey: 'F5',
-      interactKey: 'F',
+      interactKey: 'G',
       clearTargetKey: 'ESC',
       pauseKey: 'PAUSE',
+      herbSearchKey: 'F9',
+      oreSearchKey: 'F10',
     });
     if (onToast) {
       onToast(isRu ? 'Настройки сброшены' : 'Defaults restored');
@@ -132,31 +185,57 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       id: 'previousTargetKey',
       nameRu: 'Предыдущая цель',
       nameEn: 'Previous Target',
+      hintRu: 'В игре: Параметры → Управление → Выбор цели → «Предыдущая цель»',
+      hintEn: 'In game: Options → Controls → Targeting → Target Last Target',
       defaultVal: 'H',
     },
     {
       id: 'startStopKey',
       nameRu: 'Старт / пауза бота',
       nameEn: 'Start / Pause Bot',
+      hintRu: 'Клавиша самого бота — в игре настраивать не нужно',
+      hintEn: 'Bot hotkey — nothing to set in game',
       defaultVal: 'F5',
     },
     {
       id: 'interactKey',
       nameRu: 'Взаимодействие с целью',
-      nameEn: 'Interact Key',
-      defaultVal: 'F',
+      nameEn: 'Interact With Target',
+      hintRu: 'В игре: Параметры → Управление → Выбор цели → «Взаимодействие с целью»',
+      hintEn: 'In game: Options → Controls → Targeting → Interact With Target',
+      defaultVal: 'G',
     },
     {
       id: 'clearTargetKey',
       nameRu: 'Сброс цели',
       nameEn: 'Clear Target',
+      hintRu: 'В игре Esc снимает цель сам — настраивать не нужно',
+      hintEn: 'Esc clears the target in game — nothing to set',
       defaultVal: 'ESC',
     },
     {
       id: 'pauseKey',
       nameRu: 'Экстренная пауза',
       nameEn: 'Emergency Pause',
+      hintRu: 'Клавиша самого бота — в игре настраивать не нужно',
+      hintEn: 'Bot hotkey — nothing to set in game',
       defaultVal: 'PAUSE',
+    },
+    {
+      id: 'herbSearchKey',
+      nameRu: 'Поиск трав',
+      nameEn: 'Find Herbs',
+      hintRu: 'Любая свободная клавиша, лучше F9–F12. Аддон сам привяжет к ней «Поиск трав» — класть заклинание на панель команд не нужно. Поменял клавишу — набери /reload в игре. Нет травничества — аддон клавишу не тронет.',
+      hintEn: 'Any free key, F9–F12 recommended. The addon will bind Find Herbs to it automatically — no need to place it on an action bar. Changed the key? Type /reload in game. No herbalism — the addon leaves the key untouched.',
+      defaultVal: 'F9',
+    },
+    {
+      id: 'oreSearchKey',
+      nameRu: 'Поиск минералов',
+      nameEn: 'Find Minerals',
+      hintRu: 'Любая свободная клавиша, лучше F9–F12. Аддон сам привяжет к ней «Поиск минералов» — класть заклинание на панель команд не нужно. Поменял клавишу — набери /reload в игре. Нет горного дела — аддон клавишу не тронет.',
+      hintEn: 'Any free key, F9–F12 recommended. The addon will bind Find Minerals to it automatically — no need to place it on an action bar. Changed the key? Type /reload in game. No mining — the addon leaves the key untouched.',
+      defaultVal: 'F10',
     },
   ];
 
@@ -308,11 +387,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </SpecularButton>
         </div>
 
-        {/* Keybinds List */}
+        {/* Keybinds List with In-game hints */}
         <div className="flex flex-col gap-1.5 sm:gap-2">
           {bindList.map((item) => {
             const rawVal = settings[item.id];
-            const currentKey = typeof rawVal === 'string' && rawVal !== '' ? rawVal : item.defaultVal;
+            const currentKey = rawVal !== undefined ? rawVal : item.defaultVal;
             const isCapturing = capturingId === item.id;
 
             return (
@@ -325,13 +404,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 }`}
               >
                 <div className="flex items-center justify-between w-full gap-4">
-                  {/* Left Side: Name only */}
-                  <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white tracking-wide">
-                    {isRu ? item.nameRu : item.nameEn}
-                  </span>
+                  {/* Left Side: Name and Hint */}
+                  <div className="flex flex-col min-w-0 pr-2">
+                    <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white tracking-wide">
+                      {isRu ? item.nameRu : item.nameEn}
+                    </span>
+                    <span className="text-[11px] text-zinc-500 font-mono leading-snug mt-0.5 break-words">
+                      {isRu ? item.hintRu : item.hintEn}
+                    </span>
+                  </div>
 
                   {/* Right Side: Keycap Button with Live Capture */}
-                  <div className="relative shrink-0 ml-auto">
+                  <div className="relative shrink-0 ml-auto flex items-center">
                     <button
                       type="button"
                       onClick={() => setCapturingId(item.id)}
