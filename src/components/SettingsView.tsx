@@ -8,7 +8,7 @@ import {
   RefreshCw,
   Loader2,
 } from 'lucide-react';
-import { AppSettings, ScheduleSettings, PriceStatus } from '../types';
+import { AppSettings, ScheduleSettings, PriceStatus, AuctionRuleset } from '../types';
 import { Language, Theme } from '../utils/i18n';
 import { SpecularCard, SpecularButton } from './ui/Specular';
 import { DEFAULT_SCHEDULE_SETTINGS } from '../data/mockSchedule';
@@ -80,6 +80,21 @@ export const isValidSearchKey = (key: string): boolean => {
   return false;
 };
 
+const getRulesetLabel = (ruleset: AuctionRuleset | string | null | undefined, isRu: boolean): string => {
+  switch (ruleset) {
+    case 'normal':
+      return isRu ? 'Обычный' : 'Normal';
+    case 'pvp':
+      return 'PvP';
+    case 'rp':
+      return isRu ? 'Ролевая игра' : 'RP';
+    case 'rp_pvp':
+      return isRu ? 'Ролевая игра с PvP' : 'RP-PvP';
+    default:
+      return isRu ? 'набор неизвестен' : 'unknown ruleset';
+  }
+};
+
 interface KeybindItem {
   id: keyof AppSettings;
   nameRu: string;
@@ -127,8 +142,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     loadPrices();
 
     const handlePrices = (e: any) => {
-      const detail: PriceStatus | undefined = e?.detail;
-      if (detail) {
+      let detail: PriceStatus | undefined = e?.detail;
+      if (typeof detail === 'string') {
+        try {
+          detail = JSON.parse(detail);
+        } catch {}
+      }
+      if (detail && typeof detail === 'object') {
         setPriceStatus(detail);
       }
     };
@@ -139,6 +159,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       window.removeEventListener('wowbot:prices', handlePrices);
     };
   }, []);
+
+  const getHouseSourceText = () => {
+    if (!priceStatus) return '';
+    const note = priceStatus.who?.note || '';
+    const houseId = priceStatus.house_id ?? settings.auctionHouseId ?? '';
+
+    if (priceStatus.house_source === 'auto') {
+      return isRu
+        ? `Определён по игре: ${note} — аукцион №${houseId}`
+        : `Determined by game: ${note} — auction #${houseId}`;
+    }
+    if (priceStatus.house_source === 'settings') {
+      return isRu
+        ? `Выбран вручную: №${houseId}`
+        : `Manually selected: #${houseId}`;
+    }
+    return note;
+  };
 
   const handleRefreshPrices = async () => {
     setIsPriceLoading(true);
@@ -510,7 +548,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </SpecularCard>
         ) : (
           <SpecularCard className="p-3.5 sm:p-4 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col gap-3 font-mono">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
               <div className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-zinc-950 dark:text-white">
                   {isRu ? 'Аукционный дом' : 'Auction House'}
@@ -523,27 +561,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </span>
               </div>
 
-              <div className="relative">
-                <select
-                  value={settings.auctionHouseId ?? priceStatus.house_id ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value === '' ? null : Number(e.target.value);
-                    onSettingsChange({
-                      ...settings,
-                      auctionHouseId: val,
-                    });
-                  }}
-                  className="w-full sm:w-64 px-3 py-1.5 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-xs font-mono text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white cursor-pointer"
-                >
-                  {priceStatus.houses.length === 0 && (
-                    <option value="">{isRu ? 'Нет доступных домов' : 'No houses available'}</option>
-                  )}
-                  {priceStatus.houses.map((house) => (
-                    <option key={house.id} value={house.id} className="bg-zinc-900 text-white">
-                      {house.name}
+              <div className="flex flex-col gap-1.5 items-start sm:items-end w-full sm:w-auto">
+                <div className="relative w-full sm:w-auto">
+                  <select
+                    value={settings.auctionHouseId != null ? String(settings.auctionHouseId) : ''}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? null : Number(e.target.value);
+                      onSettingsChange({
+                        ...settings,
+                        auctionHouseId: val,
+                      });
+                    }}
+                    className="w-full sm:w-80 px-3 py-1.5 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-xs font-mono text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white cursor-pointer"
+                  >
+                    <option value="" className="bg-zinc-900 text-white">
+                      {isRu ? 'Авто — по персонажу в игре (рекомендуется)' : 'Auto — by in-game character (recommended)'}
                     </option>
-                  ))}
-                </select>
+                    {priceStatus.houses.map((house) => (
+                      <option key={house.id} value={house.id} className="bg-zinc-900 text-white">
+                        {house.name} — {getRulesetLabel(house.ruleset, isRu)} (№{house.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {getHouseSourceText() && (
+                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono text-left sm:text-right max-w-sm">
+                    {getHouseSourceText()}
+                  </span>
+                )}
               </div>
             </div>
 

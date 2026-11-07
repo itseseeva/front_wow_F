@@ -47,12 +47,22 @@ export interface LootStatus {
   earned_complete: boolean;
 }
 
+export type AuctionRuleset = 'normal' | 'pvp' | 'rp' | 'rp_pvp' | null;
+
 export interface PriceStatus {
   configured: boolean;
   keys_error: string | null;
   region: string | null;
   house_id: number | null;
-  houses: { id: number; name: string }[];
+  house_source?: 'auto' | 'settings' | null;
+  who?: {
+    realm: string | null;
+    faction: string | null;
+    ruleset: AuctionRuleset;
+    auto_house_id: number | null;
+    note: string;
+  } | null;
+  houses: { id: number; name: string; ruleset?: AuctionRuleset }[];
   updated_at_ms: number | null;
   loading: boolean;
   error: string | null;
