@@ -8,7 +8,6 @@ import {
   mockStopRouteRecord,
   mockSetActiveRoute,
   mockDeleteRoute,
-  mockResetTerrainSession,
 } from './data/mockRoutes';
 import { SettingsView } from './components/SettingsView';
 import { ComboSequence } from './components/ComboSequence';
@@ -1274,27 +1273,6 @@ export const App: React.FC = () => {
             );
           }, 42000);
         }
-      }
-
-      // In browser mock mode without route: simulate waiting for zone terrain and auto-route
-      if (!api?.start_bot && !activeRoute && typeof window !== 'undefined') {
-        mockResetTerrainSession(1436);
-        window.dispatchEvent(
-          new CustomEvent('wowbot:terrain-status', {
-            detail: {
-              map_id: 1436,
-              status: 'building',
-              stage: 'tiles',
-              done: 0,
-              total: 24,
-              progress: 0,
-              elapsed_s: 0,
-              eta_s: 40,
-              error: null,
-              source: null,
-            },
-          })
-        );
       }
     }
   };

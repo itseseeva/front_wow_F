@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { DayResponse, SessionHeatmapResponse, LootStatus, ScheduleStatus } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { DayResponse, SessionHeatmapResponse, LootStatus, ScheduleStatus, AutoRouteStatus, TerrainStatus, PriceStatus } from '../types';
+import { getPywebviewApi } from '../utils/pywebviewBridge';
 import {
   BarChart3,
   Calendar as CalendarIcon,
@@ -83,6 +84,20 @@ function getPluralRoutes(n: number, isRu: boolean): string {
   return `${n} маршрутов`;
 }
 
+function formatElapsed(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return `${m}:${String(rem).padStart(2, '0')}`;
+}
+
+function getTerrainStageText(stage: 'tiles' | 'models' | 'grid' | null, isRu: boolean): string {
+  if (stage === 'tiles') return isRu ? 'Скачиваю карту зоны' : 'Downloading zone tiles';
+  if (stage === 'models') return isRu ? 'Скачиваю деревья и дома' : 'Downloading trees and models';
+  if (stage === 'grid') return isRu ? 'Строю сетку' : 'Building navigation grid';
+  return isRu ? 'Подготовка местности' : 'Preparing terrain';
+}
+
 export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
   selectedDate,
   dayData,
@@ -141,13 +156,92 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Terminal dots animation for scanning state
-  const [scanDots, setScanDots] = useState('');
+  // Terrain Status (from wowbot:terrain-status)
+  const [terrainStatus, setTerrainStatus] = useState<TerrainStatus | null>(null);
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      setScanDots(prev => (prev.length >= 3 ? '' : prev + '.'));
-    }, 450);
-    return () => clearInterval(interval);
+    const handleTerrain = (e: any) => {
+      const detail: TerrainStatus = e?.detail;
+      if (!detail) return;
+      if (detail.status === 'ready') {
+        setTerrainStatus(null);
+      } else {
+        setTerrainStatus(detail);
+      }
+    };
+    window.addEventListener('wowbot:terrain-status', handleTerrain);
+    return () => window.removeEventListener('wowbot:terrain-status', handleTerrain);
+  }, []);
+
+  // AutoRoute Status (from get_autoroute_status and wowbot:autoroute-status)
+  const [autoRouteStatus, setAutoRouteStatus] = useState<AutoRouteStatus | null>(null);
+  const [showAutoRouteReady, setShowAutoRouteReady] = useState<boolean>(false);
+  const autoRouteReadyTimerRef = useRef<any>(null);
+
+  // Restore state once when bot is running / block opens
+  useEffect(() => {
+    if (!isBotRunning) return;
+    getPywebviewApi().then((api) => {
+      if (api?.get_autoroute_status) {
+        api.get_autoroute_status().then((res) => {
+          if (res && res.status) {
+            setAutoRouteStatus(res);
+            if (res.status === 'ready') {
+              setShowAutoRouteReady(true);
+              if (autoRouteReadyTimerRef.current) clearTimeout(autoRouteReadyTimerRef.current);
+              autoRouteReadyTimerRef.current = setTimeout(() => {
+                setShowAutoRouteReady(false);
+              }, 10000);
+            }
+          }
+        }).catch(() => {});
+      }
+    });
+  }, [isBotRunning]);
+
+  // Listen to wowbot:autoroute-status window events
+  useEffect(() => {
+    const handleAutoRoute = (e: any) => {
+      const detail: AutoRouteStatus = e?.detail;
+      if (!detail) return;
+      setAutoRouteStatus(detail);
+      if (detail.status === 'ready') {
+        setShowAutoRouteReady(true);
+        if (autoRouteReadyTimerRef.current) clearTimeout(autoRouteReadyTimerRef.current);
+        autoRouteReadyTimerRef.current = setTimeout(() => {
+          setShowAutoRouteReady(false);
+        }, 10000);
+      }
+    };
+    window.addEventListener('wowbot:autoroute-status', handleAutoRoute);
+    return () => {
+      window.removeEventListener('wowbot:autoroute-status', handleAutoRoute);
+      if (autoRouteReadyTimerRef.current) clearTimeout(autoRouteReadyTimerRef.current);
+    };
+  }, []);
+
+  // Price Status (from wowbot:prices and get_price_status)
+  const [priceStatus, setPriceStatus] = useState<PriceStatus | null>(null);
+
+  useEffect(() => {
+    const handlePrices = (e: any) => {
+      if (e?.detail) {
+        setPriceStatus(e.detail);
+      }
+    };
+    window.addEventListener('wowbot:prices', handlePrices);
+
+    getPywebviewApi().then((api) => {
+      if (api?.get_price_status) {
+        api.get_price_status().then((res) => {
+          if (res && res.ok) {
+            setPriceStatus(res);
+          }
+        }).catch(() => {});
+      }
+    });
+
+    return () => window.removeEventListener('wowbot:prices', handlePrices);
   }, []);
 
   // Card «До перерыва»: countdown to phase_until_ms based on phase
@@ -180,29 +274,58 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     breakSubtext = isRu ? 'без расписания' : 'no schedule';
   }
 
-  // Card «Золото в час»: earned_copper / hours worked; first 5 mins -> «считаю…»
+  // Cards «Заработано» и «Золото в час»
+  const items = lootStatus?.items || [];
+  const hasItems = items.length > 0;
   const earnedCopper = lootStatus?.earned_copper;
+
+  let earnedValueNode: React.ReactNode = null;
+  let earnedSubtext = '';
   let goldPerHourNode: React.ReactNode = null;
   let goldPerHourSubtext = '';
 
-  if (earnedCopper === null || earnedCopper === undefined) {
-    goldPerHourNode = isRu ? 'нет цен' : 'no price';
-    goldPerHourSubtext = isRu ? 'выбери аукцион в настройках' : 'select auction in settings';
-  } else if (sessionSeconds < 300) {
-    goldPerHourNode = isRu ? 'считаю…' : 'calculating…';
-    if (lootStatus?.earned_complete === false) {
-      goldPerHourSubtext = isRu ? 'не у всех предметов есть цена' : 'not all items have a price';
-    } else {
-      goldPerHourSubtext = isRu ? 'первые 5 минут' : 'first 5 minutes';
+  const getPriceSubtext = () => {
+    if (!priceStatus || priceStatus.configured === false) {
+      return isRu ? 'нет ключей API (.env)' : 'missing API keys (.env)';
     }
+    if (priceStatus.house_id === null) {
+      return isRu ? 'аукцион не определён — см. настройки' : 'auction not selected — see settings';
+    }
+    return isRu ? 'цены загружаются' : 'loading prices…';
+  };
+
+  if (!hasItems) {
+    // items пустой — «Заработано: 0», «Золото в час: —», подпись «пока ничего не собрано»
+    earnedValueNode = '0';
+    earnedSubtext = isRu ? 'пока ничего не собрано' : 'nothing gathered yet';
+    goldPerHourNode = '—';
+    goldPerHourSubtext = isRu ? 'пока ничего не собрано' : 'nothing gathered yet';
+  } else if (earnedCopper === null || earnedCopper === undefined) {
+    // предметы есть, а earned_copper === null — «нет цен», и подпись по PriceStatus
+    const pSub = getPriceSubtext();
+    earnedValueNode = isRu ? 'нет цен' : 'no prices';
+    earnedSubtext = pSub;
+    goldPerHourNode = isRu ? 'нет цен' : 'no prices';
+    goldPerHourSubtext = pSub;
   } else {
-    const hours = sessionSeconds / 3600;
-    const copperPerHour = Math.round(earnedCopper / hours);
-    goldPerHourNode = <MoneyBadge copper={copperPerHour} language={language} />;
-    if (lootStatus?.earned_complete === false) {
-      goldPerHourSubtext = isRu ? 'не у всех предметов есть цена' : 'not all items have a price';
+    // предметы есть и цена известна
+    earnedValueNode = <MoneyBadge copper={earnedCopper} language={language} />;
+    earnedSubtext = lootStatus?.earned_complete === false
+      ? (isRu ? 'не у всех предметов есть цена' : 'not all items have a price')
+      : (isRu ? 'по аукциону' : 'auction price');
+
+    if (sessionSeconds < 300) {
+      goldPerHourNode = isRu ? 'считаю…' : 'calculating…';
+      goldPerHourSubtext = lootStatus?.earned_complete === false
+        ? (isRu ? 'не у всех предметов есть цена' : 'not all items have a price')
+        : (isRu ? 'первые 5 минут' : 'first 5 minutes');
     } else {
-      goldPerHourSubtext = isRu ? 'по ценам аукциона' : 'auction market rate';
+      const hours = sessionSeconds / 3600;
+      const copperPerHour = Math.round(earnedCopper / hours);
+      goldPerHourNode = <MoneyBadge copper={copperPerHour} language={language} />;
+      goldPerHourSubtext = lootStatus?.earned_complete === false
+        ? (isRu ? 'не у всех предметов есть цена' : 'not all items have a price')
+        : (isRu ? 'по ценам аукциона' : 'auction market rate');
     }
   }
 
@@ -465,12 +588,10 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     </div>
                     <div>
                       <span className="text-xl sm:text-2xl font-bold text-zinc-950 dark:text-white tracking-tight">
-                        <MoneyBadge copper={lootStatus?.earned_copper} language={language} />
+                        {earnedValueNode}
                       </span>
                       <p className="text-[10px] text-zinc-500 mt-0.5 truncate">
-                        {lootStatus?.earned_complete === false
-                          ? (isRu ? 'не у всех предметов есть цена' : 'not all items have a price')
-                          : (isRu ? 'по аукциону' : 'auction price')}
+                        {earnedSubtext}
                       </p>
                     </div>
                   </div>
@@ -492,8 +613,118 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                   </div>
                 </div>
 
-                {/* Live Gathering Loot Table or Radar Scanning Placeholder (frameless) */}
-                {lootStatus?.items && lootStatus.items.length > 0 ? (
+                {/* Terrain Status Banner (wowbot:terrain-status) */}
+                {terrainStatus && (terrainStatus.status === 'building' || terrainStatus.status === 'error') && (
+                  <div className="font-mono pt-1 select-none">
+                    {terrainStatus.status === 'building' ? (
+                      <div className="flex flex-col gap-2 p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/80 max-w-lg">
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            <span className="font-semibold text-zinc-200">
+                              {isRu ? 'Собираю карту местности зоны' : 'Building zone terrain mesh'}
+                              {terrainStatus.map_id ? ` #${terrainStatus.map_id}` : ''}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-zinc-400 tabular-nums">
+                            {Math.min(100, Math.max(0, Math.round((terrainStatus.progress ?? 0) * 100)))}%
+                          </span>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                          <div
+                            className="h-full bg-white transition-all duration-300 ease-out rounded-full"
+                            style={{ width: `${Math.min(100, Math.max(2, Math.round((terrainStatus.progress ?? 0) * 100)))}%` }}
+                          />
+                        </div>
+
+                        {/* Subtitle: Stage, Done/Total, ETA */}
+                        <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                          <span>
+                            {getTerrainStageText(terrainStatus.stage, isRu)}
+                            {terrainStatus.total ? ` (${terrainStatus.done} / ${terrainStatus.total})` : ''}
+                          </span>
+                          <span className="text-zinc-400">
+                            {terrainStatus.eta_s != null
+                              ? (isRu ? `осталось ~${terrainStatus.eta_s} с` : `~${terrainStatus.eta_s}s remaining`)
+                              : (isRu ? 'оцениваю…' : 'evaluating…')}
+                          </span>
+                        </div>
+                      </div>
+                    ) : terrainStatus.status === 'error' ? (
+                      <div className="p-3 rounded-lg bg-red-950/20 border border-red-900/50 text-xs text-red-300 flex items-center gap-2 max-w-lg">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                        <span>{terrainStatus.error || (isRu ? 'Ошибка сборки карты зоны' : 'Error building terrain mesh')}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* AutoRoute Status Banner (AutoRouteStatus) */}
+                {autoRouteStatus && (autoRouteStatus.status === 'building' || (autoRouteStatus.status === 'ready' && showAutoRouteReady) || autoRouteStatus.status === 'error') && (
+                  <div className="font-mono pt-1 select-none">
+                    {autoRouteStatus.status === 'building' ? (
+                      <div className="flex flex-col gap-2 p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/80 max-w-lg">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                          <span>
+                            {isRu
+                              ? `Строю круг по местам руды и трав${autoRouteStatus.minutes != null ? ` (~${autoRouteStatus.minutes} мин)` : ''}`
+                              : `Building loop around nodes${autoRouteStatus.minutes != null ? ` (~${autoRouteStatus.minutes} min)` : ''}`}
+                          </span>
+                        </div>
+
+                        {/* Running indeterminate line without percent */}
+                        <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden relative">
+                          <div className="h-full w-1/3 bg-white rounded-full absolute animate-autoroute-beam" />
+                        </div>
+
+                        {/* Elapsed time text */}
+                        <div className="text-[11px] text-zinc-400">
+                          {(() => {
+                            const elapsedSec = autoRouteStatus.started_at_ms
+                              ? Math.max(0, Math.floor((nowMs - autoRouteStatus.started_at_ms) / 1000))
+                              : 0;
+                            const typical = autoRouteStatus.typical_s || 60;
+                            if (elapsedSec > typical) {
+                              return isRu ? 'дольше обычного, считаю…' : 'taking longer than usual, calculating…';
+                            }
+                            return isRu
+                              ? `${formatElapsed(elapsedSec)} · обычно до минуты`
+                              : `${formatElapsed(elapsedSec)} · usually up to a minute`;
+                          })()}
+                        </div>
+                      </div>
+                    ) : autoRouteStatus.status === 'ready' && showAutoRouteReady ? (
+                      <div className="p-3 rounded-lg bg-zinc-900/40 border border-zinc-700/60 flex flex-col gap-1 max-w-lg animate-assemble">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-zinc-100">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <span>
+                            {isRu ? `Круг готов: ${autoRouteStatus.route_name || 'Автомаршрут'}` : `Loop ready: ${autoRouteStatus.route_name || 'AutoRoute'}`}
+                          </span>
+                        </div>
+                        {autoRouteStatus.note && (
+                          <p className="text-[11px] text-zinc-400 pl-3.5">{autoRouteStatus.note}</p>
+                        )}
+                      </div>
+                    ) : autoRouteStatus.status === 'error' ? (
+                      <div className="p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/80 text-xs text-zinc-300 max-w-lg">
+                        <div className="flex items-start gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1 shrink-0" />
+                          <span>
+                            {isRu
+                              ? `Автомаршрут не вышел: ${autoRouteStatus.note || 'ошибка'}. Хожу по зоне вокруг места`
+                              : `Auto-route failed: ${autoRouteStatus.note || 'error'}. Patrolling local zone around area`}
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Live Gathering Loot Table or Empty State */}
+                {hasItems ? (
                   <div className="flex flex-col gap-3 font-mono pt-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -503,7 +734,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                         <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white animate-pulse" />
                       </div>
                       <span className="text-[11px] text-zinc-500">
-                        {lootStatus.items.length} {isRu ? 'поз.' : 'types'}
+                        {items.length} {isRu ? 'поз.' : 'types'}
                       </span>
                     </div>
 
@@ -518,7 +749,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                           </tr>
                         </thead>
                         <tbody>
-                          {lootStatus.items.map((item) => {
+                          {items.map((item) => {
                             const displayName = item.name || (isRu ? `Предмет #${item.item_id}` : `Item #${item.item_id}`);
                             return (
                               <tr key={item.item_id} className="hover:bg-white/[0.02] transition-colors">
@@ -561,19 +792,14 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                       </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="py-16 flex flex-col items-center justify-center text-center font-mono select-none">
-                    <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                      <span className="tracking-wide">
-                        {isRu ? 'Сканирование местности' : 'Scanning terrain'}
-                      </span>
-                      <span className="w-4 text-left text-zinc-400 font-mono inline-block">
-                        {scanDots}
-                      </span>
+                ) : !terrainStatus && (!autoRouteStatus || autoRouteStatus.status === 'idle' || (autoRouteStatus.status === 'ready' && !showAutoRouteReady)) ? (
+                  <div className="py-16 flex flex-col items-center justify-center text-center font-mono select-none text-zinc-500 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                      <span>{isRu ? 'пока ничего не собрано' : 'nothing gathered yet'}</span>
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
             ) : (
               /* PAST SESSION OR ALL DAY SUMMARY (frameless, no container boxes) */

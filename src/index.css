@@ -955,6 +955,26 @@ input[type="number"] {
   will-change: opacity, transform, filter;
 }
 
+/* AutoRoute indeterminate scanning beam */
+@keyframes autorouteBeam {
+  0% {
+    left: -35%;
+    width: 35%;
+  }
+  50% {
+    left: 35%;
+    width: 45%;
+  }
+  100% {
+    left: 100%;
+    width: 35%;
+  }
+}
+
+.animate-autoroute-beam {
+  animation: autorouteBeam 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
 /* =========================================================================
    SPECULAR EFFECT ENGINE (Zero-re-render Two-Layer Light Physics)
    ========================================================================= */

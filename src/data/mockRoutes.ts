@@ -1,4 +1,4 @@
-import { RouteInfo, RoutePoint, RoutePreview, RouteRecordStatus, RoutePath, MapImageResponse, TerrainStatus } from '../types';
+import { RouteInfo, RoutePoint, RoutePreview, RouteRecordStatus, RoutePath, MapImageResponse, TerrainStatus, AutoRouteStatus } from '../types';
 
 // Generate points along an ellipse
 const generateOvalPoints = (count: number, cx = 0.5, cy = 0.5, rx = 0.35, ry = 0.25): RoutePoint[] => {
@@ -390,5 +390,20 @@ export const mockGetRoutePreview = async (id: string): Promise<{ ok: boolean; er
       points: basePoints,
       paths: [path1, path2, path3],
     },
+  };
+};
+
+export const mockGetAutoRouteStatus = async (): Promise<{ ok: boolean } & AutoRouteStatus> => {
+  return {
+    ok: true,
+    status: 'idle',
+    map_id: null,
+    minutes: null,
+    started_at_ms: null,
+    finished_at_ms: null,
+    typical_s: 60,
+    route_id: null,
+    route_name: null,
+    note: null,
   };
 };

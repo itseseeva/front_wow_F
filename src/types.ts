@@ -91,6 +91,18 @@ export interface TerrainStatus {
   source: string | null;   // при ready — например «Retail 12.1.5.70575», показать мелко
 }
 
+export interface AutoRouteStatus {
+  status: 'idle' | 'building' | 'ready' | 'error';
+  map_id: number | null;
+  minutes: number | null;
+  started_at_ms: number | null;
+  finished_at_ms: number | null;
+  typical_s: number;
+  route_id: string | null;
+  route_name: string | null;
+  note: string | null;
+}
+
 // Ответ get_map_image: картинка карты зоны WoW (та же, что карта мира в игре).
 // Координаты маршрута (доли 0..1) — это доли ЭТОЙ картинки: точка [x, y] лежит в пикселе (x * width, y * height).
 export interface MapImageResponse {
@@ -376,6 +388,9 @@ declare global {
         // Auction & Prices API
         get_price_status?(): Promise<{ ok: boolean } & PriceStatus>;
         refresh_prices?(): Promise<{ ok: boolean } & PriceStatus>;
+
+        // AutoRoute API
+        get_autoroute_status?(): Promise<{ ok: boolean } & AutoRouteStatus>;
       };
     };
   }
