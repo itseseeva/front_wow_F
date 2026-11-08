@@ -707,6 +707,15 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                                 {scanBottomText}
                               </div>
                             )}
+
+                            {/* Warning during active build: pulsing white text */}
+                            {(isTerrainBuilding || isAutoRouteBuilding) && (
+                              <div className="text-[10px] text-zinc-100 dark:text-white font-medium animate-pulse text-left pl-0.5">
+                                {isRu
+                                  ? 'Не сворачивайте игру во время загрузки'
+                                  : 'Do not minimize the game during loading'}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
