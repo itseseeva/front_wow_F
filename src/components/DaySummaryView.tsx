@@ -127,7 +127,6 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
   const isRu = language === 'ru';
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
-  const [hoveredResourceKey, setHoveredResourceKey] = useState<'gold' | 'herb' | 'ore' | null>(null);
 
   const sessions = dayData?.sessions || [];
   const hasSessions = sessions.length > 0;
@@ -1092,12 +1091,12 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                   </div>
                 )}
 
-                {/* 7. 3-Resource Wheel (Золото, Трава, Руда) - Frameless & Enlarged */}
+                {/* 7. Horizontal 3-Resource Row: Золото · Трава · Руда (без колеса и без контейнеров) */}
                 {(totalWheelUnits > 0 || isTestMode) && (
-                  <div className="w-full py-2 flex flex-col gap-4 font-mono select-none">
+                  <div className="w-full py-2 flex flex-col gap-2.5 font-mono select-none">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono font-medium text-zinc-500 uppercase tracking-wider">
-                        {isRu ? 'Распределение ресурсов и золота' : 'Resource & Revenue Distribution'}
+                        {isRu ? 'Добыча сессии' : 'Session Loot'}
                       </span>
                       {isTestMode && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30">
@@ -1106,176 +1105,32 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center py-2">
-                      {/* Left: Enlarged 3-Resource Wheel */}
-                      <div className="flex items-center justify-center">
-                        <div className="relative w-60 h-60 sm:w-72 sm:h-72 flex items-center justify-center">
-                          <svg viewBox="0 0 240 240" className="w-full h-full transform -rotate-90">
-                            {/* Background Track */}
-                            <circle
-                              cx="120"
-                              cy="120"
-                              r={82}
-                              fill="none"
-                              stroke="#18181b"
-                              strokeWidth={26}
-                            />
-                            {/* 3 Slices: Золото (#F59E0B), Трава (#10B981), Руда (#9CA3AF) */}
-                            {(() => {
-                              let acc = 0;
-                              const r = 82;
-                              const c = 2 * Math.PI * r;
-                              return resourceSlices.map((s) => {
-                                const isHovered = hoveredResourceKey === s.id;
-                                const dashLen = (s.percentage / 100) * c;
-                                const gap = resourceSlices.length > 1 ? 3 : 0;
-                                const visualLen = Math.max(0, dashLen - gap);
-                                const dashGap = c - visualLen;
-                                const dashOff = -((acc / 100) * c);
-                                acc += s.percentage;
-
-                                if (s.percentage <= 0) return null;
-
-                                return (
-                                  <circle
-                                    key={s.id}
-                                    cx="120"
-                                    cy="120"
-                                    r={82}
-                                    fill="none"
-                                    stroke={s.color}
-                                    strokeWidth={isHovered ? 32 : 26}
-                                    strokeDasharray={`${visualLen} ${dashGap}`}
-                                    strokeDashoffset={dashOff}
-                                    strokeLinecap="butt"
-                                    className="transition-all duration-200 cursor-pointer"
-                                    onMouseEnter={() => setHoveredResourceKey(s.id)}
-                                    onMouseLeave={() => setHoveredResourceKey(null)}
-                                  />
-                                );
-                              });
-                            })()}
-                          </svg>
-
-                          {/* Center of the Wheel */}
-                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none text-center px-4">
-                            {hoveredResourceKey === 'gold' ? (
-                              <>
-                                <div className="text-xl sm:text-2xl font-bold font-mono tracking-tight text-amber-400 leading-tight">
-                                  <MoneyBadge copper={effectiveEarnedCopper} language={language} />
-                                </div>
-                                <span className="text-xs text-amber-300 font-medium mt-1">
-                                  {isRu ? 'Заработано золота' : 'Gold Revenue'}
-                                </span>
-                                <span className="text-[10px] text-zinc-500 font-mono">
-                                  {(resourceSlices.find((s) => s.id === 'gold')?.percentage || 0).toFixed(1)}%
-                                </span>
-                              </>
-                            ) : hoveredResourceKey === 'herb' ? (
-                              <>
-                                <div className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-emerald-400 leading-tight">
-                                  {herbCount} <span className="text-base font-normal">{isRu ? 'шт.' : 'pcs'}</span>
-                                </div>
-                                <span className="text-xs text-emerald-300 font-medium mt-1">
-                                  {isRu ? 'Собрано травы' : 'Herbs gathered'}
-                                </span>
-                                <span className="text-[10px] text-zinc-500 font-mono">
-                                  {(resourceSlices.find((s) => s.id === 'herb')?.percentage || 0).toFixed(1)}%
-                                </span>
-                              </>
-                            ) : hoveredResourceKey === 'ore' ? (
-                              <>
-                                <div className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-zinc-200 leading-tight">
-                                  {oreCount} <span className="text-base font-normal">{isRu ? 'шт.' : 'pcs'}</span>
-                                </div>
-                                <span className="text-xs text-zinc-400 font-medium mt-1">
-                                  {isRu ? 'Собрано руды' : 'Ore mined'}
-                                </span>
-                                <span className="text-[10px] text-zinc-500 font-mono">
-                                  {(resourceSlices.find((s) => s.id === 'ore')?.percentage || 0).toFixed(1)}%
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <div className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-white leading-tight">
-                                  <MoneyBadge copper={effectiveEarnedCopper} language={language} />
-                                </div>
-                                <span className="text-[11px] sm:text-xs text-zinc-400 mt-1 uppercase tracking-wider font-mono">
-                                  {oreCount + herbCount} {isRu ? 'рес. собрано' : 'nodes gathered'}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
+                    <div className="flex items-center gap-6 sm:gap-8 flex-wrap py-1 text-xs font-mono">
+                      {/* 1. Золото: золотой кружок */}
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.7)] shrink-0" />
+                        <span className="text-zinc-400">{isRu ? 'Золото:' : 'Gold:'}</span>
+                        <strong className="text-sm font-bold text-amber-400 tabular-nums">
+                          <MoneyBadge copper={effectiveEarnedCopper} language={language} />
+                        </strong>
                       </div>
 
-                      {/* Right: 3 Clean Legend Rows */}
-                      <div className="flex flex-col gap-3 justify-center font-mono max-w-sm w-full mx-auto md:mx-0">
-                        {/* 1. Золото */}
-                        <div
-                          onMouseEnter={() => setHoveredResourceKey('gold')}
-                          onMouseLeave={() => setHoveredResourceKey(null)}
-                          className={`flex items-center justify-between py-2.5 px-3 rounded-xl transition-all cursor-pointer ${
-                            hoveredResourceKey === 'gold' ? 'bg-amber-500/10' : 'hover:bg-white/[0.03]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="w-3.5 h-3.5 rounded-[3px] bg-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.5)] shrink-0" />
-                            <span className="text-sm font-medium text-zinc-200">{isRu ? 'Золото' : 'Gold'}</span>
-                          </div>
-                          <div className="flex items-center gap-4 tabular-nums">
-                            <span className="text-sm font-bold text-amber-400">
-                              <MoneyBadge copper={effectiveEarnedCopper} language={language} />
-                            </span>
-                            <span className="text-xs text-zinc-500 w-12 text-right">
-                              {(resourceSlices.find((s) => s.id === 'gold')?.percentage || 0).toFixed(1)}%
-                            </span>
-                          </div>
-                        </div>
+                      {/* 2. Трава: зелёный кружок */}
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.7)] shrink-0" />
+                        <span className="text-zinc-400">{isRu ? 'Трава:' : 'Herbs:'}</span>
+                        <strong className="text-sm font-bold text-emerald-400 tabular-nums">
+                          {herbCount} <span className="text-xs font-normal text-emerald-300/80">{isRu ? 'шт.' : 'pcs'}</span>
+                        </strong>
+                      </div>
 
-                        {/* 2. Трава */}
-                        <div
-                          onMouseEnter={() => setHoveredResourceKey('herb')}
-                          onMouseLeave={() => setHoveredResourceKey(null)}
-                          className={`flex items-center justify-between py-2.5 px-3 rounded-xl transition-all cursor-pointer ${
-                            hoveredResourceKey === 'herb' ? 'bg-emerald-500/10' : 'hover:bg-white/[0.03]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="w-3.5 h-3.5 rounded-[3px] bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)] shrink-0" />
-                            <span className="text-sm font-medium text-zinc-200">{isRu ? 'Трава' : 'Herbs'}</span>
-                          </div>
-                          <div className="flex items-center gap-4 tabular-nums">
-                            <span className="text-sm font-bold text-emerald-400">
-                              {herbCount} {isRu ? 'шт.' : 'pcs'}
-                            </span>
-                            <span className="text-xs text-zinc-500 w-12 text-right">
-                              {(resourceSlices.find((s) => s.id === 'herb')?.percentage || 0).toFixed(1)}%
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* 3. Руда */}
-                        <div
-                          onMouseEnter={() => setHoveredResourceKey('ore')}
-                          onMouseLeave={() => setHoveredResourceKey(null)}
-                          className={`flex items-center justify-between py-2.5 px-3 rounded-xl transition-all cursor-pointer ${
-                            hoveredResourceKey === 'ore' ? 'bg-zinc-500/10' : 'hover:bg-white/[0.03]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="w-3.5 h-3.5 rounded-[3px] bg-zinc-400 shadow-[0_0_10px_rgba(156,163,175,0.3)] shrink-0" />
-                            <span className="text-sm font-medium text-zinc-200">{isRu ? 'Руда' : 'Ore'}</span>
-                          </div>
-                          <div className="flex items-center gap-4 tabular-nums">
-                            <span className="text-sm font-bold text-zinc-300">
-                              {oreCount} {isRu ? 'шт.' : 'pcs'}
-                            </span>
-                            <span className="text-xs text-zinc-500 w-12 text-right">
-                              {(resourceSlices.find((s) => s.id === 'ore')?.percentage || 0).toFixed(1)}%
-                            </span>
-                          </div>
-                        </div>
+                      {/* 3. Руда: серый кружок */}
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-zinc-400 shadow-[0_0_8px_rgba(156,163,175,0.5)] shrink-0" />
+                        <span className="text-zinc-400">{isRu ? 'Руда:' : 'Ore:'}</span>
+                        <strong className="text-sm font-bold text-zinc-200 tabular-nums">
+                          {oreCount} <span className="text-xs font-normal text-zinc-400">{isRu ? 'шт.' : 'pcs'}</span>
+                        </strong>
                       </div>
                     </div>
                   </div>
