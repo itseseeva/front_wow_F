@@ -406,6 +406,24 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     (gold != null && gold > 0)
   );
 
+  // Past session calculated gold & gold per hour
+  const pastEarnedCopper = currentSummary?.earned_copper != null
+    ? currentSummary.earned_copper
+    : (currentSummary?.gold != null
+        ? currentSummary.gold * 10000
+        : (currentSummary?.loot && currentSummary.loot.length > 0
+            ? currentSummary.loot.reduce((acc, it) => acc + (it.value || 0), 0)
+            : null));
+
+  const pastCopperPerHour = (currentSummary?.duration_s && currentSummary.duration_s > 0 && pastEarnedCopper != null)
+    ? Math.round((pastEarnedCopper / currentSummary.duration_s) * 3600)
+    : null;
+
+  // Past session sum of gathered items
+  const pastTotalItems = currentSummary?.loot && currentSummary.loot.length > 0
+    ? currentSummary.loot.reduce((acc, it) => acc + (it.count || 0), 0)
+    : ((currentSummary?.khorium || 0) + (currentSummary?.adamantite || 0) + (currentSummary?.fel_iron || 0));
+
   return (
     <div className="w-full max-w-4xl 2xl:max-w-5xl mx-auto flex flex-col gap-6">
       <div className="w-full flex flex-col gap-5">
@@ -844,146 +862,100 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
             ) : (
               /* PAST SESSION OR ALL DAY SUMMARY (frameless, no container boxes) */
               <div className="flex flex-col gap-6">
-                {/* 4. Metric Cards Grid */}
+                {/* 4. Metric Cards Grid: Duration, Items Gathered (sum), Earned Gold, Gold/hour, Nodes, Gap */}
                 {currentSummary && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 py-1 font-mono">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[11px] text-zinc-500">{isRu ? 'Длительность' : 'Duration'}</span>
-                      <span className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white">
-                        {formatDuration(currentSummary.duration_s)}
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[11px] text-zinc-500">{isRu ? 'Узлов собрано' : 'Nodes Gathered'}</span>
-                      <span className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white">
-                        {currentSummary.kills != null ? currentSummary.kills : '—'}
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[11px] text-zinc-500">{isRu ? 'Темп в час' : 'Pace / hour'}</span>
-                      <span className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white">
-                        {currentSummary.kills_per_hour != null ? `${currentSummary.kills_per_hour}/ч` : '—'}
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[11px] text-zinc-500">{isRu ? 'Пауза' : 'Avg Kill Gap'}</span>
-                      <span className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white">
-                        {currentSummary.avg_kill_gap_s != null ? `${currentSummary.avg_kill_gap_s}с` : '—'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* 5. Resource breakdown: ONLY show if resources exist and are > 0 */}
-                {hasExtractedResources && currentSummary && (
-                  <div className="flex flex-col gap-2.5 pt-2">
-                    <span className="text-xs font-mono font-medium text-zinc-500 uppercase tracking-wide">
-                      {isRu ? 'Добытые ресурсы' : 'Extracted Resources'}
-                    </span>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono">
-                      {khorium != null && khorium > 0 && (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] text-zinc-500">{isRu ? 'Кориум' : 'Khorium'}</span>
-                          <span className="text-sm font-semibold text-zinc-950 dark:text-white">
-                            {khorium}
-                          </span>
-                        </div>
-                      )}
-                      {adamantite != null && adamantite > 0 && (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] text-zinc-500">{isRu ? 'Адамантит' : 'Adamantite'}</span>
-                          <span className="text-sm font-semibold text-zinc-950 dark:text-white">
-                            {adamantite}
-                          </span>
-                        </div>
-                      )}
-                      {felIron != null && felIron > 0 && (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] text-zinc-500">{isRu ? 'Оскверн. железо' : 'Fel Iron'}</span>
-                          <span className="text-sm font-semibold text-zinc-950 dark:text-white">
-                            {felIron}
-                          </span>
-                        </div>
-                      )}
-                      {gold != null && gold > 0 && (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] text-zinc-500">{isRu ? 'Золото' : 'Gold'}</span>
-                          <span className="text-sm font-semibold text-zinc-950 dark:text-white">
-                            +{gold.toLocaleString()}g
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 5b. Gathering Loot Table: ONLY show if loot exists and is not empty */}
-                {currentSummary?.loot && currentSummary.loot.length > 0 && (
-                  <div className="flex flex-col gap-3 font-mono pt-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono font-medium text-zinc-500 uppercase tracking-wide">
-                        {isRu ? 'Добыча сбора' : 'Gathering Loot'}
-                      </span>
-                      <span className="text-[11px] text-zinc-500">
-                        {currentSummary.loot.length} {isRu ? 'поз.' : 'items'}
-                      </span>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead>
-                          <tr className="text-[10px] text-zinc-500 uppercase tracking-wider">
-                            <th className="pb-2 font-normal">{isRu ? 'Название' : 'Item'}</th>
-                            <th className="pb-2 font-normal text-right">{isRu ? 'Кол-во' : 'Count'}</th>
-                            <th className="pb-2 font-normal text-right">{isRu ? 'Цена за шт.' : 'Price each'}</th>
-                            <th className="pb-2 font-normal text-right">{isRu ? 'Сумма' : 'Total'}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {currentSummary.loot.map((item) => {
-                            const displayName = item.name || (isRu ? `Предмет #${item.item_id}` : `Item #${item.item_id}`);
-                            return (
-                              <tr key={item.item_id} className="hover:bg-white/[0.02]">
-                                <td className="py-1.5 pr-2 font-medium text-zinc-900 dark:text-zinc-100 truncate max-w-[200px]" title={displayName}>
-                                  {displayName}
-                                </td>
-                                <td className="py-1.5 px-2 text-right text-zinc-500 tabular-nums whitespace-nowrap">
-                                  ×{item.count}
-                                </td>
-                                <td className="py-1.5 px-2 text-right tabular-nums whitespace-nowrap">
-                                  <MoneyBadge copper={item.price} language={language} />
-                                </td>
-                                <td className="py-1.5 pl-2 text-right font-semibold tabular-nums whitespace-nowrap">
-                                  <MoneyBadge copper={item.value} language={language} />
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Footer with Earned Total & Notes */}
-                    <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-zinc-500">
-                          {isRu ? 'Заработано: ' : 'Earned: '}
-                        </span>
-                        <strong className="text-sm font-bold text-zinc-950 dark:text-white">
-                          <MoneyBadge copper={currentSummary.earned_copper} language={language} />
-                        </strong>
-                        {currentSummary.earned_complete === false && (
-                          <span className="text-[11px] text-zinc-500 font-normal">
-                            {isRu ? '(не у всех предметов есть цена)' : '(not all items have a price)'}
-                          </span>
-                        )}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6 py-2 font-mono">
+                    {/* 1. Duration */}
+                    <div className="flex flex-col justify-between gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-zinc-500">{isRu ? 'Длительность' : 'Duration'}</span>
+                        <Clock className="w-3.5 h-3.5 text-zinc-400" />
                       </div>
-
-                      {currentSummary.loot_lost != null && currentSummary.loot_lost > 0 && (
-                        <span className="text-[11px] text-zinc-500">
-                          {isRu ? `не посчитано предметов: ${currentSummary.loot_lost}` : `uncounted items: ${currentSummary.loot_lost}`}
+                      <div>
+                        <span className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white tracking-tight">
+                          {formatDuration(currentSummary.duration_s)}
                         </span>
-                      )}
+                      </div>
+                    </div>
+
+                    {/* 2. Total Items Gathered (Сумма предметов) */}
+                    <div className="flex flex-col justify-between gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-zinc-500">{isRu ? 'Собрано предметов' : 'Items Gathered'}</span>
+                        <Sparkles className="w-3.5 h-3.5 text-zinc-400" />
+                      </div>
+                      <div>
+                        <span className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white tracking-tight">
+                          {pastTotalItems}
+                        </span>
+                        <p className="text-[10px] text-zinc-500 mt-0.5">
+                          {pastTotalItems > 0 ? (isRu ? 'всего в сумках' : 'total in bags') : (isRu ? 'нет предметов' : 'none')}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 3. Earned Gold (Количество заработанной голды) */}
+                    <div className="flex flex-col justify-between gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-zinc-500">{isRu ? 'Заработано' : 'Earned'}</span>
+                        <Coins className="w-3.5 h-3.5 text-zinc-400" />
+                      </div>
+                      <div>
+                        <span className="text-xl sm:text-2xl font-bold text-zinc-950 dark:text-white tracking-tight">
+                          <MoneyBadge copper={pastEarnedCopper} language={language} />
+                        </span>
+                        <p className="text-[10px] text-zinc-500 mt-0.5 truncate">
+                          {pastEarnedCopper != null && pastEarnedCopper > 0
+                            ? (isRu ? 'по ценам аукциона' : 'auction valuation')
+                            : (isRu ? 'добычи нет' : 'no revenue')}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 4. Gold Per Hour */}
+                    <div className="flex flex-col justify-between gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-zinc-500">{isRu ? 'Золото в час' : 'Gold / hour'}</span>
+                        <TrendingUp className="w-3.5 h-3.5 text-zinc-400" />
+                      </div>
+                      <div>
+                        <span className="text-xl sm:text-2xl font-bold text-zinc-950 dark:text-white tracking-tight">
+                          <MoneyBadge copper={pastCopperPerHour} language={language} />
+                        </span>
+                        <p className="text-[10px] text-zinc-500 mt-0.5 truncate">
+                          {currentSummary.duration_s > 0 ? (isRu ? 'темп фарма' : 'farm pace') : '—'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 5. Nodes Gathered */}
+                    <div className="flex flex-col justify-between gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-zinc-500">{isRu ? 'Узлов собрано' : 'Nodes Gathered'}</span>
+                      </div>
+                      <div>
+                        <span className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white tracking-tight">
+                          {currentSummary.kills != null ? currentSummary.kills : '—'}
+                        </span>
+                        <p className="text-[10px] text-zinc-500 mt-0.5 truncate">
+                          {currentSummary.kills_per_hour != null ? `${currentSummary.kills_per_hour}/ч` : '—'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 6. Avg Kill Gap */}
+                    <div className="flex flex-col justify-between gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-zinc-500">{isRu ? 'Пауза' : 'Avg Gap'}</span>
+                      </div>
+                      <div>
+                        <span className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white tracking-tight">
+                          {currentSummary.avg_kill_gap_s != null ? `${currentSummary.avg_kill_gap_s}с` : '—'}
+                        </span>
+                        <p className="text-[10px] text-zinc-500 mt-0.5 truncate">
+                          {isRu ? 'между узлами' : 'between nodes'}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}
