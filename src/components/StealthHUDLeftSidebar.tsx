@@ -232,8 +232,8 @@ export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
             <div className="p-3 bg-transparent border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] rounded-lg text-xs space-y-2 text-zinc-600 dark:text-zinc-500 transition-all">
               <p className="leading-relaxed">
                 {isRu
-                  ? 'Справа доступны системные параметры горячих клавиш: захват цели, взаимодействие и экстренная пауза.'
-                  : 'System hotkey parameters are open on the right: target selection, interact, and emergency pause.'}
+                  ? 'Справа доступны системные параметры горячих клавиш: захват цели, взаимодействие и пауза.'
+                  : 'System hotkey parameters are open on the right: target selection, interact, and pause.'}
               </p>
             </div>
           </div>

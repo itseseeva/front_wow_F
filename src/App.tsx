@@ -79,6 +79,7 @@ export const App: React.FC = () => {
 
   // Bot Execution State
   const [isBotRunning, setIsBotRunning] = useState<boolean>(false);
+  const [isBotPaused, setIsBotPaused] = useState<boolean>(false);
   const [sessionSeconds, setSessionSeconds] = useState<number>(0);
   const [globalError, setGlobalError] = useState<string | null>(null);
 
@@ -545,9 +546,17 @@ export const App: React.FC = () => {
           setScheduleStatus(status.schedule);
         }
 
+        // Update paused state from get_status()
+        if (status.running) {
+          setIsBotPaused(Boolean(status.paused));
+        } else {
+          setIsBotPaused(false);
+        }
+
         // If bot stopped on its own (running === false, but UI is currently in running state)
         if (isBotRunningRef.current && !status.running) {
           setIsBotRunning(false);
+          setIsBotPaused(false);
           soundFx.playStop();
           fetchScheduleStatus();
 
@@ -926,6 +935,19 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('wowbot:loot', handleLootEvent);
   }, []);
 
+  // Listen for bot pause status: 'wowbot:pause'
+  useEffect(() => {
+    const handlePauseEvent = (e: any) => {
+      const detail = e?.detail;
+      if (detail && typeof detail.paused === 'boolean') {
+        setIsBotPaused(detail.paused);
+      }
+    };
+
+    window.addEventListener('wowbot:pause', handlePauseEvent);
+    return () => window.removeEventListener('wowbot:pause', handlePauseEvent);
+  }, []);
+
   // Calendar Data Fetching & Month Navigation
   const fetchCalendarMonth = useCallback(async (year: number, month: number) => {
     try {
@@ -1158,6 +1180,7 @@ export const App: React.FC = () => {
         // Bot has stopped: open modal summary
         setSessionSummary(detail);
         setIsBotRunning(false);
+        setIsBotPaused(false);
         setActiveTab('summary');
         if (todayDateStr) {
           setSelectedDate(todayDateStr);
@@ -1181,6 +1204,7 @@ export const App: React.FC = () => {
     if (isBotRunning) {
       soundFx.playStop();
       setIsBotRunning(false);
+      setIsBotPaused(false);
       fetchScheduleStatus();
       let backendSummary: SessionSummaryData | null = null;
       if (api?.stop_bot) {
@@ -1234,6 +1258,7 @@ export const App: React.FC = () => {
       setSessionSeconds(0);
       setLootStatus({ items: [], earned_copper: null, earned_complete: true });
       setIsBotRunning(true);
+      setIsBotPaused(false);
       if (todayDateStr) {
         setSelectedDate(todayDateStr);
         fetchDayData(todayDateStr);
@@ -1416,6 +1441,8 @@ export const App: React.FC = () => {
           theme={theme}
           onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
           isBotRunning={isBotRunning}
+          isBotPaused={isBotPaused}
+          pauseKey={settings.pauseKey}
           onToggleBot={handleToggleBot}
           onExport={handleExportJson}
           onOpenSettings={() => setActiveTab('settings')}
@@ -1546,6 +1573,8 @@ export const App: React.FC = () => {
               isHeatmapLoading={isHeatmapLoading}
               language={language}
               isBotRunning={isBotRunning}
+              isBotPaused={isBotPaused}
+              pauseKey={settings.pauseKey}
               sessionSeconds={sessionSeconds}
               lootStatus={lootStatus}
               activeRoute={activeRoute}

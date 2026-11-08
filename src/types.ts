@@ -72,6 +72,7 @@ export interface PriceStatus {
 
 export interface BotStatusResponse {
   running: boolean;
+  paused?: boolean; // true — бот на паузе, сессия идёт
   chat_running?: boolean;
   ok?: boolean;
   error?: string;

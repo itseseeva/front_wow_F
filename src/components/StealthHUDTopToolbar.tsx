@@ -7,6 +7,8 @@ interface StealthHUDTopToolbarProps {
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   isBotRunning: boolean;
+  isBotPaused?: boolean;
+  pauseKey?: string;
   onToggleBot: () => void;
   onExport: () => void;
   onOpenSettings: () => void;
@@ -19,12 +21,15 @@ export const StealthHUDTopToolbar: React.FC<StealthHUDTopToolbarProps> = ({
   theme,
   onToggleTheme,
   isBotRunning,
+  isBotPaused = false,
+  pauseKey = 'PAUSE',
   onToggleBot,
   onExport,
   onOpenSettings,
   onOpenStats,
 }) => {
   const isRu = language === 'ru';
+  const formattedPauseKey = (pauseKey || 'PAUSE').toUpperCase();
 
   return (
     <header
@@ -66,7 +71,21 @@ export const StealthHUDTopToolbar: React.FC<StealthHUDTopToolbarProps> = ({
         )}
       </button>
 
-      {/* 4. Action Button: START / STOP (Ghost Specular Button) */}
+      {/* 4. Amber Pause Badge (рядом с кнопкой СТОП) */}
+      {isBotRunning && isBotPaused && (
+        <div
+          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-500 dark:text-amber-400 font-mono text-xs font-semibold shadow-sm animate-pulse select-none whitespace-nowrap"
+          title={isRu ? `Бот на паузе. Нажми ${formattedPauseKey}, чтобы продолжить` : `Bot paused. Press ${formattedPauseKey} to resume`}
+        >
+          <span>
+            {isRu
+              ? `⏸ Пауза — управление у тебя. Нажми ${formattedPauseKey}, чтобы продолжить`
+              : `⏸ Paused — you are in control. Press ${formattedPauseKey} to resume`}
+          </span>
+        </div>
+      )}
+
+      {/* 5. Action Button: START / STOP (Ghost Specular Button) */}
       <SpecularButton
         onClick={() => {
           if (isBotRunning) {

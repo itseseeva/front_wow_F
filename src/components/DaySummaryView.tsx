@@ -31,6 +31,8 @@ interface DaySummaryViewProps {
   isHeatmapLoading: boolean;
   language: 'ru' | 'en';
   isBotRunning?: boolean;
+  isBotPaused?: boolean;
+  pauseKey?: string;
   sessionSeconds?: number;
   lootStatus?: LootStatus | null;
   activeRoute?: RouteItem | null;
@@ -117,6 +119,8 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
   isHeatmapLoading,
   language,
   isBotRunning = false,
+  isBotPaused = false,
+  pauseKey = 'PAUSE',
   sessionSeconds = 0,
   lootStatus = null,
   activeRoute = null,
@@ -449,7 +453,11 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
             </h1>
             <p className="text-[11px] 2xl:text-xs text-zinc-500 mt-0.5 font-mono">
               {isBotRunning && isLiveSelected
-                ? (isRu ? 'Идёт сессия сбора в реальном времени' : 'Live gathering session in progress')
+                ? (isBotPaused
+                    ? (isRu
+                        ? `⏸ Пауза — управление у тебя. Нажми ${(pauseKey || 'PAUSE').toUpperCase()}, чтобы продолжить`
+                        : `⏸ Paused — you are in control. Press ${(pauseKey || 'PAUSE').toUpperCase()} to resume`)
+                    : (isRu ? 'Идёт сессия сбора в реальном времени' : 'Live gathering session in progress'))
                 : hasSessions
                 ? `${getPluralSessions(sessions.length, isRu)} · ${getPluralRoutes(uniqueRoutesCount, isRu)}`
                 : (isRu ? 'В этот день бот не работал' : 'No sessions on this day')}
@@ -503,11 +511,16 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     }`}
                   >
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-zinc-900 dark:bg-white opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-zinc-950 dark:bg-white"></span>
+                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isBotPaused ? 'bg-amber-400' : 'bg-zinc-900 dark:bg-white'} opacity-75`}></span>
+                      <span className={`relative inline-flex rounded-full h-2 w-2 ${isBotPaused ? 'bg-amber-400' : 'bg-zinc-950 dark:bg-white'}`}></span>
                     </span>
                     <span>
                       LIVE · {activeRoute ? `${formatRouteRoman(activeRoute.name)}${activeRoute.region ? ` (${activeRoute.region})` : ''}` : (isRu ? 'Текущая сессия' : 'Active Session')}
+                      {isBotPaused && (
+                        <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30">
+                          {isRu ? 'ПАУЗА' : 'PAUSED'}
+                        </span>
+                      )}
                     </span>
                   </button>
                 )}
@@ -573,6 +586,15 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
             {/* LIVE TELEMETRY VIEW (immediately open, no container boxes) */}
             {isLiveSelected ? (
               <div className="flex flex-col gap-6 animate-fadeIn">
+                {isBotPaused && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 dark:text-amber-400 font-mono text-xs font-semibold shadow-sm">
+                    <span>
+                      {isRu
+                        ? `⏸ Пауза — управление у тебя. Нажми ${(pauseKey || 'PAUSE').toUpperCase()}, чтобы продолжить`
+                        : `⏸ Paused — you are in control. Press ${(pauseKey || 'PAUSE').toUpperCase()} to resume`}
+                    </span>
+                  </div>
+                )}
                 {/* Live 5 Metric Cards (frameless columns, no boxes) */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 py-1 font-mono">
                   {/* 1. Duration */}
@@ -586,9 +608,9 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                         {formatDuration(sessionSeconds)}
                       </span>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white animate-pulse" />
-                        <span className="text-[10px] text-zinc-500">
-                          {isRu ? 'в процессе' : 'running'}
+                        <span className={`w-1.5 h-1.5 rounded-full ${isBotPaused ? 'bg-amber-400' : 'bg-zinc-950 dark:bg-white'} animate-pulse`} />
+                        <span className={`text-[10px] ${isBotPaused ? 'text-amber-500 dark:text-amber-400 font-medium' : 'text-zinc-500'}`}>
+                          {isBotPaused ? (isRu ? 'на паузе' : 'paused') : (isRu ? 'в процессе' : 'running')}
                         </span>
                       </div>
                     </div>

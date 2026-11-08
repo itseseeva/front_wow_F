@@ -321,10 +321,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     },
     {
       id: 'pauseKey',
-      nameRu: 'Экстренная пауза',
-      nameEn: 'Emergency Pause',
-      hintRu: 'Клавиша самого бота — в игре настраивать не нужно',
-      hintEn: 'Bot hotkey — nothing to set in game',
+      nameRu: 'Пауза',
+      nameEn: 'Pause',
+      hintRu: 'Клавиша самого бота: нажал — бот отпускает клавиши и ждёт, ещё раз — продолжает ту же сессию. Совсем остановить — кнопка «Стоп». В игре настраивать не нужно',
+      hintEn: 'Bot key: press to release keys and pause, press again to resume the session. To stop completely, use the "Stop" button. No in-game setup needed',
       defaultVal: 'PAUSE',
     },
     {
