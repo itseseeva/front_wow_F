@@ -19,7 +19,6 @@ import { soundFx } from '../utils/audio';
 import { formatRouteRoman } from '../utils/roman';
 import { MoneyBadge } from '../utils/money';
 import { RouteItem } from './StealthHUDLeftSidebar';
-import { MOCK_LOOT_ROWS } from '../data/mockPrices';
 
 interface DaySummaryViewProps {
   selectedDate: string;
@@ -126,7 +125,6 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
 }) => {
   const isRu = language === 'ru';
   const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const [isTestMode, setIsTestMode] = useState(false);
 
   const sessions = dayData?.sessions || [];
   const hasSessions = sessions.length > 0;
@@ -408,14 +406,12 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     (gold != null && gold > 0)
   );
 
-  // Effective loot for past session / test preview
+  // Effective loot and metrics for past session / all-day view
   const effectiveLoot = useMemo(() => {
-    if (isTestMode) return MOCK_LOOT_ROWS;
     return currentSummary?.loot && currentSummary.loot.length > 0 ? currentSummary.loot : null;
-  }, [isTestMode, currentSummary]);
+  }, [currentSummary]);
 
-  const effectiveEarnedCopper = useMemo(() => {
-    if (isTestMode) return 742200; // 74з 22с
+  const pastEarnedCopper = useMemo(() => {
     if (currentSummary?.earned_copper != null) return currentSummary.earned_copper;
     if (currentSummary?.gold != null && currentSummary.gold > 0) return currentSummary.gold * 10000;
     if (effectiveLoot && effectiveLoot.length > 0) {
@@ -423,94 +419,20 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
       return sum > 0 ? sum : null;
     }
     return null;
-  }, [isTestMode, currentSummary, effectiveLoot]);
-
-  const effectiveEarnedComplete = isTestMode ? false : currentSummary?.earned_complete;
-  const effectiveLootLost = isTestMode ? 0 : currentSummary?.loot_lost;
+  }, [currentSummary, effectiveLoot]);
 
   const pastTotalItems = useMemo(() => {
-    if (isTestMode) return MOCK_LOOT_ROWS.reduce((acc, it) => acc + (it.count || 0), 0);
     if (currentSummary?.loot && currentSummary.loot.length > 0) {
       return currentSummary.loot.reduce((acc, it) => acc + (it.count || 0), 0);
     }
     const ores = (currentSummary?.khorium || 0) + (currentSummary?.adamantite || 0) + (currentSummary?.fel_iron || 0);
     return ores;
-  }, [isTestMode, currentSummary]);
-
-  const pastEarnedCopper = effectiveEarnedCopper;
+  }, [currentSummary]);
 
   const pastCopperPerHour = useMemo(() => {
-    if (isTestMode) return 1045000; // 104з 50с/ч
     if (!currentSummary?.duration_s || currentSummary.duration_s <= 0 || pastEarnedCopper == null) return null;
     return Math.round((pastEarnedCopper / currentSummary.duration_s) * 3600);
-  }, [isTestMode, currentSummary, pastEarnedCopper]);
-
-  // 3-Resource Wheel breakdown: Золото, Трава, Руда
-  const { oreCount, herbCount, goldCoins, totalWheelUnits, resourceSlices } = useMemo(() => {
-    let hCount = 0;
-    let oCount = 0;
-
-    const sourceLoot = effectiveLoot || [];
-    sourceLoot.forEach((item) => {
-      const name = (item.name || '').toLowerCase();
-      const isHerb = /трав|сноцвет|лилия|водоросл|цвет|лист|ягод|лотос|лотус|грезолист|пепелянк|зверобой|чумоцвет|сквернопл|herb|weed|flower|bloom|lotus|dreamfoil|felweed|leaf|grass|thistle|lichen|terocone|nightmare/.test(name);
-      const isOre = /руд|желез|адамантит|кориум|медь|олов|серебр|золот|мифрил|торий|камен|слиток|саронит|титан|обсидиан|ore|iron|adamantite|khorium|copper|tin|silver|gold|mithril|thorium|stone|bar|nugget|chunk/.test(name);
-
-      if (isHerb) {
-        hCount += item.count;
-      } else if (isOre) {
-        oCount += item.count;
-      } else {
-        oCount += item.count;
-      }
-    });
-
-    if (hCount === 0 && oCount === 0) {
-      oCount = (currentSummary?.khorium || 0) + (currentSummary?.adamantite || 0) + (currentSummary?.fel_iron || 0);
-    }
-
-    const gCoins = effectiveEarnedCopper != null
-      ? Math.max(0, Math.round(effectiveEarnedCopper / 10000))
-      : (currentSummary?.gold || 0);
-
-    const total = oCount + hCount + gCoins;
-
-    const goldPct = total > 0 ? (gCoins / total) * 100 : 0;
-    const herbPct = total > 0 ? (hCount / total) * 100 : 0;
-    const orePct = total > 0 ? (oCount / total) * 100 : 0;
-
-    const slices = [
-      {
-        id: 'gold' as const,
-        name: isRu ? 'Золото' : 'Gold',
-        value: gCoins,
-        percentage: goldPct,
-        color: '#F59E0B', // Золотой
-      },
-      {
-        id: 'herb' as const,
-        name: isRu ? 'Трава' : 'Herbs',
-        value: hCount,
-        percentage: herbPct,
-        color: '#10B981', // Зеленый
-      },
-      {
-        id: 'ore' as const,
-        name: isRu ? 'Руда' : 'Ore',
-        value: oCount,
-        percentage: orePct,
-        color: '#9CA3AF', // Серый
-      },
-    ].filter((s) => s.percentage > 0);
-
-    return {
-      oreCount: oCount,
-      herbCount: hCount,
-      goldCoins: gCoins,
-      totalWheelUnits: total,
-      resourceSlices: slices,
-    };
-  }, [effectiveLoot, effectiveEarnedCopper, currentSummary, isRu]);
+  }, [currentSummary, pastEarnedCopper]);
 
   return (
     <div className="w-full max-w-4xl 2xl:max-w-5xl mx-auto flex flex-col gap-6">
@@ -646,26 +568,6 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                   );
                 })}
               </div>
-
-              {/* Test statistics preview button */}
-              {!isLiveSelected && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    soundFx.playClick();
-                    setIsTestMode((prev) => !prev);
-                  }}
-                  className={`px-2.5 py-1 text-xs font-mono rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ml-auto shrink-0 ${
-                    isTestMode
-                      ? 'bg-zinc-800 text-white border-zinc-600 shadow-sm'
-                      : 'text-zinc-400 hover:text-zinc-200 border-zinc-800/80 hover:border-zinc-700 bg-zinc-900/40'
-                  }`}
-                  title={isRu ? 'Показать тестовый вывод добычи с графиком-колесом' : 'Toggle sample loot preview'}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${isTestMode ? 'bg-amber-400 animate-pulse' : 'bg-zinc-500'}`} />
-                  <span>{isTestMode ? (isRu ? 'Выход из теста' : 'Exit test') : (isRu ? 'Тестовый вывод' : 'Test data')}</span>
-                </button>
-              )}
             </div>
 
             {/* LIVE TELEMETRY VIEW (immediately open, no container boxes) */}
@@ -1088,51 +990,6 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                         </strong>
                       </span>
                     )}
-                  </div>
-                )}
-
-                {/* 7. Horizontal 3-Resource Row: Золото · Трава · Руда (без колеса и без контейнеров) */}
-                {(totalWheelUnits > 0 || isTestMode) && (
-                  <div className="w-full py-2 flex flex-col gap-2.5 font-mono select-none">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-medium text-zinc-500 uppercase tracking-wider">
-                        {isRu ? 'Добыча сессии' : 'Session Loot'}
-                      </span>
-                      {isTestMode && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                          {isRu ? 'тестовый режим' : 'test mode'}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-6 sm:gap-8 flex-wrap py-1 text-xs font-mono">
-                      {/* 1. Золото: золотой кружок */}
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.7)] shrink-0" />
-                        <span className="text-zinc-400">{isRu ? 'Золото:' : 'Gold:'}</span>
-                        <strong className="text-sm font-bold text-amber-400 tabular-nums">
-                          <MoneyBadge copper={effectiveEarnedCopper} language={language} />
-                        </strong>
-                      </div>
-
-                      {/* 2. Трава: зелёный кружок */}
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.7)] shrink-0" />
-                        <span className="text-zinc-400">{isRu ? 'Трава:' : 'Herbs:'}</span>
-                        <strong className="text-sm font-bold text-emerald-400 tabular-nums">
-                          {herbCount} <span className="text-xs font-normal text-emerald-300/80">{isRu ? 'шт.' : 'pcs'}</span>
-                        </strong>
-                      </div>
-
-                      {/* 3. Руда: серый кружок */}
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-zinc-400 shadow-[0_0_8px_rgba(156,163,175,0.5)] shrink-0" />
-                        <span className="text-zinc-400">{isRu ? 'Руда:' : 'Ore:'}</span>
-                        <strong className="text-sm font-bold text-zinc-200 tabular-nums">
-                          {oreCount} <span className="text-xs font-normal text-zinc-400">{isRu ? 'шт.' : 'pcs'}</span>
-                        </strong>
-                      </div>
-                    </div>
                   </div>
                 )}
               </div>
