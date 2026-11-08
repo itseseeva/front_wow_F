@@ -405,5 +405,11 @@ export const mockGetAutoRouteStatus = async (): Promise<{ ok: boolean } & AutoRo
     route_id: null,
     route_name: null,
     note: null,
+    stage: null,
+    done: 0,
+    total: 0,
+    progress: 0,
+    elapsed_s: null,
+    eta_s: null,
   };
 };

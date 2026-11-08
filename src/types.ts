@@ -94,13 +94,19 @@ export interface TerrainStatus {
 export interface AutoRouteStatus {
   status: 'idle' | 'building' | 'ready' | 'error';
   map_id: number | null;
-  minutes: number | null;
+  minutes: number | null;          // заданная длина круга
   started_at_ms: number | null;
   finished_at_ms: number | null;
   typical_s: number;
   route_id: string | null;
   route_name: string | null;
-  note: string | null;
+  note: string | null;             // ready — что вошло в круг; error — почему не вышло
+  stage: 'grid' | 'spots' | 'paths' | 'check' | null;
+  done: number;
+  total: number;
+  progress: number;                // 0..1, только растёт
+  elapsed_s: number | null;
+  eta_s: number | null;            // null — «оцениваю…»
 }
 
 // Ответ get_map_image: картинка карты зоны WoW (та же, что карта мира в игре).

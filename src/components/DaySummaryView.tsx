@@ -98,6 +98,14 @@ function getTerrainStageText(stage: 'tiles' | 'models' | 'grid' | null, isRu: bo
   return isRu ? 'Подготовка местности' : 'Preparing terrain';
 }
 
+function getAutoRouteStageText(stage: AutoRouteStatus['stage'], done: number, total: number, isRu: boolean): string {
+  if (stage === 'grid') return isRu ? 'Загружаю карту местности' : 'Loading terrain mesh';
+  if (stage === 'spots') return isRu ? 'Ищу скопления руды и трав' : 'Searching for resource nodes';
+  if (stage === 'paths') return isRu ? `Прокладываю круг: участок ${done} из ${total}` : `Plotting path: segment ${done} of ${total}`;
+  if (stage === 'check') return isRu ? 'Уточняю длину круга' : 'Refining loop length';
+  return isRu ? 'Готовлюсь…' : 'Preparing…';
+}
+
 export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
   selectedDate,
   dayData,
@@ -185,7 +193,14 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
       if (api?.get_autoroute_status) {
         api.get_autoroute_status().then((res) => {
           if (res && res.status) {
-            setAutoRouteStatus(res);
+            setAutoRouteStatus(prev => {
+              const incomingProg = typeof res.progress === 'number' ? Math.max(0, Math.min(1, res.progress)) : 0;
+              const finalProg = res.status === 'ready' ? 1 : Math.max(prev?.progress ?? 0, incomingProg);
+              return {
+                ...res,
+                progress: finalProg,
+              };
+            });
             if (res.status === 'ready') {
               setShowAutoRouteReady(true);
               if (autoRouteReadyTimerRef.current) clearTimeout(autoRouteReadyTimerRef.current);
@@ -204,7 +219,15 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     const handleAutoRoute = (e: any) => {
       const detail: AutoRouteStatus = e?.detail;
       if (!detail) return;
-      setAutoRouteStatus(detail);
+      setAutoRouteStatus(prev => {
+        const incomingProg = typeof detail.progress === 'number' ? Math.max(0, Math.min(1, detail.progress)) : 0;
+        const finalProg = detail.status === 'ready' ? 1 : Math.max(prev?.progress ?? 0, incomingProg);
+        return {
+          ...detail,
+          progress: finalProg,
+        };
+      });
+
       if (detail.status === 'ready') {
         setShowAutoRouteReady(true);
         if (autoRouteReadyTimerRef.current) clearTimeout(autoRouteReadyTimerRef.current);
@@ -613,115 +636,112 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                   </div>
                 </div>
 
-                {/* Terrain Status Banner (wowbot:terrain-status) */}
-                {terrainStatus && (terrainStatus.status === 'building' || terrainStatus.status === 'error') && (
-                  <div className="font-mono pt-1 select-none">
-                    {terrainStatus.status === 'building' ? (
-                      <div className="flex flex-col gap-2 p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/80 max-w-lg">
-                        <div className="flex items-center justify-between gap-2 text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                            <span className="font-semibold text-zinc-200">
-                              {isRu ? 'Собираю карту местности зоны' : 'Building zone terrain mesh'}
-                              {terrainStatus.map_id ? ` #${terrainStatus.map_id}` : ''}
+                {/* 1. Unified «Сканирование местности» loading block / AutoRoute ready / error */}
+                {(() => {
+                  const isTerrainBuilding = terrainStatus?.status === 'building';
+                  const isAutoRouteBuilding = !isTerrainBuilding && autoRouteStatus?.status === 'building';
+                  const isAutoRouteReady = !isTerrainBuilding && autoRouteStatus?.status === 'ready' && showAutoRouteReady;
+                  const isAutoRouteError = !isTerrainBuilding && autoRouteStatus?.status === 'error';
+                  const isTerrainError = terrainStatus?.status === 'error';
+
+                  let scanTitle = isRu ? 'Сканирование местности' : 'Scanning terrain';
+                  let scanSubtitle: string | null = null;
+                  let scanPercent = 0;
+                  let scanBottomText: string | null = null;
+
+                  if (isTerrainBuilding) {
+                    scanPercent = Math.min(100, Math.max(0, Math.round((terrainStatus.progress ?? 0) * 100)));
+                    scanSubtitle = getTerrainStageText(terrainStatus.stage, isRu);
+                    const elapsed = terrainStatus.elapsed_s ?? 0;
+                    const eta = terrainStatus.eta_s != null ? `${terrainStatus.eta_s} с` : (isRu ? 'оцениваю…' : 'evaluating…');
+                    scanBottomText = isRu ? `прошло ${elapsed} с · осталось ~${eta}` : `elapsed ${elapsed}s · ~${eta} left`;
+                  } else if (isAutoRouteBuilding) {
+                    scanPercent = Math.min(100, Math.max(0, Math.round((autoRouteStatus.progress ?? 0) * 100)));
+                    scanSubtitle = getAutoRouteStageText(autoRouteStatus.stage, autoRouteStatus.done, autoRouteStatus.total, isRu);
+                    const elapsed = autoRouteStatus.elapsed_s != null
+                      ? autoRouteStatus.elapsed_s
+                      : (autoRouteStatus.started_at_ms ? Math.max(0, Math.floor((nowMs - autoRouteStatus.started_at_ms) / 1000)) : 0);
+                    const eta = autoRouteStatus.eta_s != null ? `${autoRouteStatus.eta_s} с` : (isRu ? 'оцениваю…' : 'evaluating…');
+                    scanBottomText = isRu ? `прошло ${elapsed} с · осталось ~${eta}` : `elapsed ${elapsed}s · ~${eta} left`;
+                  } else if (isAutoRouteReady) {
+                    scanTitle = isRu ? `Круг готов: ${autoRouteStatus.route_name || 'Автомаршрут'}` : `Loop ready: ${autoRouteStatus.route_name || 'AutoRoute'}`;
+                    scanSubtitle = autoRouteStatus.note || null;
+                    scanPercent = 100;
+                    scanBottomText = null;
+                  }
+
+                  return (
+                    <>
+                      {/* Active Loading Bar or Ready (10s) */}
+                      {(isTerrainBuilding || isAutoRouteBuilding || isAutoRouteReady) && (
+                        <div className="py-8 flex flex-col items-center justify-center text-center font-mono select-none">
+                          <div className="w-full max-w-xs flex flex-col gap-2">
+                            {/* Top: Blinking white dot + Title + Percent on the right */}
+                            <div className="flex items-center justify-between text-xs font-medium text-zinc-200">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    isAutoRouteReady ? 'bg-emerald-400' : 'bg-white animate-pulse'
+                                  }`}
+                                />
+                                <span className="tracking-wide">{scanTitle}</span>
+                              </div>
+                              <span className="font-mono text-zinc-400 tabular-nums shrink-0">
+                                {scanPercent}%
+                              </span>
+                            </div>
+
+                            {/* Stage Subtitle under title */}
+                            {scanSubtitle && (
+                              <div className="text-[11px] text-zinc-400 text-left pl-3.5 -mt-0.5">
+                                {scanSubtitle}
+                              </div>
+                            )}
+
+                            {/* Minimalist black and white bar */}
+                            <div className="w-full h-1 rounded-full bg-zinc-800 overflow-hidden">
+                              <div
+                                className="h-full bg-white transition-all duration-300 ease-out rounded-full"
+                                style={{ width: `${Math.max(2, scanPercent)}%` }}
+                              />
+                            </div>
+
+                            {/* Fine text under bar */}
+                            {scanBottomText && (
+                              <div className="text-[10px] text-zinc-500 text-left pl-0.5">
+                                {scanBottomText}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Error State: AutoRoute error without bar */}
+                      {isAutoRouteError && !isTerrainBuilding && (
+                        <div className="py-6 flex flex-col items-center justify-center text-center font-mono select-none">
+                          <div className="w-full max-w-sm p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/80 text-xs text-zinc-300 text-left flex items-start gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1 shrink-0" />
+                            <span>
+                              {isRu
+                                ? `Автомаршрут не вышел: ${autoRouteStatus.note || 'ошибка'}. Хожу по зоне вокруг места`
+                                : `Auto-route failed: ${autoRouteStatus.note || 'error'}. Patrolling local zone around area`}
                             </span>
                           </div>
-                          <span className="text-[11px] text-zinc-400 tabular-nums">
-                            {Math.min(100, Math.max(0, Math.round((terrainStatus.progress ?? 0) * 100)))}%
-                          </span>
                         </div>
+                      )}
 
-                        {/* Progress Bar */}
-                        <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                          <div
-                            className="h-full bg-white transition-all duration-300 ease-out rounded-full"
-                            style={{ width: `${Math.min(100, Math.max(2, Math.round((terrainStatus.progress ?? 0) * 100)))}%` }}
-                          />
+                      {/* Error State: Terrain error without bar */}
+                      {isTerrainError && (
+                        <div className="py-6 flex flex-col items-center justify-center text-center font-mono select-none">
+                          <div className="w-full max-w-sm p-3 rounded-lg bg-red-950/20 border border-red-900/50 text-xs text-red-300 text-left flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                            <span>{terrainStatus.error || (isRu ? 'Ошибка сборки карты зоны' : 'Error building terrain mesh')}</span>
+                          </div>
                         </div>
-
-                        {/* Subtitle: Stage, Done/Total, ETA */}
-                        <div className="flex items-center justify-between text-[11px] text-zinc-500">
-                          <span>
-                            {getTerrainStageText(terrainStatus.stage, isRu)}
-                            {terrainStatus.total ? ` (${terrainStatus.done} / ${terrainStatus.total})` : ''}
-                          </span>
-                          <span className="text-zinc-400">
-                            {terrainStatus.eta_s != null
-                              ? (isRu ? `осталось ~${terrainStatus.eta_s} с` : `~${terrainStatus.eta_s}s remaining`)
-                              : (isRu ? 'оцениваю…' : 'evaluating…')}
-                          </span>
-                        </div>
-                      </div>
-                    ) : terrainStatus.status === 'error' ? (
-                      <div className="p-3 rounded-lg bg-red-950/20 border border-red-900/50 text-xs text-red-300 flex items-center gap-2 max-w-lg">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                        <span>{terrainStatus.error || (isRu ? 'Ошибка сборки карты зоны' : 'Error building terrain mesh')}</span>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-
-                {/* AutoRoute Status Banner (AutoRouteStatus) */}
-                {autoRouteStatus && (autoRouteStatus.status === 'building' || (autoRouteStatus.status === 'ready' && showAutoRouteReady) || autoRouteStatus.status === 'error') && (
-                  <div className="font-mono pt-1 select-none">
-                    {autoRouteStatus.status === 'building' ? (
-                      <div className="flex flex-col gap-2 p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/80 max-w-lg">
-                        <div className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          <span>
-                            {isRu
-                              ? `Строю круг по местам руды и трав${autoRouteStatus.minutes != null ? ` (~${autoRouteStatus.minutes} мин)` : ''}`
-                              : `Building loop around nodes${autoRouteStatus.minutes != null ? ` (~${autoRouteStatus.minutes} min)` : ''}`}
-                          </span>
-                        </div>
-
-                        {/* Running indeterminate line without percent */}
-                        <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden relative">
-                          <div className="h-full w-1/3 bg-white rounded-full absolute animate-autoroute-beam" />
-                        </div>
-
-                        {/* Elapsed time text */}
-                        <div className="text-[11px] text-zinc-400">
-                          {(() => {
-                            const elapsedSec = autoRouteStatus.started_at_ms
-                              ? Math.max(0, Math.floor((nowMs - autoRouteStatus.started_at_ms) / 1000))
-                              : 0;
-                            const typical = autoRouteStatus.typical_s || 60;
-                            if (elapsedSec > typical) {
-                              return isRu ? 'дольше обычного, считаю…' : 'taking longer than usual, calculating…';
-                            }
-                            return isRu
-                              ? `${formatElapsed(elapsedSec)} · обычно до минуты`
-                              : `${formatElapsed(elapsedSec)} · usually up to a minute`;
-                          })()}
-                        </div>
-                      </div>
-                    ) : autoRouteStatus.status === 'ready' && showAutoRouteReady ? (
-                      <div className="p-3 rounded-lg bg-zinc-900/40 border border-zinc-700/60 flex flex-col gap-1 max-w-lg animate-assemble">
-                        <div className="flex items-center gap-2 text-xs font-semibold text-zinc-100">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                          <span>
-                            {isRu ? `Круг готов: ${autoRouteStatus.route_name || 'Автомаршрут'}` : `Loop ready: ${autoRouteStatus.route_name || 'AutoRoute'}`}
-                          </span>
-                        </div>
-                        {autoRouteStatus.note && (
-                          <p className="text-[11px] text-zinc-400 pl-3.5">{autoRouteStatus.note}</p>
-                        )}
-                      </div>
-                    ) : autoRouteStatus.status === 'error' ? (
-                      <div className="p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/80 text-xs text-zinc-300 max-w-lg">
-                        <div className="flex items-start gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1 shrink-0" />
-                          <span>
-                            {isRu
-                              ? `Автомаршрут не вышел: ${autoRouteStatus.note || 'ошибка'}. Хожу по зоне вокруг места`
-                              : `Auto-route failed: ${autoRouteStatus.note || 'error'}. Patrolling local zone around area`}
-                          </span>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
+                      )}
+                    </>
+                  );
+                })()}
 
                 {/* Live Gathering Loot Table or Empty State */}
                 {hasItems ? (
