@@ -812,13 +812,13 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     <div className="py-14 flex flex-col items-center justify-center text-center font-mono select-none">
                       <div className="w-full max-w-md flex flex-col items-center gap-2">
                         <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          <span>{isRu ? 'Сканирование местности и поиск жил / трав' : 'Scanning terrain & seeking nodes'}</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+                          <span>{isRu ? 'Добычи пока нет' : 'No loot yet'}</span>
                         </div>
                         <p className="text-[11px] text-zinc-500 max-w-sm leading-relaxed">
                           {isRu
-                            ? 'Бот патрулирует маршрут. Как только ресурс будет собран, он появится в этой таблице с подсчётом цены на аукционе.'
-                            : 'Bot is patrolling the route. Once a node is gathered, it will appear in this table with market price.'}
+                            ? 'Бот идёт по маршруту. Собранная руда и травы появятся здесь с ценой на аукционе.'
+                            : 'Bot is on the route. Gathered ore and herbs will appear here with auction prices.'}
                         </p>
                       </div>
                     </div>
