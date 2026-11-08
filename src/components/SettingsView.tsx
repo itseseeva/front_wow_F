@@ -346,7 +346,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   ];
 
   return (
-    <div className="flex flex-col gap-6 w-full select-none text-zinc-900 dark:text-zinc-100 font-sans pb-12">
+    <div className="flex flex-col gap-6 w-full select-none text-zinc-900 dark:text-zinc-100 font-sans pb-28">
       {/* =========================================================================
           SECTION 1: РАСПИСАНИЕ ФАРМА (Schedule Settings)
           ========================================================================= */}

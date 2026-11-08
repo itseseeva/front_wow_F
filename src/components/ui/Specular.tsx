@@ -69,7 +69,7 @@ export const SpecularCard = React.forwardRef<HTMLDivElement, SpecularProps>(({
       <span className="specular-sheen pointer-events-none absolute inset-0 z-0 transition-opacity duration-300" />
 
       {/* Actual Content */}
-      <div className={`relative z-10 w-full h-full ${contentClassName}`}>
+      <div className={`relative z-10 w-full ${contentClassName}`}>
         {children}
       </div>
     </div>

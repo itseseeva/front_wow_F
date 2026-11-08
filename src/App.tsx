@@ -1502,10 +1502,8 @@ export const App: React.FC = () => {
 
         {/* 3. SETTINGS VIEW: Full AppSettings Editor & Farm Schedule */}
         {activeTab === 'settings' && (
-          <div className="relative w-full h-full p-4 sm:p-6 2xl:p-10 pt-16 sm:pt-20 pb-8 flex flex-col justify-start overflow-y-auto animate-assemble">
-            <SpecularCard
-              className="w-full max-w-3xl 2xl:max-w-5xl mx-auto rounded-2xl p-5 2xl:p-8 border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
-            >
+          <div className="relative w-full h-full p-4 sm:p-6 2xl:p-10 pt-16 sm:pt-20 pb-24 flex flex-col justify-start overflow-y-auto animate-assemble">
+            <div className="w-full max-w-3xl 2xl:max-w-5xl mx-auto rounded-2xl p-5 2xl:p-8">
               <SettingsView
                 settings={settings}
                 onSettingsChange={(newSettings) => {
@@ -1530,7 +1528,7 @@ export const App: React.FC = () => {
                 onThemeChange={setTheme}
                 onToast={(msg) => setScheduleToast(msg)}
               />
-            </SpecularCard>
+            </div>
           </div>
         )}
 
