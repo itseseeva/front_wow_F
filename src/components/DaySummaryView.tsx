@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DayResponse, SessionHeatmapResponse, LootStatus, ScheduleStatus, TerrainStatus } from '../types';
-import { getPywebviewApi } from '../utils/pywebviewBridge';
-import { mockGetTerrainStatus } from '../data/mockRoutes';
+import { DayResponse, SessionHeatmapResponse, LootStatus, ScheduleStatus } from '../types';
 import {
   BarChart3,
   Calendar as CalendarIcon,
@@ -143,78 +141,14 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Terrain & dynamic auto-route building state
-  const [terrainStatus, setTerrainStatus] = useState<TerrainStatus | null>(null);
-
-  // Subscribe to wowbot:terrain-status window events
+  // Terminal dots animation for scanning state
+  const [scanDots, setScanDots] = useState('');
   useEffect(() => {
-    const handleTerrain = (e: any) => {
-      const detail: TerrainStatus = e?.detail;
-      if (detail) {
-        setTerrainStatus(prev => {
-          const incomingProg = typeof detail.progress === 'number' ? Math.max(0, Math.min(1, detail.progress)) : 0;
-          const finalProg = detail.status === 'ready' ? 1 : Math.max(prev?.progress ?? 0, incomingProg);
-          return {
-            ...detail,
-            progress: finalProg,
-          };
-        });
-      }
-    };
-    window.addEventListener('wowbot:terrain-status', handleTerrain);
-    return () => window.removeEventListener('wowbot:terrain-status', handleTerrain);
+    const interval = setInterval(() => {
+      setScanDots(prev => (prev.length >= 3 ? '' : prev + '.'));
+    }, 450);
+    return () => clearInterval(interval);
   }, []);
-
-  // Poll terrain / auto-route status while building or running without a route
-  useEffect(() => {
-    const isBuilding = isBotRunning && (!activeRoute || terrainStatus?.status === 'building');
-    if (!isBuilding) return;
-
-    let isMounted = true;
-    const mapId = terrainStatus?.map_id || 1436;
-
-    const poll = async () => {
-      try {
-        let res: { ok: boolean; error?: string } & Partial<TerrainStatus>;
-        const api = await getPywebviewApi();
-        if (api?.get_terrain_status) {
-          res = await api.get_terrain_status(mapId);
-        } else {
-          res = await mockGetTerrainStatus(mapId);
-        }
-
-        if (!isMounted) return;
-
-        if (res && res.status) {
-          setTerrainStatus(prev => {
-            const incomingProg = typeof res.progress === 'number' ? Math.max(0, Math.min(1, res.progress)) : 0;
-            const finalProg = res.status === 'ready' ? 1 : Math.max(prev?.progress ?? 0, incomingProg);
-            return {
-              map_id: res.map_id ?? mapId,
-              status: res.status as any,
-              stage: (res.stage as any) ?? prev?.stage ?? 'tiles',
-              done: res.done ?? prev?.done ?? 0,
-              total: res.total ?? prev?.total ?? 100,
-              progress: finalProg,
-              elapsed_s: res.elapsed_s ?? prev?.elapsed_s ?? 0,
-              eta_s: res.eta_s !== undefined ? res.eta_s : prev?.eta_s ?? null,
-              error: res.error ?? null,
-              source: res.source ?? prev?.source ?? null,
-            };
-          });
-        }
-      } catch (err) {
-        console.warn('Poll terrain status error:', err);
-      }
-    };
-
-    poll();
-    const interval = setInterval(poll, 1000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, [isBotRunning, activeRoute, terrainStatus?.status, terrainStatus?.map_id]);
 
   // Card «До перерыва»: countdown to phase_until_ms based on phase
   let breakValueNode: React.ReactNode = '—';
@@ -628,37 +562,17 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     </div>
                   </div>
                 ) : (
-                  (() => {
-                    const hasActiveFixedRoute = Boolean(activeRoute && activeRoute.id);
-                    const isAutoRouteBuilding = isBotRunning && (!hasActiveFixedRoute || terrainStatus?.status === 'building');
-                    const currentProg = terrainStatus?.progress ?? 0;
-                    const percent = Math.min(100, Math.max(0, Math.round(currentProg * 100)));
-
-                    return (
-                      <div className="py-16 flex flex-col items-center justify-center text-center gap-3 font-mono">
-                        {/* Blinking white dot + text "Сканирование местности" */}
-                        <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          <span>{isRu ? 'Сканирование местности' : 'Scanning terrain'}</span>
-                        </div>
-
-                        {/* Minimalist black and white bar with percentage on the right */}
-                        {isAutoRouteBuilding && (
-                          <div className="w-full max-w-xs flex items-center gap-3">
-                            <div className="flex-1 h-1 rounded-full bg-zinc-800 overflow-hidden">
-                              <div
-                                className="h-full bg-white transition-all duration-300 ease-out rounded-full"
-                                style={{ width: `${Math.max(2, percent)}%` }}
-                              />
-                            </div>
-                            <span className="text-xs font-mono text-zinc-400 tabular-nums shrink-0">
-                              {percent}%
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()
+                  <div className="py-16 flex flex-col items-center justify-center text-center font-mono select-none">
+                    <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                      <span className="tracking-wide">
+                        {isRu ? 'Сканирование местности' : 'Scanning terrain'}
+                      </span>
+                      <span className="w-4 text-left text-zinc-400 font-mono inline-block">
+                        {scanDots}
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
             ) : (
