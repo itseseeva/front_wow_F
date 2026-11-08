@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { DayResponse, SessionHeatmapResponse, LootStatus, ScheduleStatus, AutoRouteStatus, TerrainStatus, PriceStatus } from '../types';
 import { getPywebviewApi } from '../utils/pywebviewBridge';
 import { mockGetAutoRouteStatus, startMockAutoRouteSimulation } from '../data/mockRoutes';
@@ -19,6 +19,7 @@ import { soundFx } from '../utils/audio';
 import { formatRouteRoman } from '../utils/roman';
 import { MoneyBadge } from '../utils/money';
 import { RouteItem } from './StealthHUDLeftSidebar';
+import { MOCK_LOOT_ROWS } from '../data/mockPrices';
 
 interface DaySummaryViewProps {
   selectedDate: string;
@@ -125,6 +126,9 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
 }) => {
   const isRu = language === 'ru';
   const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [isTestMode, setIsTestMode] = useState(false);
+  const [donutMode, setDonutMode] = useState<'items' | 'gold'>('items');
+  const [hoveredDonutIndex, setHoveredDonutIndex] = useState<number | null>(null);
 
   const sessions = dayData?.sessions || [];
   const hasSessions = sessions.length > 0;
@@ -406,23 +410,97 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     (gold != null && gold > 0)
   );
 
-  // Past session calculated gold & gold per hour
-  const pastEarnedCopper = currentSummary?.earned_copper != null
-    ? currentSummary.earned_copper
-    : (currentSummary?.gold != null
-        ? currentSummary.gold * 10000
-        : (currentSummary?.loot && currentSummary.loot.length > 0
-            ? currentSummary.loot.reduce((acc, it) => acc + (it.value || 0), 0)
-            : null));
+  // Effective loot for past session / test preview
+  const effectiveLoot = useMemo(() => {
+    if (isTestMode) return MOCK_LOOT_ROWS;
+    return currentSummary?.loot && currentSummary.loot.length > 0 ? currentSummary.loot : null;
+  }, [isTestMode, currentSummary]);
 
-  const pastCopperPerHour = (currentSummary?.duration_s && currentSummary.duration_s > 0 && pastEarnedCopper != null)
-    ? Math.round((pastEarnedCopper / currentSummary.duration_s) * 3600)
-    : null;
+  const effectiveEarnedCopper = useMemo(() => {
+    if (isTestMode) return 742200; // 74з 22с
+    if (currentSummary?.earned_copper != null) return currentSummary.earned_copper;
+    if (currentSummary?.gold != null && currentSummary.gold > 0) return currentSummary.gold * 10000;
+    if (effectiveLoot && effectiveLoot.length > 0) {
+      const sum = effectiveLoot.reduce((acc, it) => acc + (it.value || 0), 0);
+      return sum > 0 ? sum : null;
+    }
+    return null;
+  }, [isTestMode, currentSummary, effectiveLoot]);
 
-  // Past session sum of gathered items
-  const pastTotalItems = currentSummary?.loot && currentSummary.loot.length > 0
-    ? currentSummary.loot.reduce((acc, it) => acc + (it.count || 0), 0)
-    : ((currentSummary?.khorium || 0) + (currentSummary?.adamantite || 0) + (currentSummary?.fel_iron || 0));
+  const effectiveEarnedComplete = isTestMode ? false : currentSummary?.earned_complete;
+  const effectiveLootLost = isTestMode ? 0 : currentSummary?.loot_lost;
+
+  const pastTotalItems = useMemo(() => {
+    if (isTestMode) return MOCK_LOOT_ROWS.reduce((acc, it) => acc + (it.count || 0), 0);
+    if (currentSummary?.loot && currentSummary.loot.length > 0) {
+      return currentSummary.loot.reduce((acc, it) => acc + (it.count || 0), 0);
+    }
+    const ores = (currentSummary?.khorium || 0) + (currentSummary?.adamantite || 0) + (currentSummary?.fel_iron || 0);
+    return ores;
+  }, [isTestMode, currentSummary]);
+
+  const pastEarnedCopper = effectiveEarnedCopper;
+
+  const pastCopperPerHour = useMemo(() => {
+    if (isTestMode) return 1045000; // 104з 50с/ч
+    if (!currentSummary?.duration_s || currentSummary.duration_s <= 0 || pastEarnedCopper == null) return null;
+    return Math.round((pastEarnedCopper / currentSummary.duration_s) * 3600);
+  }, [isTestMode, currentSummary, pastEarnedCopper]);
+
+  // Donut slices for circular wheel
+  const totalDonutItems = useMemo(() => {
+    return (effectiveLoot || []).reduce((acc, it) => acc + (it.count || 0), 0);
+  }, [effectiveLoot]);
+
+  const totalDonutValue = useMemo(() => {
+    return (effectiveLoot || []).reduce((acc, it) => acc + (it.value || 0), 0);
+  }, [effectiveLoot]);
+
+  const donutSlices = useMemo(() => {
+    if (!effectiveLoot || effectiveLoot.length === 0) return [];
+    const total = donutMode === 'items' ? totalDonutItems : totalDonutValue;
+    if (total <= 0) return [];
+
+    const MONOCHROME_PALETTE = ['#FFFFFF', '#E4E4E7', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46'];
+
+    const sorted = [...effectiveLoot].sort((a, b) => {
+      if (donutMode === 'items') return b.count - a.count;
+      return (b.value ?? 0) - (a.value ?? 0);
+    });
+
+    const topItems = sorted.slice(0, 5);
+    const restItems = sorted.slice(5);
+
+    const res = topItems.map((it, idx) => {
+      const metric = donutMode === 'items' ? it.count : (it.value ?? 0);
+      const pct = total > 0 ? (metric / total) * 100 : 0;
+      return {
+        id: it.item_id,
+        name: it.name || `#${it.item_id}`,
+        count: it.count,
+        value: it.value,
+        percentage: pct,
+        color: MONOCHROME_PALETTE[idx % MONOCHROME_PALETTE.length],
+      };
+    });
+
+    if (restItems.length > 0) {
+      const restCount = restItems.reduce((acc, it) => acc + it.count, 0);
+      const restVal = restItems.reduce((acc, it) => acc + (it.value ?? 0), 0);
+      const metric = donutMode === 'items' ? restCount : restVal;
+      const pct = total > 0 ? (metric / total) * 100 : 0;
+      res.push({
+        id: -999,
+        name: isRu ? `Другие (${restItems.length})` : `Others (${restItems.length})`,
+        count: restCount,
+        value: restVal,
+        percentage: pct,
+        color: MONOCHROME_PALETTE[5],
+      });
+    }
+
+    return res;
+  }, [effectiveLoot, donutMode, totalDonutItems, totalDonutValue, isRu]);
 
   return (
     <div className="w-full max-w-4xl 2xl:max-w-5xl mx-auto flex flex-col gap-6">
@@ -558,6 +636,26 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                   );
                 })}
               </div>
+
+              {/* Test statistics preview button */}
+              {!isLiveSelected && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundFx.playClick();
+                    setIsTestMode((prev) => !prev);
+                  }}
+                  className={`px-2.5 py-1 text-xs font-mono rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ml-auto shrink-0 ${
+                    isTestMode
+                      ? 'bg-zinc-800 text-white border-zinc-600 shadow-sm'
+                      : 'text-zinc-400 hover:text-zinc-200 border-zinc-800/80 hover:border-zinc-700 bg-zinc-900/40'
+                  }`}
+                  title={isRu ? 'Показать тестовый вывод добычи с графиком-колесом' : 'Toggle sample loot preview'}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${isTestMode ? 'bg-amber-400 animate-pulse' : 'bg-zinc-500'}`} />
+                  <span>{isTestMode ? (isRu ? 'Выход из теста' : 'Exit test') : (isRu ? 'Тестовый вывод' : 'Test data')}</span>
+                </button>
+              )}
             </div>
 
             {/* LIVE TELEMETRY VIEW (immediately open, no container boxes) */}
@@ -980,6 +1078,259 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                         </strong>
                       </span>
                     )}
+                  </div>
+                )}
+
+                {/* 7. Loot Block with Circular Wheel & Detailed Table */}
+                {effectiveLoot && effectiveLoot.length > 0 && (
+                  <div className="p-4 sm:p-5 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 flex flex-col gap-5 font-mono select-none">
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-3 border-b border-zinc-800/70">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">
+                          {isRu ? 'Добыча' : 'Loot'}
+                        </span>
+                        <span className="text-[11px] text-zinc-500">
+                          {effectiveLoot.length} {isRu ? 'поз.' : 'items'}
+                        </span>
+                        {isTestMode && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                            {isRu ? 'тестовый режим' : 'test mode'}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Pill Toggle for Items / Gold */}
+                      <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            soundFx.playClick();
+                            setDonutMode('items');
+                            setHoveredDonutIndex(null);
+                          }}
+                          className={`px-2.5 py-0.5 rounded-md transition-all cursor-pointer font-medium ${
+                            donutMode === 'items'
+                              ? 'bg-zinc-700/90 text-white shadow-sm'
+                              : 'text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          {isRu ? 'Предметы' : 'Items'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            soundFx.playClick();
+                            setDonutMode('gold');
+                            setHoveredDonutIndex(null);
+                          }}
+                          className={`px-2.5 py-0.5 rounded-md transition-all cursor-pointer font-medium ${
+                            donutMode === 'gold'
+                              ? 'bg-zinc-700/90 text-white shadow-sm'
+                              : 'text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          {isRu ? 'Золото' : 'Revenue'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Circular Donut Wheel + Legend Breakdown */}
+                    {donutSlices.length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center py-1">
+                        {/* Donut Chart */}
+                        <div className="flex items-center justify-center">
+                          <div className="relative w-40 h-40 sm:w-44 sm:h-44 flex items-center justify-center">
+                            <svg viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
+                              <circle
+                                cx="70"
+                                cy="70"
+                                r={48}
+                                fill="none"
+                                stroke="#18181b"
+                                strokeWidth={18}
+                              />
+                              {(() => {
+                                let acc = 0;
+                                const r = 48;
+                                const c = 2 * Math.PI * r;
+                                return donutSlices.map((s) => {
+                                  const isHovered = hoveredDonutIndex === s.id;
+                                  const dashLen = (s.percentage / 100) * c;
+                                  const gap = donutSlices.length > 1 ? 2 : 0;
+                                  const visualLen = Math.max(0, dashLen - gap);
+                                  const dashGap = c - visualLen;
+                                  const dashOff = -((acc / 100) * c);
+                                  acc += s.percentage;
+
+                                  if (s.percentage <= 0) return null;
+
+                                  return (
+                                    <circle
+                                      key={s.id}
+                                      cx="70"
+                                      cy="70"
+                                      r={48}
+                                      fill="none"
+                                      stroke={s.color}
+                                      strokeWidth={isHovered ? 21 : 18}
+                                      strokeDasharray={`${visualLen} ${dashGap}`}
+                                      strokeDashoffset={dashOff}
+                                      strokeLinecap="butt"
+                                      className="transition-all duration-200 cursor-pointer"
+                                      onMouseEnter={() => setHoveredDonutIndex(s.id)}
+                                      onMouseLeave={() => setHoveredDonutIndex(null)}
+                                    />
+                                  );
+                                });
+                              })()}
+                            </svg>
+
+                            {/* Center Donut Hole Content */}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none text-center px-3">
+                              {(() => {
+                                const hoveredItem = hoveredDonutIndex != null ? donutSlices.find((s) => s.id === hoveredDonutIndex) : null;
+                                if (hoveredItem) {
+                                  return (
+                                    <>
+                                      <div className="text-lg font-bold font-mono tracking-tight text-white leading-tight">
+                                        {donutMode === 'items' ? `×${hoveredItem.count}` : <MoneyBadge copper={hoveredItem.value} language={language} />}
+                                      </div>
+                                      <span className="text-[10px] text-zinc-400 mt-0.5 truncate max-w-[110px]" title={hoveredItem.name}>
+                                        {hoveredItem.name}
+                                      </span>
+                                      <span className="text-[9px] text-zinc-500 font-mono">
+                                        {hoveredItem.percentage.toFixed(1)}%
+                                      </span>
+                                    </>
+                                  );
+                                }
+                                return (
+                                  <>
+                                    <div className="text-lg font-bold font-mono tracking-tight text-white leading-tight">
+                                      {donutMode === 'items' ? totalDonutItems : <MoneyBadge copper={effectiveEarnedCopper} language={language} />}
+                                    </div>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider mt-0.5">
+                                      {donutMode === 'items' ? (isRu ? 'Предметов' : 'Items') : (isRu ? 'Заработано' : 'Earned')}
+                                    </span>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Legend Breakdown */}
+                        <div className="flex flex-col gap-2 justify-center">
+                          {donutSlices.map((s) => {
+                            const isHovered = hoveredDonutIndex === s.id;
+                            return (
+                              <div
+                                key={s.id}
+                                onMouseEnter={() => setHoveredDonutIndex(s.id)}
+                                onMouseLeave={() => setHoveredDonutIndex(null)}
+                                className={`flex items-center justify-between text-xs py-1 px-2 rounded-lg transition-colors cursor-pointer ${
+                                  isHovered ? 'bg-white/[0.07]' : 'hover:bg-white/[0.03]'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0 pr-3">
+                                  <span
+                                    className="w-2.5 h-2.5 rounded-[2px] shrink-0"
+                                    style={{ backgroundColor: s.color }}
+                                  />
+                                  <span className="font-medium text-zinc-200 truncate" title={s.name}>
+                                    {s.name}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3 shrink-0 tabular-nums">
+                                  <span className="text-zinc-300 font-semibold text-right">
+                                    {donutMode === 'items' ? (
+                                      `×${s.count}`
+                                    ) : s.value != null ? (
+                                      <MoneyBadge copper={s.value} language={language} />
+                                    ) : (
+                                      <span className="text-zinc-600">—</span>
+                                    )}
+                                  </span>
+                                  <span className="text-zinc-500 text-[11px] w-10 text-right">
+                                    {s.percentage.toFixed(1)}%
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Table (стиль как живая таблица добычи) */}
+                    <div className="overflow-x-auto pt-2 border-t border-zinc-800/60">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="text-[10px] text-zinc-500 uppercase tracking-wider border-b border-zinc-800/80">
+                            <th className="pb-2 font-normal">{isRu ? 'Предмет' : 'Item'}</th>
+                            <th className="pb-2 font-normal text-right">{isRu ? 'Количество' : 'Count'}</th>
+                            <th className="pb-2 font-normal text-right">{isRu ? 'Цена за шт.' : 'Price each'}</th>
+                            <th className="pb-2 font-normal text-right">{isRu ? 'Сумма' : 'Value'}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {effectiveLoot.map((item) => {
+                            const displayName = item.name || `#${item.item_id}`;
+                            return (
+                              <tr key={item.item_id} className="hover:bg-white/[0.02] border-b border-zinc-800/30">
+                                <td className="py-2 pr-2 font-medium text-zinc-900 dark:text-zinc-100 truncate max-w-[220px]" title={displayName}>
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 shrink-0" />
+                                    <span className="truncate">{displayName}</span>
+                                  </div>
+                                </td>
+                                <td className="py-2 px-2 text-right font-mono font-semibold text-zinc-700 dark:text-zinc-300 tabular-nums whitespace-nowrap">
+                                  ×{item.count}
+                                </td>
+                                <td className="py-2 px-2 text-right tabular-nums whitespace-nowrap">
+                                  {item.price != null ? (
+                                    <MoneyBadge copper={item.price} language={language} />
+                                  ) : (
+                                    <span className="text-zinc-600">—</span>
+                                  )}
+                                </td>
+                                <td className="py-2 pl-2 text-right font-semibold tabular-nums whitespace-nowrap">
+                                  {item.value != null ? (
+                                    <MoneyBadge copper={item.value} language={language} />
+                                  ) : (
+                                    <span className="text-zinc-600">—</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Footer with Earned Total */}
+                    <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs border-t border-zinc-800/60">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-zinc-500">
+                          {isRu ? 'Итого заработано:' : 'Total Earned:'}
+                        </span>
+                        <strong className="text-sm font-bold text-zinc-950 dark:text-white">
+                          <MoneyBadge copper={effectiveEarnedCopper} language={language} />
+                        </strong>
+                        {effectiveEarnedComplete === false && (
+                          <span className="text-[11px] text-zinc-500 font-normal">
+                            {isRu ? '(не для всех предметов есть цена на аукционе)' : '(prices pending for some items)'}
+                          </span>
+                        )}
+                      </div>
+
+                      {effectiveLootLost != null && effectiveLootLost > 0 && (
+                        <span className="text-[11px] text-zinc-500">
+                          {isRu ? `не посчитано предметов: ${effectiveLootLost}` : `uncounted items: ${effectiveLootLost}`}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
