@@ -85,7 +85,7 @@ export const StealthHUDTopToolbar: React.FC<StealthHUDTopToolbarProps> = ({
       >
         {isBotRunning ? (
           <span className="flex items-center gap-1.5 text-zinc-950 dark:text-white">
-            <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_8px_rgba(0,0,0,0.5)] dark:shadow-[0_0_8px_rgba(255,255,255,0.9)] animate-pulse" />
+            <span className="w-2 h-2 rounded-[1.5px] bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.85)] animate-pulse shrink-0" />
             {isRu ? 'СТОП' : 'STOP'}
           </span>
         ) : (

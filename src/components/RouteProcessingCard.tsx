@@ -139,7 +139,7 @@ export const RouteProcessingCard: React.FC<RouteProcessingCardProps> = ({
                 >
                   {isBotRunning ? (
                     <>
-                      <Square className="w-3.5 h-3.5 fill-current" />
+                      <span className="w-2.5 h-2.5 rounded-[1.5px] bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.85)] animate-pulse shrink-0" />
                       <span>{isRu ? 'Остановить' : 'Stop Bot'}</span>
                     </>
                   ) : (

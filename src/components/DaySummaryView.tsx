@@ -12,7 +12,6 @@ import {
   TrendingUp,
   Coins,
   Sparkles,
-  Square,
 } from 'lucide-react';
 import { SpecularCard } from './ui/Specular';
 import { HeatmapViewer } from './HeatmapViewer';
@@ -541,20 +540,6 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                   );
                 })}
               </div>
-
-              {isBotRunning && onStopBot && isLiveSelected && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    soundFx.playClick();
-                    onStopBot();
-                  }}
-                  className="px-2.5 py-1 text-zinc-500 hover:text-red-500 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ml-auto"
-                >
-                  <Square className="w-3 h-3 fill-current" />
-                  <span>{isRu ? 'Остановить' : 'Stop Bot'}</span>
-                </button>
-              )}
             </div>
 
             {/* LIVE TELEMETRY VIEW (immediately open, no container boxes) */}
@@ -823,12 +808,28 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     </div>
                   </div>
                 ) : !terrainStatus && (!autoRouteStatus || autoRouteStatus.status === 'idle' || (autoRouteStatus.status === 'ready' && !showAutoRouteReady)) ? (
-                  <div className="py-16 flex flex-col items-center justify-center text-center font-mono select-none text-zinc-500 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
-                      <span>{isRu ? 'пока ничего не собрано' : 'nothing gathered yet'}</span>
+                  isBotRunning ? (
+                    <div className="py-14 flex flex-col items-center justify-center text-center font-mono select-none">
+                      <div className="w-full max-w-md flex flex-col items-center gap-2">
+                        <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                          <span>{isRu ? 'Сканирование местности и поиск жил / трав' : 'Scanning terrain & seeking nodes'}</span>
+                        </div>
+                        <p className="text-[11px] text-zinc-500 max-w-sm leading-relaxed">
+                          {isRu
+                            ? 'Бот патрулирует маршрут. Как только ресурс будет собран, он появится в этой таблице с подсчётом цены на аукционе.'
+                            : 'Bot is patrolling the route. Once a node is gathered, it will appear in this table with market price.'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="py-16 flex flex-col items-center justify-center text-center font-mono select-none text-zinc-500 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                        <span>{isRu ? 'пока ничего не собрано' : 'nothing gathered yet'}</span>
+                      </div>
+                    </div>
+                  )
                 ) : null}
               </div>
             ) : (
