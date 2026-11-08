@@ -8,6 +8,7 @@ import {
   mockStopRouteRecord,
   mockSetActiveRoute,
   mockDeleteRoute,
+  startMockAutoRouteSimulation,
 } from './data/mockRoutes';
 import { SettingsView } from './components/SettingsView';
 import { ComboSequence } from './components/ComboSequence';
@@ -1272,6 +1273,11 @@ export const App: React.FC = () => {
               })
             );
           }, 42000);
+        }
+
+        // Start mock autoroute simulation in browser preview
+        if (!activeRoute) {
+          startMockAutoRouteSimulation();
         }
       }
     }

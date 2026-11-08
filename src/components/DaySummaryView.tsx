@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DayResponse, SessionHeatmapResponse, LootStatus, ScheduleStatus, AutoRouteStatus, TerrainStatus, PriceStatus } from '../types';
 import { getPywebviewApi } from '../utils/pywebviewBridge';
+import { mockGetAutoRouteStatus, startMockAutoRouteSimulation } from '../data/mockRoutes';
 import {
   BarChart3,
   Calendar as CalendarIcon,
@@ -210,9 +211,18 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
             }
           }
         }).catch(() => {});
+      } else {
+        // In browser mock preview
+        mockGetAutoRouteStatus().then((res) => {
+          if (res && res.status !== 'idle') {
+            setAutoRouteStatus(res);
+          } else if (!activeRoute) {
+            startMockAutoRouteSimulation();
+          }
+        });
       }
     });
-  }, [isBotRunning]);
+  }, [isBotRunning, activeRoute]);
 
   // Listen to wowbot:autoroute-status window events
   useEffect(() => {

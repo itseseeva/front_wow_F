@@ -393,23 +393,140 @@ export const mockGetRoutePreview = async (id: string): Promise<{ ok: boolean; er
   };
 };
 
+let currentMockAutoRoute: AutoRouteStatus = {
+  status: 'idle',
+  map_id: null,
+  minutes: null,
+  started_at_ms: null,
+  finished_at_ms: null,
+  typical_s: 25,
+  route_id: null,
+  route_name: null,
+  note: null,
+  stage: null,
+  done: 0,
+  total: 0,
+  progress: 0,
+  elapsed_s: null,
+  eta_s: null,
+};
+
+let mockAutoRouteTimer: any = null;
+
+export const startMockAutoRouteSimulation = () => {
+  if (mockAutoRouteTimer) clearInterval(mockAutoRouteTimer);
+  const startedAt = Date.now();
+
+  const tick = () => {
+    const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+
+    if (elapsed < 4) {
+      currentMockAutoRoute = {
+        status: 'building',
+        map_id: 1436,
+        minutes: 15,
+        started_at_ms: startedAt,
+        finished_at_ms: null,
+        typical_s: 25,
+        route_id: null,
+        route_name: null,
+        note: null,
+        stage: 'grid',
+        done: 1,
+        total: 4,
+        progress: Number((0.15 + (elapsed / 4) * 0.15).toFixed(2)),
+        elapsed_s: elapsed,
+        eta_s: Math.max(1, 24 - elapsed),
+      };
+    } else if (elapsed < 10) {
+      currentMockAutoRoute = {
+        status: 'building',
+        map_id: 1436,
+        minutes: 15,
+        started_at_ms: startedAt,
+        finished_at_ms: null,
+        typical_s: 25,
+        route_id: null,
+        route_name: null,
+        note: null,
+        stage: 'spots',
+        done: 18,
+        total: 45,
+        progress: Number((0.30 + ((elapsed - 4) / 6) * 0.25).toFixed(2)),
+        elapsed_s: elapsed,
+        eta_s: Math.max(1, 24 - elapsed),
+      };
+    } else if (elapsed < 18) {
+      const segDone = Math.min(32, Math.floor(((elapsed - 10) / 8) * 32));
+      currentMockAutoRoute = {
+        status: 'building',
+        map_id: 1436,
+        minutes: 15,
+        started_at_ms: startedAt,
+        finished_at_ms: null,
+        typical_s: 25,
+        route_id: null,
+        route_name: null,
+        note: null,
+        stage: 'paths',
+        done: segDone,
+        total: 32,
+        progress: Number((0.55 + ((elapsed - 10) / 8) * 0.30).toFixed(2)),
+        elapsed_s: elapsed,
+        eta_s: Math.max(1, 24 - elapsed),
+      };
+    } else if (elapsed < 24) {
+      currentMockAutoRoute = {
+        status: 'building',
+        map_id: 1436,
+        minutes: 15,
+        started_at_ms: startedAt,
+        finished_at_ms: null,
+        typical_s: 25,
+        route_id: null,
+        route_name: null,
+        note: null,
+        stage: 'check',
+        done: 32,
+        total: 32,
+        progress: 0.95,
+        elapsed_s: elapsed,
+        eta_s: Math.max(1, 24 - elapsed),
+      };
+    } else {
+      currentMockAutoRoute = {
+        status: 'ready',
+        map_id: 1436,
+        minutes: 15,
+        started_at_ms: startedAt,
+        finished_at_ms: Date.now(),
+        typical_s: 25,
+        route_id: 'auto_route_1',
+        route_name: 'Круг: Долина Призрачной Луны',
+        note: 'Вошло 18 жил осквернённого железа и 24 травы',
+        stage: null,
+        done: 32,
+        total: 32,
+        progress: 1,
+        elapsed_s: elapsed,
+        eta_s: 0,
+      };
+      clearInterval(mockAutoRouteTimer);
+      mockAutoRouteTimer = null;
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('wowbot:autoroute-status', { detail: currentMockAutoRoute }));
+    }
+  };
+
+  tick();
+  mockAutoRouteTimer = setInterval(tick, 1000);
+};
+
 export const mockGetAutoRouteStatus = async (): Promise<{ ok: boolean } & AutoRouteStatus> => {
   return {
     ok: true,
-    status: 'idle',
-    map_id: null,
-    minutes: null,
-    started_at_ms: null,
-    finished_at_ms: null,
-    typical_s: 60,
-    route_id: null,
-    route_name: null,
-    note: null,
-    stage: null,
-    done: 0,
-    total: 0,
-    progress: 0,
-    elapsed_s: null,
-    eta_s: null,
+    ...currentMockAutoRoute,
   };
 };
