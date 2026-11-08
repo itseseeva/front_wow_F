@@ -648,7 +648,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     scanPercent = Math.min(100, Math.max(0, Math.round((terrainStatus.progress ?? 0) * 100)));
                     scanSubtitle = getTerrainStageText(terrainStatus.stage, isRu);
                     const elapsed = terrainStatus.elapsed_s ?? 0;
-                    const eta = terrainStatus.eta_s != null ? `${terrainStatus.eta_s} с` : (isRu ? 'оцениваю…' : 'evaluating…');
+                    const eta = terrainStatus.eta_s != null ? (isRu ? `${terrainStatus.eta_s} с` : `${terrainStatus.eta_s}s`) : (isRu ? 'оцениваю…' : 'evaluating…');
                     scanBottomText = isRu ? `прошло ${elapsed} с · осталось ~${eta}` : `elapsed ${elapsed}s · ~${eta} left`;
                   } else if (isAutoRouteBuilding) {
                     scanPercent = Math.min(100, Math.max(0, Math.round((autoRouteStatus.progress ?? 0) * 100)));
@@ -656,7 +656,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     const elapsed = autoRouteStatus.elapsed_s != null
                       ? autoRouteStatus.elapsed_s
                       : (autoRouteStatus.started_at_ms ? Math.max(0, Math.floor((nowMs - autoRouteStatus.started_at_ms) / 1000)) : 0);
-                    const eta = autoRouteStatus.eta_s != null ? `${autoRouteStatus.eta_s} с` : (isRu ? 'оцениваю…' : 'evaluating…');
+                    const eta = autoRouteStatus.eta_s != null ? (isRu ? `${autoRouteStatus.eta_s} с` : `${autoRouteStatus.eta_s}s`) : (isRu ? 'оцениваю…' : 'evaluating…');
                     scanBottomText = isRu ? `прошло ${elapsed} с · осталось ~${eta}` : `elapsed ${elapsed}s · ~${eta} left`;
                   } else if (isAutoRouteReady) {
                     scanTitle = isRu ? `Круг готов: ${autoRouteStatus.route_name || 'Автомаршрут'}` : `Loop ready: ${autoRouteStatus.route_name || 'AutoRoute'}`;
@@ -797,9 +797,9 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                           {isRu ? 'Итого заработано:' : 'Total Earned:'}
                         </span>
                         <strong className="text-sm font-bold text-zinc-950 dark:text-white">
-                          <MoneyBadge copper={lootStatus.earned_copper} language={language} />
+                          <MoneyBadge copper={lootStatus?.earned_copper ?? null} language={language} />
                         </strong>
-                        {lootStatus.earned_complete === false && (
+                        {lootStatus?.earned_complete === false && (
                           <span className="text-[11px] text-zinc-500 font-normal">
                             {isRu ? '(не для всех предметов найдена цена на аукционе)' : '(prices pending for some items)'}
                           </span>
