@@ -596,7 +596,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                   </div>
                 )}
                 {/* Live 5 Metric Cards (frameless columns, no boxes) */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 py-1 font-mono">
+                <div data-tour="summary-live-cards" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 py-1 font-mono">
                   {/* 1. Duration */}
                   <div className="flex flex-col justify-between gap-1">
                     <div className="flex items-center justify-between">
@@ -617,7 +617,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                   </div>
 
                   {/* 2. Break Countdown */}
-                  <div className="flex flex-col justify-between gap-1">
+                  <div data-tour="summary-until-break" className="flex flex-col justify-between gap-1">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] text-zinc-500">{isRu ? 'До перерыва' : 'Until Break'}</span>
                       <Coffee className="w-3.5 h-3.5 text-zinc-400" />
@@ -665,7 +665,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                   </div>
 
                   {/* 5. Gold Per Hour */}
-                  <div className="flex flex-col justify-between gap-1">
+                  <div data-tour="summary-gold-rate" className="flex flex-col justify-between gap-1">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] text-zinc-500">{isRu ? 'Золото в час' : 'Gold / hour'}</span>
                       <TrendingUp className="w-3.5 h-3.5 text-zinc-400" />
@@ -896,7 +896,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
               <div className="flex flex-col gap-6">
                 {/* 4. Metric Cards Grid: Duration, Items Gathered (sum), Earned Gold, Gold/hour, Nodes, Gap */}
                 {currentSummary && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6 py-2 font-mono">
+                  <div data-tour="summary-live-cards" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6 py-2 font-mono">
                     {/* 1. Duration */}
                     <div className="flex flex-col justify-between gap-1">
                       <div className="flex items-center justify-between">
@@ -945,7 +945,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     </div>
 
                     {/* 4. Gold Per Hour */}
-                    <div className="flex flex-col justify-between gap-1">
+                    <div data-tour="summary-gold-rate" className="flex flex-col justify-between gap-1">
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] text-zinc-500">{isRu ? 'Золото в час' : 'Gold / hour'}</span>
                         <TrendingUp className="w-3.5 h-3.5 text-zinc-400" />

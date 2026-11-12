@@ -13,6 +13,7 @@ interface StealthHUDTopToolbarProps {
   onExport: () => void;
   onOpenSettings: () => void;
   onOpenStats?: () => void;
+  className?: string;
 }
 
 export const StealthHUDTopToolbar: React.FC<StealthHUDTopToolbarProps> = ({
@@ -27,13 +28,14 @@ export const StealthHUDTopToolbar: React.FC<StealthHUDTopToolbarProps> = ({
   onExport,
   onOpenSettings,
   onOpenStats,
+  className = '',
 }) => {
   const isRu = language === 'ru';
   const formattedPauseKey = (pauseKey || 'PAUSE').toUpperCase();
 
   return (
     <header
-      className="absolute top-2.5 right-2.5 sm:top-4 sm:right-4 xl:top-5 xl:right-5 z-30 flex items-center gap-1.5 sm:gap-2 select-none rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] transition-all duration-200 py-1 px-2 sm:px-3 bg-transparent shadow-none"
+      className={`relative flex items-center gap-1.5 sm:gap-2 select-none rounded-xl border border-black/10 dark:border-white/[0.12] transition-all duration-200 py-1.5 px-2.5 sm:px-3 bg-zinc-100/90 dark:bg-[#09090b]/90 backdrop-blur-md shadow-md ${className}`}
     >
       {/* 1. Language Toggle */}
       <button

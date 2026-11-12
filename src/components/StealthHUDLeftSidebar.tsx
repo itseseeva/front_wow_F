@@ -5,6 +5,7 @@ import {
   SlidersHorizontal,
   BarChart3,
   CalendarClock,
+  HelpCircle,
 } from 'lucide-react';
 import { soundFx } from '../utils/audio';
 import { CalendarMonthResponse, LootStatus } from '../types';
@@ -33,6 +34,7 @@ interface StealthHUDLeftSidebarProps {
   onSelectRoute: (id: string) => void;
   onDeleteRoute: (id: string) => void;
   onRecordRouteClick?: () => void;
+  onOpenSectionHelp?: (sectionId: NavTab) => void;
   // Calendar integration props for summary tab
   selectedDate: string;
   onSelectDate: (date: string) => void;
@@ -52,6 +54,7 @@ interface StealthHUDLeftSidebarProps {
 export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
   activeTab,
   onTabChange,
+  onOpenSectionHelp,
   selectedDate,
   onSelectDate,
   calendarMonthData,
@@ -184,6 +187,20 @@ export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
                   : 'Automated farming node navigation based on radar detection and route loop optimization.'}
               </p>
             </div>
+
+            {onOpenSectionHelp && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundFx.playClick();
+                  onOpenSectionHelp('routes');
+                }}
+                className="flex items-center justify-center gap-1.5 w-full py-1.5 px-3 rounded-lg border border-black/10 dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:border-black/20 dark:hover:border-white/20 text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all cursor-pointer group shadow-none active:scale-[0.98]"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white transition-colors" />
+                <span>{isRu ? 'Как это работает' : 'How it works'}</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -204,26 +221,86 @@ export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
                 <span className="font-mono text-zinc-950 dark:text-zinc-200 font-semibold">{isRu ? 'Сбор' : 'Gather'}</span>
               </div>
             </div>
+
+            {onOpenSectionHelp && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundFx.playClick();
+                  onOpenSectionHelp('rotation');
+                }}
+                className="flex items-center justify-center gap-1.5 w-full py-1.5 px-3 rounded-lg border border-black/10 dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:border-black/20 dark:hover:border-white/20 text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all cursor-pointer group shadow-none active:scale-[0.98]"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white transition-colors" />
+                <span>{isRu ? 'Как это работает' : 'How it works'}</span>
+              </button>
+            )}
           </div>
         )}
 
-        {/* 3. Calendar Month View in Left Panel */}
-        {activeTab === 'summary' && (
-          <CalendarMonthView
-            currentYear={calendarYear}
-            currentMonth={calendarMonth}
-            selectedDate={selectedDate}
-            monthData={calendarMonthData}
-            onSelectDate={onSelectDate}
-            onPrevMonth={onPrevMonth}
-            onNextMonth={onNextMonth}
-            onRefresh={onRefreshCalendar}
-            onExport={onExportCalendar}
-            language={language}
-          />
+        {/* 3. Schedule Sidebar Overview */}
+        {activeTab === 'schedule' && (
+          <div className="flex flex-col gap-2.5 animate-fadeIn">
+            <span className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400 pt-1">
+              {isRu ? 'Расписание фарма' : 'Farm Schedule'}
+            </span>
+            <div className="p-3 bg-transparent border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] rounded-lg text-xs space-y-2 text-zinc-600 dark:text-zinc-400 transition-all">
+              <p className="leading-relaxed">
+                {isRu
+                  ? 'Человеческий график игры по дням недели, окна активности и перерывы для максимальной безопасности.'
+                  : 'Human-like weekly schedule, activity windows, and breaks for maximum anti-detection security.'}
+              </p>
+            </div>
+
+            {onOpenSectionHelp && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundFx.playClick();
+                  onOpenSectionHelp('schedule');
+                }}
+                className="flex items-center justify-center gap-1.5 w-full py-1.5 px-3 rounded-lg border border-black/10 dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:border-black/20 dark:hover:border-white/20 text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all cursor-pointer group shadow-none active:scale-[0.98]"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white transition-colors" />
+                <span>{isRu ? 'Как это работает' : 'How it works'}</span>
+              </button>
+            )}
+          </div>
         )}
 
-        {/* 4. Settings Sidebar Overview */}
+        {/* 4. Calendar Month View in Left Panel */}
+        {activeTab === 'summary' && (
+          <div data-tour="summary-calendar" className="flex flex-col gap-2.5 animate-fadeIn">
+            <CalendarMonthView
+              currentYear={calendarYear}
+              currentMonth={calendarMonth}
+              selectedDate={selectedDate}
+              monthData={calendarMonthData}
+              onSelectDate={onSelectDate}
+              onPrevMonth={onPrevMonth}
+              onNextMonth={onNextMonth}
+              onRefresh={onRefreshCalendar}
+              onExport={onExportCalendar}
+              language={language}
+            />
+
+            {onOpenSectionHelp && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundFx.playClick();
+                  onOpenSectionHelp('summary');
+                }}
+                className="flex items-center justify-center gap-1.5 w-full py-1.5 px-3 rounded-lg border border-black/10 dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:border-black/20 dark:hover:border-white/20 text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all cursor-pointer group shadow-none active:scale-[0.98]"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white transition-colors" />
+                <span>{isRu ? 'Как это работает' : 'How it works'}</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 5. Settings Sidebar Overview */}
         {activeTab === 'settings' && (
           <div className="flex flex-col gap-2.5 animate-fadeIn">
             <span className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400 pt-1">
@@ -236,6 +313,20 @@ export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
                   : 'System hotkey parameters are open on the right: target selection, interact, and pause.'}
               </p>
             </div>
+
+            {onOpenSectionHelp && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundFx.playClick();
+                  onOpenSectionHelp('settings');
+                }}
+                className="flex items-center justify-center gap-1.5 w-full py-1.5 px-3 rounded-lg border border-black/10 dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:border-black/20 dark:hover:border-white/20 text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all cursor-pointer group shadow-none active:scale-[0.98]"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white transition-colors" />
+                <span>{isRu ? 'Как это работает' : 'How it works'}</span>
+              </button>
+            )}
           </div>
         )}
       </div>

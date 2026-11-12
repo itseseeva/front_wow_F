@@ -42,6 +42,8 @@ import {
   normalizeScheduleSettings,
 } from './data/mockSchedule';
 import { ScheduleView } from './components/ScheduleView';
+import { SectionHelpModal, HelpSectionId } from './components/SectionHelpModal';
+import { InteractiveTourGuide, TourSectionId } from './components/InteractiveTourGuide';
 
 function formatDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
@@ -82,6 +84,8 @@ export const App: React.FC = () => {
   const [isBotPaused, setIsBotPaused] = useState<boolean>(false);
   const [sessionSeconds, setSessionSeconds] = useState<number>(0);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [helpModalSection, setHelpModalSection] = useState<HelpSectionId | null>(null);
+  const [activeTourSection, setActiveTourSection] = useState<TourSectionId | null>(null);
 
   useEffect(() => {
     if (!globalError) return;
@@ -832,6 +836,26 @@ export const App: React.FC = () => {
     });
   };
 
+  // Start auto-route generation
+  const handleStartAutoRoute = async () => {
+    soundFx.playClick();
+    const isRu = language === 'ru';
+    try {
+      const api = await getPywebviewApi();
+      if ((api as any)?.start_autoroute) {
+        await (api as any).start_autoroute();
+      } else {
+        startMockAutoRouteSimulation();
+      }
+      setScheduleToast(
+        isRu ? 'Строю автомаршрут вокруг персонажа...' : 'Building auto route around character...'
+      );
+    } catch (e) {
+      console.warn('start_autoroute error:', e);
+      startMockAutoRouteSimulation();
+    }
+  };
+
   // Listen for bot auto-stop of route recording
   useEffect(() => {
     const handleStopped = (e: Event) => {
@@ -1428,162 +1452,170 @@ export const App: React.FC = () => {
         theme={theme}
         isBotRunning={isBotRunning}
         lootStatus={lootStatus}
+        onOpenSectionHelp={(sectionId) => {
+          setActiveTourSection(sectionId as TourSectionId);
+        }}
       />
 
       {/* =========================================================================
           MAIN DYNAMIC VIEWPORT AREA (Expands proportionally on large/fullscreen monitors)
           ========================================================================= */}
       <div className="relative flex-1 h-full min-w-0 overflow-hidden flex flex-col">
-        {/* RIGHT TOP TOOLBAR: Compact Glass Capsule */}
-        <StealthHUDTopToolbar
-          language={language}
-          onToggleLanguage={() => setLanguage((l) => (l === 'ru' ? 'en' : 'ru'))}
-          theme={theme}
-          onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-          isBotRunning={isBotRunning}
-          isBotPaused={isBotPaused}
-          pauseKey={settings.pauseKey}
-          onToggleBot={handleToggleBot}
-          onExport={handleExportJson}
-          onOpenSettings={() => setActiveTab('settings')}
-          onOpenStats={handleOpenStats}
-        />
-
-        {/* 1. ROUTES VIEW: Clean Route Card with Line-Sidebar Rail */}
-        {activeTab === 'routes' && (
-          <div className="relative w-full h-full p-4 sm:p-6 2xl:p-10 pt-16 sm:pt-20 pb-6 flex flex-col justify-start overflow-y-auto animate-assemble">
-            <div className="w-full max-w-5xl 2xl:max-w-7xl mx-auto flex flex-col gap-4">
-              <LineSidebarRouteList
-                routes={routes}
-                activeRouteId={activeRoute?.id || ''}
-                onSelectRoute={handleSelectRoute}
-                onRenameRoute={handleRenameRoute}
-                onDeleteRoute={handleDeleteRoute}
-                onRecordRoute={handleStartRouteRecord}
-                onSaveRecording={handleSaveRecording}
-                onCancelRecording={handleCancelRecording}
-                language={language}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* 2. ROTATION VIEW: Full Interactive ComboSequence & Keybind Editor */}
-        {activeTab === 'rotation' && (
-          <div className="relative w-full h-full p-4 sm:p-6 2xl:p-10 pt-16 sm:pt-20 pb-6 flex flex-col justify-start overflow-y-auto animate-assemble">
-            <SpecularCard
-              className="w-full max-w-5xl 2xl:max-w-7xl mx-auto rounded-2xl p-4 sm:p-6 2xl:p-8 border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
-            >
-              <div className="flex items-center justify-between pb-3 mb-3 border-b border-transparent">
-                <div>
-                  <h1 className="text-sm 2xl:text-base font-semibold tracking-wide text-zinc-950 dark:text-white font-mono flex items-center gap-2">
-                    <Crosshair className="w-4 h-4 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
-                    <span>{isRu ? 'Боевая ротация и бинды' : 'Combat rotation & binds'}</span>
-                  </h1>
-                  <p className="text-[11px] 2xl:text-xs text-zinc-500 mt-0.5 font-mono">
-                    {isRu
-                      ? 'Последовательность заклинаний, тайминги каста, кулдауны и клавиши'
-                      : 'Spell sequence, cast timings, cooldowns, and action keys'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] 2xl:text-xs font-mono text-zinc-600 dark:text-zinc-400">
-                    {isRu ? 'Режим: ' : 'Mode: '}
-                    <strong className="text-zinc-950 dark:text-white font-semibold">
-                      {isRu ? 'Сбор' : 'Gather'}
-                    </strong>
-                  </span>
-                </div>
-              </div>
-
-              {/* Full Original ComboSequence Component with sleek styling */}
-              <ComboSequence
-                chains={chains}
-                onChainsChange={(newChains) => {
-                  setChains(newChains);
-                  saveCurrentConfigToBackend(newChains, settings, scheduleSettings);
-                }}
-                activeCasting={activeCasting}
-                isBotRunning={isBotRunning}
-                language={language}
-                theme={theme}
-              />
-            </SpecularCard>
-          </div>
-        )}
-
-        {/* 3. SCHEDULE VIEW: Interactive Timeline, Dual-Track Sliders & Presets */}
-        {activeTab === 'schedule' && (
-          <ScheduleView
-            scheduleSettings={scheduleSettings}
-            onScheduleSettingsChange={(newSchedule) => {
-              setScheduleSettings(newSchedule);
-              saveCurrentConfigToBackend(chains, settings, newSchedule);
-            }}
-            scheduleStatus={scheduleStatus}
-            scheduleError={scheduleError}
+        {/* TOP BAR ROW: Dedicated header row holding the top toolbar cleanly on the right */}
+        <div className="w-full shrink-0 h-16 sm:h-20 flex items-center justify-end px-4 sm:px-6 2xl:px-10 z-30 pointer-events-auto">
+          <StealthHUDTopToolbar
             language={language}
+            onToggleLanguage={() => setLanguage((l) => (l === 'ru' ? 'en' : 'ru'))}
+            theme={theme}
+            onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+            isBotRunning={isBotRunning}
+            isBotPaused={isBotPaused}
+            pauseKey={settings.pauseKey}
+            onToggleBot={handleToggleBot}
+            onExport={handleExportJson}
+            onOpenSettings={() => setActiveTab('settings')}
+            onOpenStats={handleOpenStats}
           />
-        )}
+        </div>
 
-        {/* 3. SETTINGS VIEW: Full AppSettings Editor & Farm Schedule */}
-        {activeTab === 'settings' && (
-          <div className="relative w-full h-full p-4 sm:p-6 2xl:p-10 pt-16 sm:pt-20 pb-24 flex flex-col justify-start overflow-y-auto animate-assemble">
-            <div className="w-full max-w-3xl 2xl:max-w-5xl mx-auto rounded-2xl p-5 2xl:p-8">
-              <SettingsView
-                settings={settings}
-                onSettingsChange={(newSettings) => {
-                  setSettings(newSettings);
-                  try {
-                    localStorage.setItem('wowbot_settings', JSON.stringify(newSettings));
-                  } catch {}
-                  saveCurrentConfigToBackend(chains, newSettings, scheduleSettings);
-                }}
-                scheduleSettings={scheduleSettings}
-                onScheduleSettingsChange={(newSchedule) => {
-                  setScheduleSettings(newSchedule);
-                  saveCurrentConfigToBackend(chains, settings, newSchedule);
-                }}
-                scheduleError={scheduleError}
-                onBack={() => setActiveTab('routes')}
-                onNavigateToSchedule={() => setActiveTab('schedule')}
-                onExportJson={handleExportJson}
+        {/* SCROLLABLE VIEWPORT CONTENT (Physically below the top toolbar, zero collision possible) */}
+        <div className="relative flex-1 w-full min-h-0 overflow-y-auto">
+          {/* 1. ROUTES VIEW: Clean Route Card with Line-Sidebar Rail */}
+          {activeTab === 'routes' && (
+            <div className="w-full p-4 sm:p-6 2xl:p-10 pt-2 sm:pt-4 pb-8 flex flex-col justify-start animate-assemble">
+              <div className="w-full max-w-5xl 2xl:max-w-7xl mx-auto flex flex-col gap-4">
+                <LineSidebarRouteList
+                  routes={routes}
+                  activeRouteId={activeRoute?.id || ''}
+                  onSelectRoute={handleSelectRoute}
+                  onRenameRoute={handleRenameRoute}
+                  onDeleteRoute={handleDeleteRoute}
+                  onRecordRoute={handleStartRouteRecord}
+                  onAutoRoute={handleStartAutoRoute}
+                  onSaveRecording={handleSaveRecording}
+                  onCancelRecording={handleCancelRecording}
+                  language={language}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 2. ROTATION VIEW: Full Interactive ComboSequence & Keybind Editor */}
+          {activeTab === 'rotation' && (
+            <div className="w-full p-4 sm:p-6 2xl:p-10 pt-2 sm:pt-4 pb-8 flex flex-col justify-start animate-assemble">
+              <SpecularCard
+                className="w-full max-w-5xl 2xl:max-w-7xl mx-auto rounded-2xl p-4 sm:p-6 2xl:p-8 border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent shadow-none transition-all duration-200"
+              >
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-transparent">
+                  <div>
+                    <h1 className="text-sm 2xl:text-base font-semibold tracking-wide text-zinc-950 dark:text-white font-mono flex items-center gap-2">
+                      <Crosshair className="w-4 h-4 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
+                      <span>{isRu ? 'Боевая ротация и бинды' : 'Combat rotation & binds'}</span>
+                    </h1>
+                    <p className="text-[11px] 2xl:text-xs text-zinc-500 mt-0.5 font-mono">
+                      {isRu
+                        ? 'Последовательность заклинаний, тайминги каста, кулдауны и клавиши'
+                        : 'Spell sequence, cast timings, cooldowns, and action keys'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] 2xl:text-xs font-mono text-zinc-600 dark:text-zinc-400">
+                      {isRu ? 'Режим: ' : 'Mode: '}
+                      <strong className="text-zinc-950 dark:text-white font-semibold">
+                        {isRu ? 'Сбор' : 'Gather'}
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Full Original ComboSequence Component with sleek styling */}
+                <ComboSequence
+                  chains={chains}
+                  onChainsChange={(newChains) => {
+                    setChains(newChains);
+                    saveCurrentConfigToBackend(newChains, settings, scheduleSettings);
+                  }}
+                  activeCasting={activeCasting}
+                  isBotRunning={isBotRunning}
+                  language={language}
+                  theme={theme}
+                />
+              </SpecularCard>
+            </div>
+          )}
+
+          {/* 3. SCHEDULE VIEW: Interactive Timeline, Dual-Track Sliders & Presets */}
+          {activeTab === 'schedule' && (
+            <ScheduleView
+              scheduleSettings={scheduleSettings}
+              onScheduleSettingsChange={(newSchedule) => {
+                setScheduleSettings(newSchedule);
+                saveCurrentConfigToBackend(chains, settings, newSchedule);
+              }}
+              scheduleStatus={scheduleStatus}
+              scheduleError={scheduleError}
+              language={language}
+            />
+          )}
+
+          {/* 4. SETTINGS VIEW: Full AppSettings Editor & Farm Schedule */}
+          {activeTab === 'settings' && (
+            <div className="w-full p-4 sm:p-6 2xl:p-10 pt-2 sm:pt-4 pb-24 flex flex-col justify-start animate-assemble">
+              <div className="w-full max-w-3xl 2xl:max-w-5xl mx-auto rounded-2xl p-5 2xl:p-8">
+                <SettingsView
+                  settings={settings}
+                  onSettingsChange={(newSettings) => {
+                    setSettings(newSettings);
+                    try {
+                      localStorage.setItem('wowbot_settings', JSON.stringify(newSettings));
+                    } catch {}
+                    saveCurrentConfigToBackend(chains, newSettings, scheduleSettings);
+                  }}
+                  scheduleSettings={scheduleSettings}
+                  onScheduleSettingsChange={(newSchedule) => {
+                    setScheduleSettings(newSchedule);
+                    saveCurrentConfigToBackend(chains, settings, newSchedule);
+                  }}
+                  scheduleError={scheduleError}
+                  onBack={() => setActiveTab('routes')}
+                  onNavigateToSchedule={() => setActiveTab('schedule')}
+                  onExportJson={handleExportJson}
+                  language={language}
+                  onLanguageChange={setLanguage}
+                  theme={theme}
+                  onThemeChange={setTheme}
+                  onToast={(msg) => setScheduleToast(msg)}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 5. SUMMARY VIEW: Detailed Day & Session Analytics linked with Calendar */}
+          {activeTab === 'summary' && (
+            <div className="w-full p-4 sm:p-6 2xl:p-10 pt-2 sm:pt-4 pb-10 flex flex-col justify-start animate-assemble">
+              <DaySummaryView
+                selectedDate={selectedDate}
+                dayData={dayData}
+                selectedSessionId={selectedSessionId}
+                onSelectSessionId={setSelectedSessionId}
+                selectedPassIndex={selectedPassIndex}
+                onSelectPassIndex={setSelectedPassIndex}
+                heatmap={activeHeatmap}
+                isHeatmapLoading={isHeatmapLoading}
                 language={language}
-                onLanguageChange={setLanguage}
-                theme={theme}
-                onThemeChange={setTheme}
-                onToast={(msg) => setScheduleToast(msg)}
+                isBotRunning={isBotRunning}
+                isBotPaused={isBotPaused}
+                pauseKey={settings.pauseKey}
+                sessionSeconds={sessionSeconds}
+                lootStatus={lootStatus}
+                activeRoute={activeRoute}
+                scheduleStatus={scheduleStatus}
+                onStopBot={handleToggleBot}
               />
             </div>
-          </div>
-        )}
-
-        {/* 4. SUMMARY VIEW: Detailed Day & Session Analytics linked with Calendar */}
-        {activeTab === 'summary' && (
-          <div className="relative w-full h-full p-4 sm:p-6 2xl:p-10 pt-16 sm:pt-20 pb-8 flex flex-col justify-start overflow-y-auto animate-assemble">
-            <DaySummaryView
-              selectedDate={selectedDate}
-              dayData={dayData}
-              selectedSessionId={selectedSessionId}
-              onSelectSessionId={setSelectedSessionId}
-              selectedPassIndex={selectedPassIndex}
-              onSelectPassIndex={setSelectedPassIndex}
-              heatmap={activeHeatmap}
-              isHeatmapLoading={isHeatmapLoading}
-              language={language}
-              isBotRunning={isBotRunning}
-              isBotPaused={isBotPaused}
-              pauseKey={settings.pauseKey}
-              sessionSeconds={sessionSeconds}
-              lootStatus={lootStatus}
-              activeRoute={activeRoute}
-              scheduleStatus={scheduleStatus}
-              onStopBot={handleToggleBot}
-            />
-          </div>
-        )}
-
+          )}
+        </div>
       </div>
 
       {/* Floating Scheduled Session Toast Notification */}
@@ -1600,6 +1632,21 @@ export const App: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* Stylish Glass Modal: Как это работает (fallback) */}
+      <SectionHelpModal
+        isOpen={Boolean(helpModalSection)}
+        sectionId={helpModalSection}
+        onClose={() => setHelpModalSection(null)}
+        language={language}
+      />
+
+      {/* Interactive Mobile-Game Style Spotlight Tour Guide */}
+      <InteractiveTourGuide
+        activeSection={activeTourSection}
+        onClose={() => setActiveTourSection(null)}
+        language={language}
+      />
     </div>
   );
 };

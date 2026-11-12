@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, Trash2, Check, Plus, Pencil, X } from 'lucide-react';
+import { Loader2, Trash2, Check, Plus, Pencil, X, Compass } from 'lucide-react';
 import { RouteItem } from './StealthHUDLeftSidebar';
 import { SpecularCard, SpecularButton } from './ui/Specular';
 import { soundFx } from '../utils/audio';
@@ -15,6 +15,7 @@ interface LineSidebarRouteListProps {
   onDeleteRoute?: (id: string) => void;
   onRenameRoute?: (id: string, newName: string) => void;
   onRecordRoute?: () => void;
+  onAutoRoute?: () => void;
   onSaveRecording?: (id: string) => void;
   onCancelRecording?: (id: string) => void;
   language?: 'ru' | 'en';
@@ -59,6 +60,7 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
   onDeleteRoute,
   onRenameRoute,
   onRecordRoute,
+  onAutoRoute,
   onSaveRecording,
   onCancelRecording,
   language = 'ru',
@@ -341,23 +343,42 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
             </h2>
           </div>
 
-          {onRecordRoute && (
-            <SpecularButton
-              onClick={() => {
-                soundFx.playClick();
-                onRecordRoute();
-              }}
-              className="h-8 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all active:scale-95 shadow-none"
-            >
-              <Plus className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white" />
-              <span>{isRu ? 'Записать маршрут' : 'Record Route'}</span>
-            </SpecularButton>
-          )}
+          <div className="flex items-center gap-2">
+            {onAutoRoute && (
+              <SpecularButton
+                data-tour="routes-autoroute"
+                onClick={() => {
+                  soundFx.playClick();
+                  onAutoRoute();
+                }}
+                className="h-8 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all active:scale-95 shadow-none"
+                title={isRu ? 'Построить автомаршрут вокруг персонажа' : 'Build auto route around character'}
+              >
+                <Compass className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white" />
+                <span>{isRu ? 'Автомаршрут' : 'Auto Route'}</span>
+              </SpecularButton>
+            )}
+
+            {onRecordRoute && (
+              <SpecularButton
+                data-tour="routes-record"
+                onClick={() => {
+                  soundFx.playClick();
+                  onRecordRoute();
+                }}
+                className="h-8 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all active:scale-95 shadow-none"
+              >
+                <Plus className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white" />
+                <span>{isRu ? 'Записать маршрут' : 'Record Route'}</span>
+              </SpecularButton>
+            )}
+          </div>
         </div>
 
         {/* React Bits Line Sidebar Container */}
         <div
           ref={containerRef}
+          data-tour="routes-list"
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
           className="relative flex flex-col py-2 pl-4 pr-2"

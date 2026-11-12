@@ -49,8 +49,15 @@ const getPhysicalKeyFromEvent = (e: KeyboardEvent): string | null => {
   if (e.key === 'End' || e.code === 'End') return 'END';
   if (e.key === 'Insert' || e.code === 'Insert') return 'INSERT';
 
+  // Tilde / Backquote key (` / ~ / ё)
+  if (e.code === 'Backquote' || e.key === '`' || e.key === '~' || e.key === 'ё' || e.key === 'Ё') {
+    return '`';
+  }
+
   if (e.key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract') return '-';
   if (e.key === '=' || e.code === 'Equal') return '=';
+  if (e.code === 'BracketLeft' || e.key === '[') return '[';
+  if (e.code === 'BracketRight' || e.key === ']') return ']';
 
   let keyStr = e.key.toUpperCase();
   if (e.code.startsWith('Key')) {
@@ -69,12 +76,12 @@ const getPhysicalKeyFromEvent = (e: KeyboardEvent): string | null => {
   return keyStr.slice(0, 8);
 };
 
-// Search key validator: A–Z, 0–9, '-', '=', F1–F12, PAGEUP, PAGEDOWN, HOME, END, INSERT, DELETE
+// Search key validator: A–Z, 0–9, '-', '=', '`', F1–F12, PAGEUP, PAGEDOWN, HOME, END, INSERT, DELETE
 export const isValidSearchKey = (key: string): boolean => {
   if (!key) return true;
   if (/^[A-Z]$/.test(key)) return true;
   if (/^[0-9]$/.test(key)) return true;
-  if (key === '-' || key === '=') return true;
+  if (key === '-' || key === '=' || key === '`') return true;
   if (/^F([1-9]|1[0-2])$/.test(key)) return true;
   if (['PAGEUP', 'PAGEDOWN', 'HOME', 'END', 'INSERT', 'DELETE'].includes(key)) return true;
   return false;
@@ -451,7 +458,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* =========================================================================
           SECTION 2: АВТОМАРШРУТ (Auto Route Settings)
           ========================================================================= */}
-      <div className="flex flex-col gap-3">
+      <div data-tour="settings-autoroute" className="flex flex-col gap-3">
         <div className="flex items-center justify-between pb-2 border-b border-black/10 dark:border-white/[0.08]">
           <div className="flex items-center gap-2">
             <Route className="w-4 h-4 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
@@ -505,7 +512,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* =========================================================================
           SECTION 3: ЦЕНЫ АУКЦИОНА (Auction Prices)
           ========================================================================= */}
-      <div className="flex flex-col gap-3">
+      <div data-tour="settings-auction" className="flex flex-col gap-3">
         <div className="flex items-center justify-between pb-2 border-b border-black/10 dark:border-white/[0.08]">
           <div className="flex items-center gap-2">
             <Coins className="w-4 h-4 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />
@@ -649,15 +656,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {/* Keybinds List with In-game hints */}
-        <div className="flex flex-col gap-1.5 sm:gap-2">
+        <div data-tour="settings-keybinds" className="flex flex-col gap-1.5 sm:gap-2">
           {bindList.map((item) => {
             const rawVal = settings[item.id];
             const currentKey = rawVal !== undefined ? rawVal : item.defaultVal;
             const isCapturing = capturingId === item.id;
 
+            const tourAttr = item.id === 'pauseKey'
+              ? 'settings-pause'
+              : (item.id === 'herbSearchKey' || item.id === 'oreSearchKey')
+              ? 'settings-radar'
+              : undefined;
+
             return (
               <SpecularCard
                 key={item.id}
+                data-tour={tourAttr}
                 className={`p-3 sm:p-3.5 rounded-xl border transition-all duration-150 ${
                   isCapturing
                     ? 'border-zinc-950 dark:border-white text-zinc-950 dark:text-white'

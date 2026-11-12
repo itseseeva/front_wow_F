@@ -28,6 +28,19 @@ const getPhysicalKeyFromEvent = (e: React.KeyboardEvent): string | null => {
     return e.key.toUpperCase();
   }
 
+  // Tilde / Backquote key (` / ~ / ё)
+  if (e.code === 'Backquote' || e.key === '`' || e.key === '~' || e.key === 'ё' || e.key === 'Ё') {
+    return '`';
+  }
+
+  if (e.key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract') return '-';
+  if (e.key === '=' || e.code === 'Equal') return '=';
+  if (e.code === 'BracketLeft' || e.key === '[') return '[';
+  if (e.code === 'BracketRight' || e.key === ']') return ']';
+  if (e.code === 'Semicolon' || e.key === ';') return ';';
+  if (e.code === 'Quote' || e.key === "'") return "'";
+  if (e.code === 'Slash' || e.key === '/') return '/';
+
   let keyStr = e.key.toUpperCase();
   if (e.code.startsWith('Key')) {
     keyStr = e.code.replace('Key', '');
@@ -73,9 +86,6 @@ export const ComboSequence: React.FC<Props> = ({
     return null;
   });
 
-  // Active key listening on slot tile
-  const [activeCapturingStepId, setActiveCapturingStepId] = useState<string | null>(null);
-
   // Active key listening on '+' morph button
   const [isAddingNewStep, setIsAddingNewStep] = useState<'regular' | 'water' | null>(null);
   const addingBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -114,22 +124,12 @@ export const ComboSequence: React.FC<Props> = ({
   const [hpInputStr, setHpInputStr] = useState<string>('');
   const [mpInputStr, setMpInputStr] = useState<string>('');
 
-  // Keep a step selected by default whenever steps exist, unless capturing a new key
+  // Keep a step selected by default whenever steps exist, unless adding a new step
   useEffect(() => {
-    if (!editingStep && !activeCapturingStepId && !isAddingNewStep && currentChain.steps.length > 0) {
+    if (!editingStep && !isAddingNewStep && currentChain.steps.length > 0) {
       setEditingStep({ chainId: currentChain.id, stepId: currentChain.steps[0].id });
     }
-  }, [currentChain.steps, editingStep, currentChain.id, activeCapturingStepId, isAddingNewStep]);
-
-  // Auto-focus slot key button when capturing key
-  useEffect(() => {
-    if (activeCapturingStepId) {
-      const el = document.getElementById(`slot-key-btn-${activeCapturingStepId}`);
-      if (el) {
-        el.focus();
-      }
-    }
-  }, [activeCapturingStepId]);
+  }, [currentChain.steps, editingStep, currentChain.id, isAddingNewStep]);
 
   // Auto-focus morphing '+' button when user clicks add step
   useEffect(() => {
@@ -262,40 +262,7 @@ export const ComboSequence: React.FC<Props> = ({
     }
   };
 
-  // Quick key update from slot keypress: saves key and opens editing panel
-  const handleUpdateStepKey = (chainId: string, stepId: string, newKey: string) => {
-    const upKey = newKey.toUpperCase();
-    const targetStep = currentChain.steps.find((s) => s.id === stepId);
-    if (targetStep) {
-      if (targetStep.stepType === 'water') {
-        const clash = currentChain.steps.some((s) => s.id !== stepId && s.stepType !== 'water' && s.key.toUpperCase() === upKey);
-        if (clash) {
-          setActiveCapturingStepId(null);
-          return;
-        }
-      } else {
-        const clash = currentChain.steps.some((s) => s.id !== stepId && s.stepType === 'water' && s.key.toUpperCase() === upKey);
-        if (clash) {
-          setActiveCapturingStepId(null);
-          return;
-        }
-      }
-    }
-    const updated = chains.map((c) => {
-      if (c.id !== chainId) return c;
-      return {
-        ...c,
-        steps: c.steps.map((s) => {
-          if (s.id !== stepId) return s;
-          return { ...s, key: upKey, actionType: 'press' as const };
-        }),
-      };
-    });
-    onChainsChange(updated);
-    setActiveCapturingStepId(null);
-    // After keypress, open editing panel for this step!
-    setEditingStep({ chainId, stepId });
-  };
+
 
   // Clear all steps
   const handleClearAllChainSteps = (chainId: string) => {
@@ -354,7 +321,7 @@ export const ComboSequence: React.FC<Props> = ({
       </div>
 
       {/* 2. SPELL SLOTS ROW (Ghost Action Bar) */}
-      <div className="p-3 rounded-xl bg-transparent border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] flex flex-wrap items-center gap-2.5 min-h-[64px] transition-all duration-200">
+      <div data-tour="rotation-sequence" className="p-3 rounded-xl bg-transparent border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] flex flex-wrap items-center gap-2.5 min-h-[64px] transition-all duration-200">
         {currentChain.steps.map((step, idx) => {
           const isCasting = activeCasting?.chainId === currentChain.id && activeCasting?.stepId === step.id;
           const isCurrentlyEditing = editingStep?.stepId === step.id;
@@ -364,7 +331,8 @@ export const ComboSequence: React.FC<Props> = ({
           return (
             <div
               key={step.id}
-              draggable={activeCapturingStepId !== step.id}
+              data-tour={step.stepType === 'water' ? 'rotation-water' : undefined}
+              draggable={true}
               onDragStart={(e) => {
                 setDraggedIdx(idx);
                 e.dataTransfer.effectAllowed = 'move';
@@ -400,8 +368,6 @@ export const ComboSequence: React.FC<Props> = ({
                   ? 'opacity-30 scale-90 border-dashed border-zinc-400 dark:border-zinc-500'
                   : isDragOver
                   ? 'border-2 border-zinc-950 dark:border-white scale-105 shadow-[0_0_12px_rgba(255,255,255,0.3)] bg-black/10 dark:bg-white/15 z-30'
-                  : activeCapturingStepId === step.id
-                  ? 'border border-zinc-950 dark:border-white text-zinc-950 dark:text-white animate-pulse bg-black/5 dark:bg-white/10 z-30'
                   : isCasting
                   ? 'border border-zinc-950 dark:border-white text-zinc-950 dark:text-white scale-105 z-20'
                   : isCurrentlyEditing
@@ -434,47 +400,17 @@ export const ComboSequence: React.FC<Props> = ({
               )}
 
               {/* Keycap Label */}
-              <button
-                type="button"
-                id={`slot-key-btn-${step.id}`}
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveCapturingStepId(step.id);
-                }}
-                onBlur={() => {
-                  if (activeCapturingStepId === step.id) {
-                    setActiveCapturingStepId(null);
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    setActiveCapturingStepId(null);
-                    e.currentTarget.blur();
-                    return;
-                  }
-                  const captured = getPhysicalKeyFromEvent(e);
-                  if (captured !== null) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleUpdateStepKey(currentChain.id, step.id, captured);
-                    e.currentTarget.blur();
-                  }
-                }}
-                className={`w-full text-center font-mono font-bold text-xs tracking-wide transition-colors outline-none cursor-pointer ${
-                  activeCapturingStepId === step.id
-                    ? step.stepType === 'water'
-                      ? 'text-blue-300 animate-pulse'
-                      : 'text-zinc-950 dark:text-white animate-pulse'
-                    : step.stepType === 'water'
+              <div
+                className={`w-full text-center font-mono font-bold text-xs tracking-wide transition-colors pointer-events-none select-none ${
+                  step.stepType === 'water'
                     ? 'text-blue-400'
                     : step.key
                     ? 'text-zinc-950 dark:text-white'
                     : 'text-zinc-400 dark:text-zinc-600'
                 }`}
               >
-                {activeCapturingStepId === step.id ? (isRu ? 'ЖМИ' : 'PRESS') : step.key || '—'}
-              </button>
+                {step.key || '—'}
+              </div>
 
               {/* Condition Indicator (HP for normal skills, MP for water) */}
               {step.stepType === 'water' ? (
@@ -533,7 +469,8 @@ export const ComboSequence: React.FC<Props> = ({
 
         {/* Special Blue Dashed '+' Button for Water / Mana regen - only if no water slot exists yet */}
         {!hasWaterStep && (
-          isAddingNewStep === 'water' ? (
+          <div data-tour="rotation-water" className="inline-flex shrink-0">
+          {isAddingNewStep === 'water' ? (
             <button
               ref={addingBtnRef}
               type="button"
@@ -569,7 +506,8 @@ export const ComboSequence: React.FC<Props> = ({
             >
               <Plus className="w-4 h-4 stroke-[1.5] text-blue-400 group-hover:scale-110 transition-transform" />
             </button>
-          )
+          )}
+          </div>
         )}
       </div>
 
@@ -745,7 +683,7 @@ export const ComboSequence: React.FC<Props> = ({
               /* Regular 2 cards for skill slots */
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* CARD 1: Keybind Capture & HP Below */}
-                <div className="p-3 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-2.5 transition-all">
+                <div data-tour="rotation-keybind" className="p-3 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-2.5 transition-all">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-mono font-semibold text-zinc-700 dark:text-zinc-300">
                       1. {isRu ? 'Клавиша' : 'Keybind'}
@@ -841,7 +779,7 @@ export const ComboSequence: React.FC<Props> = ({
                 </div>
 
                 {/* CARD 2: Trigger Condition & Cooldowns & Cast Time */}
-                <div className="p-3 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-2.5 transition-all">
+                <div data-tour="rotation-timings" className="p-3 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-2.5 transition-all">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-mono font-semibold text-zinc-700 dark:text-zinc-300">
                       2. {isRu ? 'Условие' : 'Condition'}

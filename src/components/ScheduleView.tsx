@@ -460,7 +460,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         : `Session ${currentDay.sessionMinutes[0]}–${currentDay.sessionMinutes[1]}m · Short ${currentDay.shortBreakMinutes[0]}–${currentDay.shortBreakMinutes[1]}m · No long breaks`);
 
   return (
-    <div className="relative w-full h-full p-4 sm:p-6 2xl:p-10 pt-16 sm:pt-20 pb-20 flex flex-col justify-start overflow-y-auto animate-assemble text-white font-sans select-none bg-black">
+    <div className="w-full p-4 sm:p-6 2xl:p-10 pt-2 sm:pt-4 pb-20 flex flex-col justify-start animate-assemble text-white font-sans select-none bg-black">
       <div className="w-full max-w-5xl 2xl:max-w-7xl mx-auto flex flex-col gap-5">
         {/* HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-white/10 gap-3">
@@ -483,7 +483,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         </div>
 
         {/* WEEK SELECTOR STRIP (7 Days) */}
-        <div className="flex flex-col gap-2">
+        <div data-tour="schedule-days" className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2 text-xs font-mono">
             <span className="text-zinc-400 font-semibold uppercase tracking-wider text-[11px]">
               {isRu ? 'Дни недели' : 'Days of the Week'}
@@ -678,7 +678,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         )}
 
         {/* PLAY STYLE PRESETS (Стиль поведения) - прямо под днями недели */}
-        <SpecularCard className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black flex flex-col gap-3">
+        <SpecularCard data-tour="schedule-styles" className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="text-xs sm:text-sm font-mono font-semibold text-white flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-white" />
@@ -796,7 +796,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
           ) : (
             <>
               {/* UNIFIED CARD: «Когда и сколько играть» */}
-              <SpecularCard className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black flex flex-col gap-5">
+              <SpecularCard data-tour="schedule-windows" className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black flex flex-col gap-5">
                 {/* 1. Окна часов */}
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between gap-2">
@@ -1038,7 +1038,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
               </SpecularCard>
 
               {/* CARD: «Перерывы и выходные» (Блок из 3 галочек) */}
-              <SpecularCard className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black flex flex-col gap-3 font-mono text-xs">
+              <SpecularCard data-tour="schedule-breaks" className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black flex flex-col gap-3 font-mono text-xs">
                 <div className="flex items-center gap-2">
                   <Shield className="w-4 h-4 text-white" />
                   <span className="font-semibold text-xs sm:text-sm text-white">
@@ -1153,7 +1153,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
               </SpecularCard>
 
               {/* CARD: «Тонкая настройка сессий и перерывов» */}
-              <SpecularCard className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black flex flex-col gap-4">
+              <SpecularCard data-tour="schedule-finetune" className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black flex flex-col gap-4">
                 <button
                   type="button"
                   onClick={() => setIsFineTuneOpen(!isFineTuneOpen)}

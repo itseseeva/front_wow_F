@@ -513,6 +513,27 @@ export const startMockAutoRouteSimulation = () => {
       };
       clearInterval(mockAutoRouteTimer);
       mockAutoRouteTimer = null;
+      if (!MOCK_ROUTES.some((r) => r.id === 'auto_route_1')) {
+        MOCK_ROUTES.unshift({
+          id: 'auto_route_1',
+          name: 'Автомаршрут (Долина Призрачной Луны)',
+          region: 'Долина Призрачной Луны',
+          map_id: 1436,
+          points: 32,
+          length_s: 180,
+          loop: true,
+          created_ms: Date.now(),
+          active: false,
+          thumb: INITIAL_MURLOC_POINTS.slice(0, 32),
+        });
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('wowbot:routes-changed', {
+            detail: { reason: 'autoroute', name: 'Автомаршрут (Долина Призрачной Луны)' },
+          })
+        );
+      }
     }
 
     if (typeof window !== 'undefined') {
