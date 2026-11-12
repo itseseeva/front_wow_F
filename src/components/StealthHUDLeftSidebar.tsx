@@ -6,13 +6,14 @@ import {
   BarChart3,
   CalendarClock,
   HelpCircle,
+  Coins,
 } from 'lucide-react';
 import { soundFx } from '../utils/audio';
 import { CalendarMonthResponse, LootStatus } from '../types';
 import { CalendarMonthView } from './CalendarMonthView';
 import { MoneyBadge } from '../utils/money';
 
-export type NavTab = 'routes' | 'rotation' | 'schedule' | 'summary' | 'settings';
+export type NavTab = 'routes' | 'rotation' | 'schedule' | 'loot' | 'summary' | 'settings';
 
 export interface RouteItem {
   id: string;
@@ -79,6 +80,7 @@ export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
     { id: 'routes', labelRu: 'Навигация и фарм', labelEn: 'Navigation & Farm', icon: Route },
     { id: 'rotation', labelRu: 'Бой / Ротация', labelEn: 'Combat / Rotation', icon: Crosshair },
     { id: 'schedule', labelRu: 'Расписание', labelEn: 'Schedule', icon: CalendarClock },
+    { id: 'loot', labelRu: 'Лут', labelEn: 'Loot', icon: Coins },
     { id: 'summary', labelRu: 'Статистика', labelEn: 'Statistics', icon: BarChart3 },
     { id: 'settings', labelRu: 'Настройки', labelEn: 'Settings', icon: SlidersHorizontal },
   ];
@@ -268,7 +270,37 @@ export const StealthHUDLeftSidebar: React.FC<StealthHUDLeftSidebarProps> = ({
           </div>
         )}
 
-        {/* 4. Calendar Month View in Left Panel */}
+        {/* 4. Loot Sidebar Overview */}
+        {activeTab === 'loot' && (
+          <div className="flex flex-col gap-2.5 animate-fadeIn">
+            <span className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400 pt-1">
+              {isRu ? 'Лут' : 'Loot'}
+            </span>
+            <div className="p-3 bg-transparent border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] rounded-lg text-xs space-y-2 text-zinc-600 dark:text-zinc-400 transition-all">
+              <p className="leading-relaxed">
+                {isRu
+                  ? 'Фильтр добычи с мобов: порог стоимости для сбора в сумку, автоопределение и ручная настройка.'
+                  : 'Mob drop filter: price threshold for looting into inventory, auto calculation, and manual tuning.'}
+              </p>
+            </div>
+
+            {onOpenSectionHelp && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundFx.playClick();
+                  onOpenSectionHelp('loot');
+                }}
+                className="flex items-center justify-center gap-1.5 w-full py-1.5 px-3 rounded-lg border border-black/10 dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:border-black/20 dark:hover:border-white/20 text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all cursor-pointer group shadow-none active:scale-[0.98]"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white transition-colors" />
+                <span>{isRu ? 'Как это работает' : 'How it works'}</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 5. Calendar Month View in Left Panel */}
         {activeTab === 'summary' && (
           <div data-tour="summary-calendar" className="flex flex-col gap-2.5 animate-fadeIn">
             <CalendarMonthView

@@ -30,6 +30,7 @@ export interface AppSettings {
   oreSearchKey?: string;
   autoRouteMinutes?: number;
   auctionHouseId?: number | null;
+  lootMinValue?: number | null;
 }
 
 export interface LootRow {

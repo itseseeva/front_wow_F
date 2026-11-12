@@ -42,6 +42,7 @@ import {
   normalizeScheduleSettings,
 } from './data/mockSchedule';
 import { ScheduleView } from './components/ScheduleView';
+import { LootView } from './components/LootView';
 import { SectionHelpModal, HelpSectionId } from './components/SectionHelpModal';
 import { InteractiveTourGuide, TourSectionId } from './components/InteractiveTourGuide';
 
@@ -183,6 +184,7 @@ export const App: React.FC = () => {
     let oreSearch = 'F10';
     let autoRouteMinutes = 30;
     let auctionHouseId: number | null = null;
+    let lootMinValue: number | null = null;
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -197,6 +199,7 @@ export const App: React.FC = () => {
         if (parsed.oreSearchKey !== undefined) oreSearch = parsed.oreSearchKey;
         if (parsed.autoRouteMinutes != null) autoRouteMinutes = Number(parsed.autoRouteMinutes);
         if (parsed.auctionHouseId !== undefined) auctionHouseId = parsed.auctionHouseId != null ? Number(parsed.auctionHouseId) : null;
+        if (parsed.lootMinValue !== undefined) lootMinValue = parsed.lootMinValue != null ? Number(parsed.lootMinValue) : null;
       } catch (e) {}
     }
     return {
@@ -212,6 +215,7 @@ export const App: React.FC = () => {
       oreSearchKey: oreSearch,
       autoRouteMinutes,
       auctionHouseId,
+      lootMinValue,
     };
   });
 
@@ -361,6 +365,7 @@ export const App: React.FC = () => {
           oreSearchKey: customSettings.oreSearchKey !== undefined ? customSettings.oreSearchKey : 'F10',
           autoRouteMinutes: customSettings.autoRouteMinutes != null ? Number(customSettings.autoRouteMinutes) : 30,
           auctionHouseId: customSettings.auctionHouseId !== undefined ? (customSettings.auctionHouseId != null ? Number(customSettings.auctionHouseId) : null) : null,
+          lootMinValue: customSettings.lootMinValue !== undefined ? (customSettings.lootMinValue != null ? Number(customSettings.lootMinValue) : null) : null,
         },
         chains: [
           {
@@ -480,6 +485,7 @@ export const App: React.FC = () => {
                   oreSearchKey: parsed.settings.oreSearchKey ?? prev.oreSearchKey,
                   autoRouteMinutes: parsed.settings.autoRouteMinutes != null ? Number(parsed.settings.autoRouteMinutes) : (prev.autoRouteMinutes ?? 30),
                   auctionHouseId: parsed.settings.auctionHouseId !== undefined ? (parsed.settings.auctionHouseId != null ? Number(parsed.settings.auctionHouseId) : null) : (prev.auctionHouseId ?? null),
+                  lootMinValue: parsed.settings.lootMinValue !== undefined ? (parsed.settings.lootMinValue != null ? Number(parsed.settings.lootMinValue) : null) : (prev.lootMinValue ?? null),
                 }));
               }
 
@@ -1453,6 +1459,7 @@ export const App: React.FC = () => {
         isBotRunning={isBotRunning}
         lootStatus={lootStatus}
         onOpenSectionHelp={(sectionId) => {
+          setActiveTab(sectionId);
           setActiveTourSection(sectionId as TourSectionId);
         }}
       />
@@ -1559,7 +1566,25 @@ export const App: React.FC = () => {
             />
           )}
 
-          {/* 4. SETTINGS VIEW: Full AppSettings Editor & Farm Schedule */}
+          {/* 4. LOOT VIEW: Mob drop filter card with auto & custom threshold */}
+          {activeTab === 'loot' && (
+            <div className="w-full p-4 sm:p-6 2xl:p-10 pt-2 sm:pt-4 pb-16 flex flex-col justify-start animate-assemble">
+              <LootView
+                settings={settings}
+                onSettingsChange={(newSettings) => {
+                  setSettings(newSettings);
+                  try {
+                    localStorage.setItem('wowbot_settings', JSON.stringify(newSettings));
+                  } catch {}
+                  saveCurrentConfigToBackend(chains, newSettings, scheduleSettings);
+                }}
+                language={language}
+                onToast={(msg) => setScheduleToast(msg)}
+              />
+            </div>
+          )}
+
+          {/* 5. SETTINGS VIEW: Full AppSettings Editor & Farm Schedule */}
           {activeTab === 'settings' && (
             <div className="w-full p-4 sm:p-6 2xl:p-10 pt-2 sm:pt-4 pb-24 flex flex-col justify-start animate-assemble">
               <div className="w-full max-w-3xl 2xl:max-w-5xl mx-auto rounded-2xl p-5 2xl:p-8">
@@ -1633,11 +1658,12 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* Stylish Glass Modal: Как это работает (fallback) */}
+      {/* Stylish Glass Modal: Как это работает */}
       <SectionHelpModal
         isOpen={Boolean(helpModalSection)}
         sectionId={helpModalSection}
         onClose={() => setHelpModalSection(null)}
+        onStartTour={(sectionId) => setActiveTourSection(sectionId as TourSectionId)}
         language={language}
       />
 

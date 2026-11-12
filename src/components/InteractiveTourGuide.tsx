@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, Check, Sparkles } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Check, Sparkles, Lightbulb } from 'lucide-react';
 import { soundFx } from '../utils/audio';
 
-export type TourSectionId = 'routes' | 'rotation' | 'schedule' | 'summary' | 'settings';
+export type TourSectionId = 'routes' | 'rotation' | 'schedule' | 'loot' | 'summary' | 'settings';
 
 export interface TourStep {
   targetSelector: string;
@@ -10,135 +10,188 @@ export interface TourStep {
   titleEn: string;
   descRu: string;
   descEn: string;
+  tipRu?: string;
+  tipEn?: string;
   preferredPosition?: 'bottom' | 'top' | 'left' | 'right';
 }
 
 export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
-  schedule: [
-    {
-      targetSelector: '[data-tour="schedule-days"]',
-      titleRu: 'Дни недели и часы активности',
-      titleEn: 'Days of the Week & Hours',
-      descRu:
-        'Здесь отображаются все 7 дней недели. Для каждого дня настраиваются индивидуальные часы фарма, чтобы бот играл по естественному графику реального человека.',
-      descEn:
-        'Overview of all 7 days of the week. Configure distinct active hours for each day to maintain a human-like schedule.',
-      preferredPosition: 'bottom',
-    },
-    {
-      targetSelector: '[data-tour="schedule-styles"]',
-      titleRu: 'Стили поведения бота',
-      titleEn: 'Behavior Styles & Presets',
-      descRu:
-        'Быстрые пресеты фарма: «Обычный» (сбалансированный режим, рекомендуется), «Осторожный» (короткие сессии и частые паузы), «Интенсивный» или «Свой» (ручная настройка таймингов).',
-      descEn:
-        'Behavior presets: «Casual» (balanced, recommended), «Cautious» (short sessions, frequent pauses), «Intense», or «Custom».',
-      preferredPosition: 'bottom',
-    },
-    {
-      targetSelector: '[data-tour="schedule-windows"]',
-      titleRu: 'Окна времени и ползунок часов',
-      titleEn: 'Time Windows & Daily Hours',
-      descRu:
-        'Задайте интервалы времени (например, утро и вечер), в которые бот имеет право запускаться. Ползунок ниже регулирует суммарное время игры внутри этих окон.',
-      descEn:
-        'Define active time windows (e.g. morning and evening). The slider controls total farming hours inside these intervals.',
-      preferredPosition: 'top',
-    },
-    {
-      targetSelector: '[data-tour="schedule-breaks"]',
-      titleRu: 'Перерывы и случайные выходные',
-      titleEn: 'Breaks & Random Days Off',
-      descRu:
-        'Включите длинные перерывы (на еду и отдых) и случайные выходные (1 раз в 10 дней), чтобы бот вёл себя не как машина, а как живой игрок.',
-      descEn:
-        'Toggle long breaks (for meals/rest) and random days off (once every 10 days) for realistic human player behavior.',
-      preferredPosition: 'top',
-    },
-    {
-      targetSelector: '[data-tour="schedule-finetune"]',
-      titleRu: 'Тонкая настройка сессий и пауз',
-      titleEn: 'Fine-Tuning Sessions & Pauses',
-      descRu:
-        'Детальное управление длительностью одной сессии (например, 25–60 мин), короткими паузами между кругами и выходом в меню персонажа.',
-      descEn:
-        'Detailed control over session lengths (e.g. 25–60 mins), short loop pauses, and character menu logout.',
-      preferredPosition: 'top',
-    },
-  ],
-
   routes: [
     {
       targetSelector: '[data-tour="routes-list"]',
-      titleRu: 'Список маршрутов и выбор зоны',
-      titleEn: 'Route List & Region',
+      titleRu: '1. Карта местности',
+      titleEn: '1. Terrain Map',
       descRu:
-        'Список доступных маршрутов фарма с указанием типа («Круг» или «Точка-точка»), времени бега и игрового региона. Кликните по маршруту, чтобы сделать его активным.',
+        'Первый раз в новой зоне карта собирается 2–3 минуты — бот в это время стоит. Дальше берётся с диска за пару секунд. Крутые склоны, стены и предметы внутри зданий он обходит, глубокую воду переплывает.',
       descEn:
-        'Available gathering routes showing loop type, duration, and in-game region. Click any route to activate it.',
+        'The first time in a new zone, the map compiles in 2–3 minutes — the bot idles meanwhile. Afterwards it loads from disk in seconds. Steep slopes, walls, and interior obstacles are bypassed, deep water is swum across.',
       preferredPosition: 'right',
     },
     {
-      targetSelector: '[data-tour="routes-autoroute"]',
-      titleRu: 'Кнопка «Автомаршрут»',
-      titleEn: '«Auto Route» Generator',
+      targetSelector: '[data-tour="routes-record"]',
+      titleRu: '2. Свой маршрут',
+      titleEn: '2. Custom Route',
       descRu:
-        'Если готового маршрута нет — нажмите эту кнопку. Бот исследует окружающие ресурсы в радиусе места старта и сам сгенерирует замкнутый круг фарма нужной длины.',
+        'Нажмите «Записать», пробегите круг сами и сохраните. Бот пойдёт по нему кусками с небольшими случайностями, а в узких местах и у поворотов — точно по вашему следу.',
       descEn:
-        'No route nearby? Click this button: the bot scans nearby nodes and automatically builds an optimal closed loop.',
+        'Click "Record", run the loop yourself, and save. The bot follows it in segments with minor randomized variations, and in tight spots and turns — exactly on your trail.',
       preferredPosition: 'bottom',
     },
     {
-      targetSelector: '[data-tour="routes-record"]',
-      titleRu: 'Запись собственного маршрута',
-      titleEn: 'Record Custom Route',
+      targetSelector: '[data-tour="routes-autoroute"]',
+      titleRu: '3. Автомаршрут',
+      titleEn: '3. Auto Route',
       descRu:
-        'Нажмите «Записать маршрут» и пробегите нужную траекторию персонажем в игре. Бот в реальном времени запишет все точки пути и сохранит круг.',
+        'Если рядом нет маршрута, бот сам строит круг от места запуска через места появления трав и руды — только тех, что умеет собирать ваш персонаж. Расчёт около минуты, длина — в настройках (30–120 мин). Круг сохраняется как «Автомаршрут» и берётся в следующий раз.',
       descEn:
-        'Click «Record Route» and run your desired path in-game. The bot tracks waypoints in real-time and saves the loop.',
+        'If no route is nearby, the bot builds a loop from starting location through herb and ore spawn points matching your character skills. Calculation takes ~1 min, length in Settings (30–120 min). Loop is saved as "Auto Route".',
       preferredPosition: 'bottom',
+    },
+    {
+      targetSelector: '[data-tour="routes-list"]',
+      titleRu: '4. Сбор по пути',
+      titleEn: '4. Gathering on the Run',
+      descRu:
+        'Руду и траву бот видит на миникарте и сворачивает к ней, если крюк недолгий (до ~20 с бега). Поиск трав и руды переключает сам, заранее — по тому, что впереди. Застрял — шаг назад и обход; застрял 3 раза за минуту — останавливается.',
+      descEn:
+        'The bot spots ore and herbs on the minimap and diverts toward them if the detour is brief (up to ~20s run). Cycles tracking modes automatically. If stuck, takes a step back and paths around; stops if stuck 3 times in a minute.',
+      tipRu: 'Записывайте маршрут там, где сами любите фармить: бот бежит по вашему следу и выглядит как вы.',
+      tipEn: 'Record routes where you like to farm: the bot follows your footsteps and looks just like you.',
+      preferredPosition: 'right',
     },
   ],
 
   rotation: [
     {
       targetSelector: '[data-tour="rotation-sequence"]',
-      titleRu: 'Последовательность заклинаний',
-      titleEn: 'Spell Sequence Chain',
+      titleRu: '1. Цепочка умений',
+      titleEn: '1. Skill Chain',
       descRu:
-        'Цепочка боевых способностей. Бот применяет заклинания по порядку слева направо, когда его атакует моб или персонаж вступает в бой.',
+        'Умения идут слева направо, на кулдауне — пропускаются. «Как только готово» — жмётся вне очереди. Конец каста бот видит по игре. Между кастами иногда делает шаг вперёд или назад, как человек.',
       descEn:
-        'Spell sequence executed from left to right when attacked by hostile mobs during gathering.',
+        'Skills fire left-to-right, skipping abilities on cooldown. "ASAP" triggers out of order. Cast completion is tracked directly from game memory. Between casts, it occasionally steps forward or backward like a human.',
       preferredPosition: 'bottom',
     },
     {
       targetSelector: '[data-tour="rotation-keybind"]',
-      titleRu: 'Привязка клавиши слота',
-      titleEn: 'Action Bar Keybind',
+      titleRu: '2. Клавиши',
+      titleEn: '2. Keybinds',
       descRu:
-        'Выберите слот и нажмите на кнопку клавиши в нижней панели, чтобы назначить кнопку клавиатуры (поддерживаются 1–9, Q, E, R, F, тильда ` и F1–F12).',
+        'Подходят цифры, «-», «=» и буквы. Нельзя: W, A, S, D, пробел, Tab и клавиши из настроек (взаимодействие, предыдущая цель, поиск) — бот ими ходит и целится. F1–F12 не подходят.',
       descEn:
-        'Select any slot and click the keybind button in the bottom panel to assign a keyboard key (1–9, letters, backtick `, F1–F12).',
+        'Numbers, "-", "=", and letters are supported. Prohibited: W, A, S, D, Space, Tab, and control keys from Settings (Interact, Last Target, Tracking) — used for navigation and aiming. F1–F12 are not allowed.',
       preferredPosition: 'top',
     },
     {
       targetSelector: '[data-tour="rotation-timings"]',
-      titleRu: 'Время каста и кулдаун',
-      titleEn: 'Cast Time & Cooldown',
+      titleRu: '3. Лечение («HP ниже»)',
+      titleEn: '3. Healing ("HP below")',
       descRu:
-        'Укажите время каста (секунды произнесения или поддержания) и кулдаун способности, чтобы бот не нажимал заклинание, пока оно перезаряжается.',
+        'Шаг с порогом HP — это хил. В бою бот лечится, только если иначе проиграет гонку: сравнивает, кто кого убьёт быстрее. Вне боя долечивается до 80–98%.',
       descEn:
-        'Set cast duration (seconds) and skill cooldown so the bot never attempts to press an ability before it cools down.',
+        'A step with an HP threshold acts as a heal. In combat, the bot only heals if it would lose the DPS race otherwise, comparing time-to-kill. Out of combat, it heals up to 80–98%.',
       preferredPosition: 'top',
     },
     {
       targetSelector: '[data-tour="rotation-water"]',
-      titleRu: 'Слот для воды (манареген)',
-      titleEn: 'Water Slot (Mana Regen)',
+      titleRu: '4. Вода',
+      titleEn: '4. Water',
       descRu:
-        'Для классов с маной: специальный синий слот. При падении маны ниже заданного % бот выходит из боя, садится и пьёт воду до восстановления.',
+        'Только вне боя: мана ниже порога — пьёт до 90–100% (не дольше 35 с). Если на хил не хватает маны — пьёт сразу. Напали — дерётся.',
       descEn:
-        'Special slot for mana users: when mana drops below threshold, the character sits and drinks until fully regenerated.',
+        'Out of combat only: if mana drops below threshold, it drinks up to 90–100% (max 35s). If there isn’t enough mana to heal, it drinks immediately. If attacked, it engages in combat.',
+      tipRu: 'Поставьте хил на «HP ниже 50%» — бот не будет тратить ману, когда моб и так умрёт первым.',
+      tipEn: 'Set heals to "HP below 50%" — the bot won’t waste mana when the mob is going to die first anyway.',
+      preferredPosition: 'top',
+    },
+  ],
+
+  schedule: [
+    {
+      targetSelector: '[data-tour="schedule-days"]',
+      titleRu: '1. Неделя',
+      titleEn: '1. Week',
+      descRu:
+        'Каждый день недели можно настроить отдельно: сколько часов фармить и в какое время. Дни можно выключать совсем (например, выходные). Нажмите «Скопировать день», чтобы быстро размножить настройку на всю неделю.',
+      descEn:
+        'Each day of the week is configured individually: active hours and start times. Days can be turned off completely (e.g. weekends). Click "Copy day" to quickly duplicate your configuration across the entire week.',
+      preferredPosition: 'bottom',
+    },
+    {
+      targetSelector: '[data-tour="schedule-styles"]',
+      titleRu: '2. Стили',
+      titleEn: '2. Styles',
+      descRu:
+        'Четыре профиля на выбор: Осторожный (короткие сессии, длинные паузы), Обычный (рекомендуется), Интенсивный (больше фарма, меньше пауз) и Свой (ваши секунды и минуты).',
+      descEn:
+        'Choose from four behavior profiles: Cautious (short sessions, long breaks), Normal (recommended), Intensive (more farming, fewer pauses), and Custom (fine-tuned timings).',
+      preferredPosition: 'bottom',
+    },
+    {
+      targetSelector: '[data-tour="schedule-breaks"]',
+      titleRu: '3. Перерывы',
+      titleEn: '3. Breaks',
+      descRu:
+        'Внутри игрового времени бот делает короткие перерывы на несколько минут (отойти от компьютера) и длинные раз в 2–3 сессии (поесть, отдохнуть). Можно включить случайные выходные раз в 10 дней.',
+      descEn:
+        'During play sessions, the bot takes short pauses for a few minutes (stepping away from the keyboard) and long breaks every 2–3 sessions (meals, rest). You can also enable random days off every 10 days.',
+      preferredPosition: 'top',
+    },
+    {
+      targetSelector: '[data-tour="schedule-finetune"]',
+      titleRu: '4. Мягкий конец',
+      titleEn: '4. Soft Exit',
+      descRu:
+        'Когда время сессии вышло, бот не выдёргивает провод: он добивает моба, собирает руду или траву, добегает до безопасного места и только потом выходит.',
+      descEn:
+        'When session time expires, the bot never pulls the plug: it finishes off the current mob, gathers nearby nodes, runs to a safe location, and only then logs out.',
+      tipRu: 'Не ставьте все дни одинаково — одинаковые дни и выдают бота.',
+      tipEn: 'Avoid configuring every day identically — uniform schedules are the easiest way to give away a bot.',
+      preferredPosition: 'top',
+    },
+  ],
+
+  loot: [
+    {
+      targetSelector: '[data-tour="loot-card"]',
+      titleRu: '1. Правило',
+      titleEn: '1. Rule',
+      descRu:
+        'С мобов берётся только то, что стоит дороже порога. Предметы дешевле бот оставляет на трупе — сумка не забивается серыми вещами за пару копеек.',
+      descEn:
+        'Only items valued above the threshold are looted from corpses. Cheaper trash items are left behind, keeping bags free of low-value junk.',
+      preferredPosition: 'bottom',
+    },
+    {
+      targetSelector: '[data-tour="loot-card"]',
+      titleRu: '2. Что берёт всегда',
+      titleEn: '2. Always Looted',
+      descRu:
+        'Травы и руду бот берёт ВСЕГДА, даже если порог высокий: на них он и зарабатывает.',
+      descEn:
+        'Herbs and mining ores are ALWAYS collected, even with high value thresholds: they are the main source of income.',
+      preferredPosition: 'bottom',
+    },
+    {
+      targetSelector: '[data-tour="loot-auto-toggle"]',
+      titleRu: '3. Авто',
+      titleEn: '3. Auto',
+      descRu:
+        'В режиме «Авто» бот сам прикидывает порог по уровню зоны и вашим свободным слотам. Для большинства зон этого достаточно.',
+      descEn:
+        'In "Auto" mode, the bot dynamically calculates the threshold based on zone level and available bag slots. This is optimal for most zones.',
+      preferredPosition: 'bottom',
+    },
+    {
+      targetSelector: '[data-tour="loot-threshold-inputs"]',
+      titleRu: '4. Свой порог',
+      titleEn: '4. Custom Threshold',
+      descRu:
+        'Снимите галочку «Авто» и задайте порог в серебре и золоте руками. Например: 5 серебра — всё, что дешевле 5 серебряных монет, останется на мобе.',
+      descEn:
+        'Uncheck "Auto" to set the threshold manually in gold and silver. For example, 5 silver: anything worth under 5 silver is left on the corpse.',
+      tipRu: 'Начните с «Авто» и посмотрите итог сессии — подправить порог можно всегда.',
+      tipEn: 'Start with "Auto" and check your session earnings — you can adjust the threshold at any time.',
       preferredPosition: 'top',
     },
   ],
@@ -146,95 +199,89 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
   summary: [
     {
       targetSelector: '[data-tour="summary-live-cards"]',
-      titleRu: 'Живая телеметрия сессии',
-      titleEn: 'Live Session Telemetry',
+      titleRu: '1. Сессия сейчас',
+      titleEn: '1. Current Session',
       descRu:
-        'Индикаторы реального времени: статус работы бота, время текущей сессии, количество добычи и точный заработок в золоте, серебре и меди.',
+        'В карточках в реальном времени: сколько бот работает, сколько золота заработал, темп «в час» и сколько осталось до ближайшего перерыва.',
       descEn:
-        'Real-time metrics: bot running state, current session duration, item count, and market earnings in gold, silver, and copper.',
+        'Real-time telemetry cards: bot uptime, total gold earned, "per hour" rate, and countdown to the next scheduled break.',
       preferredPosition: 'bottom',
     },
     {
       targetSelector: '[data-tour="summary-gold-rate"]',
-      titleRu: 'Темп дохода «Золото в час»',
-      titleEn: '«Gold per Hour» Metric',
+      titleRu: '2. Цены',
+      titleEn: '2. Prices',
       descRu:
-        'Динамический расчёт прибыльности фарма по реальным ценам аукциона вашего сервера. Позволяет сразу оценить эффективность выбранного маршрута.',
+        'Цены на руду, траву и предметы бот берёт с аукциона вашего сервера (настраивается в Настройках). Если сервер не найден — считает по базовой цене торговца.',
       descEn:
-        'Live earning speed calculated against realm auction house prices, measuring your route profitability in real-time.',
-      preferredPosition: 'bottom',
-    },
-    {
-      targetSelector: '[data-tour="summary-until-break"]',
-      titleRu: 'Таймер «До перерыва»',
-      titleEn: '«Until Break» Countdown',
-      descRu:
-        'Обратный отсчёт до следующей паузы или перекура по расписанию. Вы всегда знаете, когда бот завершит круг и сделает передышку.',
-      descEn:
-        'Countdown timer to the next scheduled break or rest window, keeping you informed about upcoming bot downtime.',
+        'Ore, herb, and drop prices are pulled from your server auction data (configured in Settings). If realm data is unavailable, vendor prices are used.',
       preferredPosition: 'bottom',
     },
     {
       targetSelector: '[data-tour="summary-calendar"]',
-      titleRu: 'Месячный календарь и история',
-      titleEn: 'Monthly History & Calendar',
+      titleRu: '3. История',
+      titleEn: '3. History',
       descRu:
-        'Календарь сохраняет результаты каждого дня: часы фарма, количество заходов и общую сумму заработанного золота.',
+        'Календарь слева помнит все прошлые сессии по дням: сколько нафармлено, сколько чистого золота вышло, сколько времени бот был активен.',
       descEn:
-        'Historical calendar recording daily run hours, session passes, and total wealth accumulated across the month.',
+        'The sidebar calendar preserves past sessions by date: total farmed value, net gold earned, and total bot uptime.',
       preferredPosition: 'right',
+    },
+    {
+      targetSelector: '[data-tour="summary-live-cards"]',
+      titleRu: '4. Карта прохода',
+      titleEn: '4. Farm Map',
+      descRu:
+        'На карте маршрута видно, где бот подбирал траву и руду, а где дрался с мобами — можно оценить, какая часть круга приносит больше всего.',
+      descEn:
+        'The route map visually highlights where herbs/ores were gathered and where combat took place — helping identify the most lucrative sections of the loop.',
+      tipRu: 'Пишет «нет цен» — проверьте в Настройках, что найдены ключи и выбран аукцион (или «Авто»).',
+      tipEn: 'If it displays "no prices", check Settings to ensure auction keys are detected and realm auction is selected (or set to "Auto").',
+      preferredPosition: 'bottom',
     },
   ],
 
   settings: [
     {
       targetSelector: '[data-tour="settings-keybinds"]',
-      titleRu: 'Глобальные горячие клавиши',
-      titleEn: 'Global Game Keybindings',
+      titleRu: '1. Клавиши игры',
+      titleEn: '1. Game Keys',
       descRu:
-        '«Предыдущая цель» и «Взаимодействие с целью» должны быть настроены так же, как в клиенте игры. Клавиша F5 запускает и останавливает бота.',
+        '«Взаимодействие с целью» и «Предыдущая цель» настройте в игре на те же клавиши, что указаны тут. Иначе бот не сможет лутать и целиться в моба за спиной.',
       descEn:
-        '«Previous Target» and «Interact With Target» must match your in-game bindings. F5 starts and stops the bot globally.',
+        'Configure "Interact With Target" and "Previous Target" in-game to match the keys specified here. Otherwise the bot cannot loot or acquire targets behind it.',
       preferredPosition: 'bottom',
     },
     {
       targetSelector: '[data-tour="settings-pause"]',
-      titleRu: 'Клавиша «Пауза»',
-      titleEn: 'Emergency Pause Key',
+      titleRu: '2. Пауза',
+      titleEn: '2. Pause',
       descRu:
-        'Нажатие клавиши паузы мгновенно отпускает управление и замирает, позволяя вмешаться вручную. Повторное нажатие возобновляет работу.',
+        'Клавиша «Пауза» (по умолчанию Pause/Break) мгновенно отпускает управление. Нажали — играете руками; нажали ещё раз — бот продолжил с того же места.',
       descEn:
-        'Instant pause hotkey: releases controls and holds the bot, giving you full control. Press again to resume seamlessly.',
+        'The emergency "Pause" key (default Pause/Break) instantly releases all keys and halts bot actions. Press again to resume seamlessly from the same spot.',
       preferredPosition: 'bottom',
     },
     {
       targetSelector: '[data-tour="settings-radar"]',
-      titleRu: 'Поиск трав и минералов',
-      titleEn: 'Herb & Mineral Tracking',
+      titleRu: '3. Поиск трав и минералов',
+      titleEn: '3. Tracking Herbs & Minerals',
       descRu:
-        'Аддон бота сам привязывает поиск к клавишам F9 и F10 и циклически переключает трекинг, чтобы видеть оба типа ресурсов на миникарте.',
+        'Клавиши F9 и F10 аддон настраивает сам, выносить их на панель не нужно. Если играете собирателем — включите оба поиска, бот будет переключать их по очереди.',
       descEn:
-        'The addon binds tracking to F9/F10 and cycles modes to display both herbs and mineral veins on the minimap.',
+        'Keys F9 and F10 are managed automatically by the addon without needing action bar slots. If gathering both professions, enable both tracking options so the bot cycles between them.',
       preferredPosition: 'top',
     },
     {
       targetSelector: '[data-tour="settings-autoroute"]',
-      titleRu: 'Длина автомаршрута',
-      titleEn: 'Auto Route Duration',
+      titleRu: '4. Автомаршрут и аукцион',
+      titleEn: '4. Auto Route & Auction',
       descRu:
-        'Ползунок задаёт желаемую длину круга (от 30 до 120 минут) при автоматическом построении маршрута вокруг персонажа.',
+        'Длина автомаршрута задаёт размер сгенерированного круга (30–120 минут). В блоке аукциона выберите сервер или оставьте «Авто», чтобы бот знал цены вашей фракции.',
       descEn:
-        'Slider controls loop duration (30 to 120 minutes) when building an auto-route around your current character location.',
-      preferredPosition: 'top',
-    },
-    {
-      targetSelector: '[data-tour="settings-auction"]',
-      titleRu: 'Выбор аукционного дома',
-      titleEn: 'Auction House Selection',
-      descRu:
-        'Выберите аукцион вашего сервера или оставьте «Авто», чтобы бот точно рассчитывал стоимость собранного лута по рыночным ценам.',
-      descEn:
-        'Select your realm auction house or leave on «Auto» so loot values are calculated based on live market prices.',
+        'The route slider configures loop generation length (30–120 minutes). In the auction section, select your server or leave on "Auto" so the bot tracks your faction prices.',
+      tipRu: 'Поменяли клавиши — сделайте /reload в игре, иначе аддон помнит старые.',
+      tipEn: 'Whenever you change keybindings, run /reload in game chat, otherwise the addon continues using previous bindings.',
       preferredPosition: 'top',
     },
   ],
@@ -281,9 +328,18 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
       return;
     }
 
-    const el = document.querySelector(currentStep.targetSelector);
+    let el = document.querySelector(currentStep.targetSelector);
     if (!el) {
-      // Fallback: try finding any element with the section or show centered
+      if (currentStep.targetSelector.includes('loot')) {
+        el = document.querySelector('[data-tour="loot-auto-toggle"]') || document.querySelector('[data-tour="loot-card"]');
+      } else if (currentStep.targetSelector.includes('routes')) {
+        el = document.querySelector('[data-tour="routes-list"]');
+      } else if (currentStep.targetSelector.includes('summary')) {
+        el = document.querySelector('[data-tour="summary-live-cards"]');
+      }
+    }
+
+    if (!el) {
       setTargetRect(null);
       return;
     }
@@ -573,6 +629,15 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
           <p className="font-sans text-xs text-zinc-300 leading-relaxed">
             {isRu ? currentStep.descRu : currentStep.descEn}
           </p>
+          {currentStep.tipRu && (
+            <div className="p-2.5 rounded-xl bg-white/[0.05] border border-white/15 flex items-start gap-2 text-zinc-300 text-[11px] leading-relaxed mt-1">
+              <Lightbulb className="w-3.5 h-3.5 text-white shrink-0 mt-0.5" />
+              <div>
+                <span className="font-mono font-semibold text-white">{isRu ? 'Совет: ' : 'Tip: '}</span>
+                <span>{isRu ? currentStep.tipRu : currentStep.tipEn}</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Card Footer: Back / Next Navigation */}
