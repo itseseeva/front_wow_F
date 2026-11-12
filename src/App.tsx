@@ -88,6 +88,7 @@ export const App: React.FC = () => {
   const [sessionSeconds, setSessionSeconds] = useState<number>(0);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [isAutoRouteBuilding, setIsAutoRouteBuilding] = useState<boolean>(false);
+  const [autoRouteError, setAutoRouteError] = useState<string | null>(null);
   const [liveAutoRouteStatus, setLiveAutoRouteStatus] = useState<AutoRouteStatus | null>(null);
   const [liveTerrainStatus, setLiveTerrainStatus] = useState<TerrainStatus | null>(null);
   const [helpModalSection, setHelpModalSection] = useState<HelpSectionId | null>(null);
@@ -240,6 +241,7 @@ export const App: React.FC = () => {
   const [sessionSummary, setSessionSummary] = useState<SessionSummaryData | null>(null);
   const recordingTimerRef = useRef<any>(null);
   const recordingRouteIdRef = useRef<string | null>(null);
+  const fetchDayDataRef = useRef<(dateStr: string) => Promise<void>>(async () => {});
 
   // Calendar & Sessions History State
   const todayDateStr = useMemo(() => {
@@ -544,6 +546,27 @@ export const App: React.FC = () => {
     };
   }, [fetchRoutes]);
 
+  const activateRunningBotUI = useCallback(
+    (paused: boolean) => {
+      isBotRunningRef.current = true;
+      setGlobalError(null);
+      soundFx.playStart();
+      setSessionSeconds(0);
+      setLootStatus({ items: [], earned_copper: null, earned_complete: true });
+      setIsBotRunning(true);
+      setIsBotPaused(paused);
+      fetchScheduleStatus();
+      if (todayDateStr) {
+        setSelectedDate(todayDateStr);
+        fetchDayDataRef.current(todayDateStr);
+      }
+      setSelectedSessionId('live');
+      setSelectedPassIndex(null);
+      setActiveTab('summary');
+    },
+    [fetchScheduleStatus, todayDateStr]
+  );
+
   // 3) Bot status polling: call api.get_status() every 1 second
   useEffect(() => {
     let cancelled = false;
@@ -561,6 +584,12 @@ export const App: React.FC = () => {
           setScheduleStatus(status.schedule);
         }
 
+        // If bot started externally (e.g. via start_autoroute, schedule, or hotkey)
+        if (!isBotRunningRef.current && status.running) {
+          activateRunningBotUI(Boolean(status.paused));
+          return;
+        }
+
         // Update paused state from get_status()
         if (status.running) {
           setIsBotPaused(Boolean(status.paused));
@@ -568,8 +597,9 @@ export const App: React.FC = () => {
           setIsBotPaused(false);
         }
 
-        // If bot stopped on its own (running === false, but UI is currently in running state)
+        // If bot stopped on its own (running was true and became false)
         if (isBotRunningRef.current && !status.running) {
+          isBotRunningRef.current = false;
           setIsBotRunning(false);
           setIsBotPaused(false);
           soundFx.playStop();
@@ -611,7 +641,7 @@ export const App: React.FC = () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [activateRunningBotUI, fetchScheduleStatus]);
 
   // Route Selection & Deletion Handlers (allow playing without route on re-clicking selected route)
   const handleSelectRoute = async (id: string) => {
@@ -847,10 +877,11 @@ export const App: React.FC = () => {
     });
   };
 
-  // Start auto-route generation
+  // Start auto-route generation (backend builds route and starts bot)
   const handleStartAutoRoute = async () => {
     if (isAutoRouteBuilding) return;
     soundFx.playClick();
+    setAutoRouteError(null);
     const isRu = language === 'ru';
     try {
       const api = await getPywebviewApi();
@@ -868,11 +899,11 @@ export const App: React.FC = () => {
       }
 
       if (!api?.start_autoroute) {
-        setGlobalError(
-          isRu
-            ? 'Бот не ответил: метод start_autoroute недоступен'
-            : 'Bot did not respond: start_autoroute unavailable'
-        );
+        const msg = isRu
+          ? 'Бот не ответил: метод start_autoroute недоступен'
+          : 'Bot did not respond: start_autoroute unavailable';
+        setAutoRouteError(msg);
+        setGlobalError(msg);
         return;
       }
 
@@ -887,18 +918,18 @@ export const App: React.FC = () => {
           isRu ? 'Строю автомаршрут вокруг персонажа…' : 'Building auto route around character…'
         );
       } else {
-        setGlobalError(
-          res?.error || (isRu ? 'Не удалось построить автомаршрут' : 'Failed to build auto route')
-        );
+        const errMsg =
+          res?.error || (isRu ? 'Не удалось построить автомаршрут' : 'Failed to build auto route');
+        setAutoRouteError(errMsg);
       }
     } catch (e: unknown) {
       console.warn('start_autoroute error:', e);
-      const errMsg = e instanceof Error ? e.message : String(e || '');
-      setGlobalError(
-        isRu
-          ? `Бот не ответил: ${errMsg || 'неизвестная ошибка'}`
-          : `Bot did not respond: ${errMsg || 'unknown error'}`
-      );
+      const errText = e instanceof Error ? e.message : String(e || '');
+      const msg = isRu
+        ? `Бот не ответил: ${errText || 'неизвестная ошибка'}`
+        : `Bot did not respond: ${errText || 'unknown error'}`;
+      setAutoRouteError(msg);
+      setGlobalError(msg);
     }
   };
 
@@ -996,9 +1027,30 @@ export const App: React.FC = () => {
           return;
         }
       }
-      if (detail && detail.status) {
-        setIsAutoRouteBuilding(detail.status === 'building');
-        setLiveAutoRouteStatus(detail);
+      if (!detail || !detail.status) return;
+
+      setLiveAutoRouteStatus(detail);
+
+      if (detail.status === 'building') {
+        setIsAutoRouteBuilding(true);
+        setAutoRouteError(null);
+      } else if (detail.status === 'error') {
+        setIsAutoRouteBuilding(false);
+        const reason = detail.note || (language === 'ru' ? 'Ошибка построения автомаршрута' : 'Auto-route failed');
+        setAutoRouteError(reason);
+      } else if (detail.status === 'ready') {
+        setIsAutoRouteBuilding(false);
+        const noteStr = detail.note || '';
+        const notStartedMatch = noteStr.match(/бот не запустился\s*:\s*(.+)/i);
+        if (notStartedMatch) {
+          const reason = notStartedMatch[1].trim() || noteStr;
+          setAutoRouteError(reason);
+          setGlobalError(reason);
+        } else {
+          setAutoRouteError(null);
+        }
+      } else {
+        setIsAutoRouteBuilding(false);
       }
     };
 
@@ -1107,6 +1159,8 @@ export const App: React.FC = () => {
       setDayData(getMockDay(dateStr));
     }
   }, []);
+
+  fetchDayDataRef.current = fetchDayData;
 
   const handlePrevMonth = useCallback(() => {
     setCalendarMonth((prevM) => {
@@ -1324,6 +1378,7 @@ export const App: React.FC = () => {
 
     if (isBotRunning) {
       soundFx.playStop();
+      isBotRunningRef.current = false;
       setIsBotRunning(false);
       setIsBotPaused(false);
       fetchScheduleStatus();
@@ -1374,18 +1429,7 @@ export const App: React.FC = () => {
       }
 
       // 2. Only if board connection and start succeed:
-      setGlobalError(null);
-      soundFx.playStart();
-      setSessionSeconds(0);
-      setLootStatus({ items: [], earned_copper: null, earned_complete: true });
-      setIsBotRunning(true);
-      setIsBotPaused(false);
-      if (todayDateStr) {
-        setSelectedDate(todayDateStr);
-        fetchDayData(todayDateStr);
-      }
-      setSelectedSessionId('live');
-      setActiveTab('summary');
+      activateRunningBotUI(false);
 
       // In browser preview: dispatch mock live loot for testing
       if (!api?.start_bot && typeof window !== 'undefined') {
@@ -1591,6 +1635,7 @@ export const App: React.FC = () => {
                   onRecordRoute={handleStartRouteRecord}
                   onAutoRoute={handleStartAutoRoute}
                   isAutoRouteBuilding={isAutoRouteBuilding}
+                  autoRouteError={autoRouteError}
                   onSaveRecording={handleSaveRecording}
                   onCancelRecording={handleCancelRecording}
                   language={language}

@@ -17,6 +17,7 @@ interface LineSidebarRouteListProps {
   onRecordRoute?: () => void;
   onAutoRoute?: () => void;
   isAutoRouteBuilding?: boolean;
+  autoRouteError?: string | null;
   onSaveRecording?: (id: string) => void;
   onCancelRecording?: (id: string) => void;
   language?: 'ru' | 'en';
@@ -63,6 +64,7 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
   onRecordRoute,
   onAutoRoute,
   isAutoRouteBuilding = false,
+  autoRouteError = null,
   onSaveRecording,
   onCancelRecording,
   language = 'ru',
@@ -337,62 +339,72 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
 
       <SpecularCard className="w-full rounded-2xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent shadow-none p-4 sm:p-5 2xl:p-7 select-none transition-all duration-200">
         {/* Title / Section Header */}
-        <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-transparent">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.3)] dark:shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
-            <h2 className="text-xs sm:text-sm font-mono font-medium text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
-              {isRu ? 'Маршруты' : 'Routes'}
-            </h2>
+        <div className="flex flex-col gap-1.5 pb-3.5 mb-4 border-b border-transparent">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.3)] dark:shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
+              <h2 className="text-xs sm:text-sm font-mono font-medium text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
+                {isRu ? 'Маршруты' : 'Routes'}
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {onAutoRoute && (
+                <SpecularButton
+                  data-tour="routes-autoroute"
+                  disabled={isAutoRouteBuilding}
+                  onClick={() => {
+                    if (isAutoRouteBuilding) return;
+                    soundFx.playClick();
+                    onAutoRoute();
+                  }}
+                  className={`h-8 px-3 rounded-lg flex items-center gap-1.5 border border-transparent bg-black/[0.03] dark:bg-white/[0.04] text-xs font-mono transition-all shadow-none ${
+                    isAutoRouteBuilding
+                      ? 'opacity-50 cursor-not-allowed text-zinc-500 dark:text-zinc-400'
+                      : 'cursor-pointer hover:border-black/10 dark:hover:border-white/[0.08] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white active:scale-95'
+                  }`}
+                  title={isRu ? 'Построить автомаршрут вокруг персонажа' : 'Build auto route around character'}
+                >
+                  {isAutoRouteBuilding ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-500 dark:text-zinc-400" />
+                  ) : (
+                    <Compass className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white" />
+                  )}
+                  <span>
+                    {isAutoRouteBuilding
+                      ? isRu
+                        ? 'Строю круг…'
+                        : 'Building loop…'
+                      : isRu
+                      ? 'Автомаршрут'
+                      : 'Auto Route'}
+                  </span>
+                </SpecularButton>
+              )}
+
+              {onRecordRoute && (
+                <SpecularButton
+                  data-tour="routes-record"
+                  onClick={() => {
+                    soundFx.playClick();
+                    onRecordRoute();
+                  }}
+                  className="h-8 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all active:scale-95 shadow-none"
+                >
+                  <Plus className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white" />
+                  <span>{isRu ? 'Записать маршрут' : 'Record Route'}</span>
+                </SpecularButton>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {onAutoRoute && (
-              <SpecularButton
-                data-tour="routes-autoroute"
-                disabled={isAutoRouteBuilding}
-                onClick={() => {
-                  if (isAutoRouteBuilding) return;
-                  soundFx.playClick();
-                  onAutoRoute();
-                }}
-                className={`h-8 px-3 rounded-lg flex items-center gap-1.5 border border-transparent bg-black/[0.03] dark:bg-white/[0.04] text-xs font-mono transition-all shadow-none ${
-                  isAutoRouteBuilding
-                    ? 'opacity-50 cursor-not-allowed text-zinc-500 dark:text-zinc-400'
-                    : 'cursor-pointer hover:border-black/10 dark:hover:border-white/[0.08] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white active:scale-95'
-                }`}
-                title={isRu ? 'Построить автомаршрут вокруг персонажа' : 'Build auto route around character'}
-              >
-                {isAutoRouteBuilding ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-500 dark:text-zinc-400" />
-                ) : (
-                  <Compass className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white" />
-                )}
-                <span>
-                  {isAutoRouteBuilding
-                    ? isRu
-                      ? 'Считаю…'
-                      : 'Building…'
-                    : isRu
-                    ? 'Автомаршрут'
-                    : 'Auto Route'}
-                </span>
-              </SpecularButton>
-            )}
-
-            {onRecordRoute && (
-              <SpecularButton
-                data-tour="routes-record"
-                onClick={() => {
-                  soundFx.playClick();
-                  onRecordRoute();
-                }}
-                className="h-8 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all active:scale-95 shadow-none"
-              >
-                <Plus className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white" />
-                <span>{isRu ? 'Записать маршрут' : 'Record Route'}</span>
-              </SpecularButton>
-            )}
-          </div>
+          {autoRouteError && (
+            <div className="flex justify-end">
+              <span className="text-[11px] font-mono text-red-500 dark:text-red-400 text-right leading-snug">
+                {autoRouteError}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* React Bits Line Sidebar Container */}
