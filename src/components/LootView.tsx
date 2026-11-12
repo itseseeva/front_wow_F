@@ -5,6 +5,7 @@ import { soundFx } from '../utils/audio';
 import { getPywebviewApi } from '../utils/pywebviewBridge';
 import { mockGetLootMemory, mockGetLootStatus } from '../data/mockPrices';
 import { MoneyBadge, CoinIcon } from '../utils/money';
+import { ItemIcon, getRarityMeta } from './ItemIcon';
 
 interface LootViewProps {
   settings: AppSettings;
@@ -45,59 +46,6 @@ const getSourceBadgeMeta = (
         className: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/25',
       };
   }
-};
-
-const RARITY_COLOR_MAP: Record<number, { border: string; glow: string; text?: string }> = {
-  0: { border: '#9d9d9d', glow: 'rgba(157, 157, 157, 0.4)', text: '#9d9d9d' },
-  1: { border: '#ffffff', glow: 'rgba(255, 255, 255, 0.4)' },
-  2: { border: '#1eff00', glow: 'rgba(30, 255, 0, 0.4)', text: '#1eff00' },
-  3: { border: '#0070dd', glow: 'rgba(0, 112, 221, 0.4)', text: '#0070dd' },
-  4: { border: '#a335ee', glow: 'rgba(163, 53, 238, 0.4)', text: '#a335ee' },
-  5: { border: '#ff8000', glow: 'rgba(255, 128, 0, 0.4)', text: '#ff8000' },
-};
-
-const DEFAULT_RARITY = { border: '#9d9d9d', glow: 'rgba(157, 157, 157, 0.4)', text: '#9d9d9d' };
-
-const getRarityMeta = (quality?: number | null) => {
-  if (quality == null) return DEFAULT_RARITY;
-  return RARITY_COLOR_MAP[quality] ?? DEFAULT_RARITY;
-};
-
-const LootItemIcon: React.FC<{
-  iconUrl?: string | null;
-  alt: string;
-  quality?: number | null;
-}> = ({ iconUrl, alt, quality }) => {
-  const [hasError, setHasError] = useState(false);
-
-  useEffect(() => {
-    setHasError(false);
-  }, [iconUrl]);
-
-  const rarity = getRarityMeta(quality);
-  const showImage = Boolean(iconUrl) && !hasError;
-
-  return (
-    <div
-      className="w-7 h-7 rounded-[4px] bg-zinc-900/90 flex items-center justify-center overflow-hidden shrink-0 select-none"
-      style={{
-        border: `1.5px solid ${rarity.border}`,
-        boxShadow: `0 0 6px ${rarity.glow}`,
-      }}
-    >
-      {showImage ? (
-        <img
-          src={iconUrl!}
-          alt={alt}
-          loading="lazy"
-          onError={() => setHasError(true)}
-          className="w-full h-full object-cover"
-        />
-      ) : (
-        <span className="text-[11px] font-mono font-bold text-zinc-400 leading-none">?</span>
-      )}
-    </div>
-  );
 };
 
 export const LootView: React.FC<LootViewProps> = ({
@@ -313,12 +261,12 @@ export const LootView: React.FC<LootViewProps> = ({
   }, [lootMemory, isRu]);
 
   return (
-    <div className="w-full max-w-3xl 2xl:max-w-5xl mx-auto flex flex-col gap-8 pt-2 sm:pt-4 pb-24 px-3 sm:px-6 select-none animate-fadeIn text-zinc-900 dark:text-zinc-100">
+    <div className="w-full max-w-3xl 2xl:max-w-5xl mx-auto flex flex-col gap-5 pt-2 sm:pt-3 pb-20 px-3 sm:px-6 select-none animate-fadeIn text-zinc-900 dark:text-zinc-100">
       {/* =========================================================================
           1. ФИЛЬТР ДОБЫЧИ С МОБОВ (Переключатель «Авто» + Золото/Серебро)
           ========================================================================= */}
-      <div data-tour="loot-card" className="flex flex-col gap-4 bg-transparent">
-        <div className="flex items-center justify-between gap-3 pb-3 border-b border-black/10 dark:border-white/[0.08]">
+      <div data-tour="loot-card" className="flex flex-col gap-3 bg-transparent">
+        <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-black/10 dark:border-white/[0.08]">
           <div className="flex items-center gap-2">
             <Coins className="w-4 h-4 text-zinc-500 dark:text-zinc-400" strokeWidth={1.5} />
             <h1 className="text-sm sm:text-base font-semibold font-mono tracking-wide text-zinc-800 dark:text-zinc-100">
@@ -341,7 +289,7 @@ export const LootView: React.FC<LootViewProps> = ({
         {/* Toggle «Авто» */}
         <div
           data-tour="loot-auto-toggle"
-          className="py-2 px-2 -mx-2 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex items-center justify-between gap-4 transition-all"
+          className="py-1.5 px-2 -mx-2 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex items-center justify-between gap-4 transition-all"
         >
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
@@ -352,7 +300,7 @@ export const LootView: React.FC<LootViewProps> = ({
                 · {isRu ? 'рекомендуется' : 'recommended'}
               </span>
             </div>
-            <p className="text-[11px] text-zinc-500 font-mono mt-1 leading-relaxed">
+            <p className="text-[11px] text-zinc-500 font-mono mt-0.5 leading-snug">
               {isRu
                 ? 'Бот запоминает, что падает с каждого вида мобов, и сам решает, что стоит места в сумке. Чем меньше места — тем строже.'
                 : 'The bot remembers what each mob drops and decides what is worth bag space. Less free space means a stricter filter.'}
@@ -375,79 +323,61 @@ export const LootView: React.FC<LootViewProps> = ({
           </button>
         </div>
 
-        {/* Custom Price Inputs (when Auto is turned off) */}
+        {/* Custom Price Inputs (compact single-row HUD controls) */}
         {!isAuto && (
           <div
             data-tour="loot-threshold-inputs"
-            className="flex flex-col gap-3 pt-4 border-t border-black/10 dark:border-white/[0.08] animate-fadeIn"
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-black/10 dark:border-white/[0.08] animate-fadeIn"
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-mono font-medium text-zinc-700 dark:text-zinc-300">
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-xs font-mono font-medium text-zinc-800 dark:text-zinc-200">
                 {isRu ? 'Не брать дешевле' : 'Never loot below'}
               </span>
-              <MoneyBadge copper={manualCopper} language={language} />
+              <p className="text-[11px] text-zinc-500 font-mono leading-snug">
+                {isRu
+                  ? 'Дешевле этой суммы бот не возьмёт никогда. Дороже — решает память дропа.'
+                  : 'Items worth less than this are never looted. Above it, drop memory decides.'}
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8">
-              {/* Gold */}
-              <div className="flex items-center justify-between py-2 border-b border-black/10 dark:border-white/[0.08]">
-                <div className="flex items-center gap-2">
-                  <CoinIcon kind="gold" className="w-3.5 h-3.5" />
-                  <label
-                    htmlFor="loot-gold-input"
-                    className="text-xs font-mono text-zinc-600 dark:text-zinc-400"
-                  >
-                    {isRu ? 'Золото' : 'Gold'}
-                  </label>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    id="loot-gold-input"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={goldVal === 0 ? '' : goldVal}
-                    placeholder="0"
-                    onChange={(e) => handleGoldChange(e.target.value)}
-                    className="w-20 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-transparent text-right text-xs font-mono font-semibold text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 outline-none focus:border-zinc-600 dark:focus:border-zinc-400 transition-colors"
-                  />
-                  <CoinIcon kind="gold" className="w-3.5 h-3.5" />
-                </div>
-              </div>
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+              <label
+                htmlFor="loot-gold-input"
+                title={isRu ? 'Золото' : 'Gold'}
+                className="h-8 px-2.5 rounded-lg border border-black/15 dark:border-white/15 bg-black/[0.02] dark:bg-white/[0.03] focus-within:border-zinc-600 dark:focus-within:border-zinc-400 flex items-center gap-1.5 transition-colors cursor-text"
+              >
+                <input
+                  id="loot-gold-input"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={goldVal === 0 ? '' : goldVal}
+                  placeholder="0"
+                  onChange={(e) => handleGoldChange(e.target.value)}
+                  className="w-12 bg-transparent text-right text-xs font-mono font-semibold text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 outline-none tabular-nums"
+                />
+                <CoinIcon kind="gold" className="w-3.5 h-3.5" />
+              </label>
 
-              {/* Silver */}
-              <div className="flex items-center justify-between py-2 border-b border-black/10 dark:border-white/[0.08]">
-                <div className="flex items-center gap-2">
-                  <CoinIcon kind="silver" className="w-3.5 h-3.5" />
-                  <label
-                    htmlFor="loot-silver-input"
-                    className="text-xs font-mono text-zinc-600 dark:text-zinc-400"
-                  >
-                    {isRu ? 'Серебро' : 'Silver'}
-                  </label>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    id="loot-silver-input"
-                    type="number"
-                    min="0"
-                    max="99"
-                    step="1"
-                    value={silverVal === 0 ? '' : silverVal}
-                    placeholder="0"
-                    onChange={(e) => handleSilverChange(e.target.value)}
-                    className="w-20 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-transparent text-right text-xs font-mono font-semibold text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 outline-none focus:border-zinc-600 dark:focus:border-zinc-400 transition-colors"
-                  />
-                  <CoinIcon kind="silver" className="w-3.5 h-3.5" />
-                </div>
-              </div>
+              <label
+                htmlFor="loot-silver-input"
+                title={isRu ? 'Серебро' : 'Silver'}
+                className="h-8 px-2.5 rounded-lg border border-black/15 dark:border-white/15 bg-black/[0.02] dark:bg-white/[0.03] focus-within:border-zinc-600 dark:focus-within:border-zinc-400 flex items-center gap-1.5 transition-colors cursor-text"
+              >
+                <input
+                  id="loot-silver-input"
+                  type="number"
+                  min="0"
+                  max="99"
+                  step="1"
+                  value={silverVal === 0 ? '' : silverVal}
+                  placeholder="0"
+                  onChange={(e) => handleSilverChange(e.target.value)}
+                  className="w-10 bg-transparent text-right text-xs font-mono font-semibold text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 outline-none tabular-nums"
+                />
+                <CoinIcon kind="silver" className="w-3.5 h-3.5" />
+              </label>
             </div>
-
-            <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
-              {isRu
-                ? 'Дешевле этой суммы бот не возьмёт никогда. Дороже — решает память дропа.'
-                : 'Items worth less than this are never looted. Above it, drop memory decides.'}
-            </p>
           </div>
         )}
       </div>
@@ -455,55 +385,55 @@ export const LootView: React.FC<LootViewProps> = ({
       {/* =========================================================================
           2. БЛОК «СЕЙЧАС»
           ========================================================================= */}
-      <div data-tour="loot-now" className="flex flex-col gap-3 pt-5 border-t border-black/10 dark:border-white/[0.08]">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-mono font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            {isRu ? 'Сейчас' : 'Right now'}
-          </h2>
-        </div>
+      <div data-tour="loot-now" className="flex flex-col gap-2 pt-4 border-t border-black/10 dark:border-white/[0.08]">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h2 className="text-[11px] font-mono font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              {isRu ? 'Сейчас' : 'Right now'}
+            </h2>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {lootFilterStatus?.thresholdCopper != null ? (
-            <MoneyBadge
-              copper={lootFilterStatus.thresholdCopper}
-              language={language}
-              className="text-xl sm:text-2xl font-bold"
-            />
-          ) : (
-            <span className="font-mono text-xl sm:text-2xl font-bold text-zinc-500">—</span>
-          )}
+            <span className="text-zinc-600 font-mono text-xs">·</span>
 
-          {lootFilterStatus && (
-            <span
-              className={`px-2.5 py-0.5 rounded-md border text-[11px] font-mono font-medium ${sourceBadge.className}`}
-            >
-              {sourceBadge.label}
-            </span>
-          )}
-        </div>
+            {lootFilterStatus?.thresholdCopper != null ? (
+              <MoneyBadge
+                copper={lootFilterStatus.thresholdCopper}
+                language={language}
+                className="text-base sm:text-lg font-bold"
+              />
+            ) : (
+              <span className="font-mono text-base sm:text-lg font-bold text-zinc-500">—</span>
+            )}
 
-        <div className="flex flex-col gap-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">
-          <span>
+            {lootFilterStatus && (
+              <span
+                className={`px-2 py-0.5 rounded border text-[10px] font-mono font-medium ${sourceBadge.className}`}
+              >
+                {sourceBadge.label}
+              </span>
+            )}
+          </div>
+
+          <span className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
             {isRu ? 'Оставлено на трупах за сессию:' : 'Left on corpses this session:'}{' '}
             <strong className="text-zinc-800 dark:text-zinc-200 tabular-nums">
               {lootFilterStatus?.leftThisSession ?? 0}
             </strong>
           </span>
-
-          {lootFilterStatus && !lootFilterStatus.active && (
-            <span className="text-[11px] text-zinc-500">
-              {isRu
-                ? 'Бот не запущен или фильтр ещё не в игре'
-                : 'Bot is not running or filter is not active in-game yet'}
-            </span>
-          )}
         </div>
+
+        {lootFilterStatus && !lootFilterStatus.active && (
+          <span className="font-mono text-[11px] text-zinc-500">
+            {isRu
+              ? 'Бот не запущен или фильтр ещё не в игре'
+              : 'Bot is not running or filter is not active in-game yet'}
+          </span>
+        )}
       </div>
 
       {/* =========================================================================
           3. БЛОК «ПАМЯТЬ ДРОПА»
           ========================================================================= */}
-      <div data-tour="loot-memory" className="flex flex-col gap-4 pt-5 border-t border-black/10 dark:border-white/[0.08]">
+      <div data-tour="loot-memory" className="flex flex-col gap-3 pt-4 border-t border-black/10 dark:border-white/[0.08]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-0.5">
             <h2 className="text-xs font-mono font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
@@ -688,7 +618,7 @@ export const LootView: React.FC<LootViewProps> = ({
                                   >
                                     <td className="py-1.5 pr-3">
                                       <div className="flex items-center gap-2.5 min-w-0">
-                                        <LootItemIcon
+                                        <ItemIcon
                                           iconUrl={item.iconUrl}
                                           alt={itemName}
                                           quality={item.quality}

@@ -32,6 +32,9 @@ export const MOCK_LOOT_ROWS: LootRow[] = [
     price: 4500, // 45с
     value: 171000, // 17з 10с
     vendor: 250,
+    quality: 1,
+    icon_url: null,
+    source: 'gather',
   },
   {
     item_id: 22786,
@@ -40,6 +43,9 @@ export const MOCK_LOOT_ROWS: LootRow[] = [
     price: 6800, // 68с
     value: 163200, // 16з 32с
     vendor: 300,
+    quality: 1,
+    icon_url: null,
+    source: 'gather',
   },
   {
     item_id: 23424,
@@ -48,6 +54,9 @@ export const MOCK_LOOT_ROWS: LootRow[] = [
     price: 3200, // 32с
     value: 134400, // 13з 44с
     vendor: 200,
+    quality: 1,
+    icon_url: null,
+    source: 'gather',
   },
   {
     item_id: 23425,
@@ -56,6 +65,9 @@ export const MOCK_LOOT_ROWS: LootRow[] = [
     price: 9500, // 95с
     value: 171000, // 17з 10с
     vendor: 450,
+    quality: 1,
+    icon_url: null,
+    source: 'gather',
   },
   {
     item_id: 23426,
@@ -64,14 +76,31 @@ export const MOCK_LOOT_ROWS: LootRow[] = [
     price: 45000, // 4з 50с
     value: 270000, // 27з
     vendor: 1500,
+    quality: 2,
+    icon_url: null,
+    source: 'gather',
   },
   {
-    item_id: 22787,
-    name: 'Дробящий гриб',
-    count: 12,
-    price: null, // нет цены
-    value: null,
-    vendor: 180,
+    item_id: 21877,
+    name: 'Ткань Пустоты',
+    count: 16,
+    price: 3450,
+    value: 55200,
+    vendor: 150,
+    quality: 1,
+    icon_url: null,
+    source: 'mob',
+  },
+  {
+    item_id: 22575,
+    name: 'Частица тени',
+    count: 4,
+    price: 48200,
+    value: 192800,
+    vendor: 400,
+    quality: 2,
+    icon_url: null,
+    source: 'mob',
   },
 ];
 

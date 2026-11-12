@@ -40,6 +40,9 @@ export interface LootRow {
   price: number | null;
   value: number | null;
   vendor: number | null;
+  quality?: number | null;              // 0 серый, 1 белый, 2 зелёный, 3 синий, 4 фиолетовый, 5 оранжевый
+  icon_url?: string | null;             // data:image/jpeg;base64,... (64 px), может не быть
+  source?: 'gather' | 'mob' | null;     // откуда: сбор (жила, куст) или с мобов; null — старые записи
 }
 
 export interface LootStatus {

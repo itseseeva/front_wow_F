@@ -18,6 +18,7 @@ import { HeatmapViewer } from './HeatmapViewer';
 import { soundFx } from '../utils/audio';
 import { formatRouteRoman } from '../utils/roman';
 import { MoneyBadge } from '../utils/money';
+import { SplitLootTables } from './SplitLootTables';
 import { RouteItem } from './StealthHUDLeftSidebar';
 
 interface DaySummaryViewProps {
@@ -875,74 +876,23 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                   );
                 })()}
 
-                {/* Live Gathering Loot Table or Empty State (only when bot is running) */}
+                {/* Live Gathering Loot Tables (only when bot is running) */}
                 {isBotRunning && (hasItems ? (
                   <div className="flex flex-col gap-3 font-mono pt-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
-                          {isRu ? 'Добыча текущей сессии' : 'Active Session Loot'}
-                        </span>
-                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white animate-pulse" />
-                      </div>
-                      <span className="text-[11px] text-zinc-500">
-                        {items.length} {isRu ? 'поз.' : 'types'}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
+                        {isRu ? 'Добыча текущей сессии' : 'Active Session Loot'}
                       </span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 dark:bg-white animate-pulse" />
                     </div>
 
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead>
-                          <tr className="text-[10px] text-zinc-500 uppercase tracking-wider">
-                            <th className="pb-2 font-normal">{isRu ? 'Ресурс' : 'Item'}</th>
-                            <th className="pb-2 font-normal text-right">{isRu ? 'Количество' : 'Count'}</th>
-                            <th className="pb-2 font-normal text-right">{isRu ? 'Цена аукциона' : 'Market Price'}</th>
-                            <th className="pb-2 font-normal text-right">{isRu ? 'Сумма' : 'Value'}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {items.map((item) => {
-                            const displayName = item.name || (isRu ? `Предмет #${item.item_id}` : `Item #${item.item_id}`);
-                            return (
-                              <tr key={item.item_id} className="hover:bg-white/[0.02] transition-colors">
-                                <td className="py-2 pr-2 font-medium text-zinc-900 dark:text-zinc-100 truncate max-w-[220px]" title={displayName}>
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 shrink-0" />
-                                    <span className="truncate">{displayName}</span>
-                                  </div>
-                                </td>
-                                <td className="py-2 px-2 text-right font-mono font-semibold text-zinc-700 dark:text-zinc-300 tabular-nums whitespace-nowrap">
-                                  ×{item.count}
-                                </td>
-                                <td className="py-2 px-2 text-right tabular-nums whitespace-nowrap">
-                                  <MoneyBadge copper={item.price} language={language} />
-                                </td>
-                                <td className="py-2 pl-2 text-right font-semibold tabular-nums whitespace-nowrap">
-                                  <MoneyBadge copper={item.value} language={language} />
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Footer with Earned Total */}
-                    <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-zinc-500">
-                          {isRu ? 'Итого заработано:' : 'Total Earned:'}
-                        </span>
-                        <strong className="text-sm font-bold text-zinc-950 dark:text-white">
-                          <MoneyBadge copper={lootStatus?.earned_copper ?? null} language={language} />
-                        </strong>
-                        {lootStatus?.earned_complete === false && (
-                          <span className="text-[11px] text-zinc-500 font-normal">
-                            {isRu ? '(не для всех предметов найдена цена на аукционе)' : '(prices pending for some items)'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                    <SplitLootTables
+                      items={items}
+                      earnedCopper={lootStatus?.earned_copper ?? null}
+                      earnedComplete={lootStatus?.earned_complete}
+                      language={language}
+                      variant="frameless"
+                    />
                   </div>
                 ) : !terrainStatus && (!autoRouteStatus || autoRouteStatus.status === 'idle' || (autoRouteStatus.status === 'ready' && !showAutoRouteReady)) ? (
                   isBotRunning ? (
@@ -1090,6 +1040,20 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                         </strong>
                       </span>
                     )}
+                  </div>
+                )}
+
+                {/* Past Session / All-Day Split Loot Tables (get_day -> total.loot & sessions[].summary.loot) */}
+                {effectiveLoot && effectiveLoot.length > 0 && (
+                  <div className="pt-3 border-t border-black/5 dark:border-white/5">
+                    <SplitLootTables
+                      items={effectiveLoot}
+                      earnedCopper={pastEarnedCopper}
+                      earnedComplete={currentSummary?.earned_complete}
+                      lootLost={currentSummary?.loot_lost}
+                      language={language}
+                      variant="frameless"
+                    />
                   </div>
                 )}
               </div>
