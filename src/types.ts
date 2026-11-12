@@ -66,6 +66,8 @@ export interface LootMemoryItem {
   margin: number;                  // 0..1 — точность ± (95%)
   perKill: number;                 // штук в среднем за одно убийство
   priceCopper: number | null;      // цена на аукционе за штуку, null — нет цены
+  quality?: number | null;         // редкость: 0 серый, 1 белый, 2 зелёный, 3 синий, 4 фиолетовый, 5 оранжевый; null — не знаем
+  iconUrl?: string | null;         // картинка предмета (https://… или data:image/…); null — картинки нет
 }
 
 export interface LootMob {
@@ -436,6 +438,7 @@ declare global {
 
         // AutoRoute API
         get_autoroute_status?(): Promise<{ ok: boolean } & AutoRouteStatus>;
+        start_autoroute?(): Promise<{ ok: boolean; error?: string }>;
 
         // Loot Filter & Drop Memory API
         get_loot_status?(): Promise<LootFilterStatus>;

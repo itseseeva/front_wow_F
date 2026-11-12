@@ -131,8 +131,17 @@ const SECTION_HELP_CONTENT: Record<HelpSectionId, SectionHelpData> = {
         icon: Crosshair,
       },
       {
-        titleRu: '3. Лечение («HP ниже»)',
-        titleEn: '3. Healing ("HP below")',
+        titleRu: '3. Условие',
+        titleEn: '3. Condition',
+        descRu:
+          'Укажите КД умения и время каста. «По очереди» жмёт скиллы слева направо, а «По готовности» — прожимает умение сразу, как только оно откатится.',
+        descEn:
+          'Set the ability cooldown and cast time. "Sequential" casts left-to-right, while "ASAP" triggers immediately whenever the skill comes off cooldown.',
+        icon: Clock,
+      },
+      {
+        titleRu: '4. Лечение («HP ниже»)',
+        titleEn: '4. Healing ("HP below")',
         descRu:
           'Шаг с порогом HP — это хил. В бою бот лечится, только если иначе проиграет гонку: сравнивает, кто кого убьёт быстрее. Вне боя долечивается до 80–98%.',
         descEn:
@@ -140,8 +149,8 @@ const SECTION_HELP_CONTENT: Record<HelpSectionId, SectionHelpData> = {
         icon: Shield,
       },
       {
-        titleRu: '4. Вода',
-        titleEn: '4. Water',
+        titleRu: '5. Вода',
+        titleEn: '5. Water',
         descRu:
           'Только вне боя: мана ниже порога — пьёт до 90–100% (не дольше 35 с). Если на хил не хватает маны — пьёт сразу. Напали — дерётся.',
         descEn:

@@ -133,10 +133,10 @@ export async function mockGetLootMemory(): Promise<LootMemory> {
         kills: 42,
         trusted: true,
         items: [
-          { itemId: 21877, name: 'Ткань Пустоты', chance: 0.47, margin: 0.08, perKill: 1.2, priceCopper: 3450 },
-          { itemId: 22575, name: 'Частица тени', chance: 0.24, margin: 0.07, perKill: 0.3, priceCopper: 48200 },
-          { itemId: 27854, name: 'Копченое мясо талбука', chance: 0.14, margin: 0.05, perKill: 0.2, priceCopper: 900 },
-          { itemId: 25440, name: null, chance: 0.09, margin: 0.04, perKill: 0.1, priceCopper: null },
+          { itemId: 21877, name: 'Ткань Пустоты', chance: 0.47, margin: 0.08, perKill: 1.2, priceCopper: 3450, quality: 1, iconUrl: null },
+          { itemId: 22575, name: 'Частица тени', chance: 0.24, margin: 0.07, perKill: 0.3, priceCopper: 48200, quality: 2, iconUrl: null },
+          { itemId: 27854, name: 'Копченое мясо талбука', chance: 0.14, margin: 0.05, perKill: 0.2, priceCopper: 900, quality: 1, iconUrl: null },
+          { itemId: 25440, name: null, chance: 0.09, margin: 0.04, perKill: 0.1, priceCopper: null, quality: null, iconUrl: null },
         ],
       },
       {
@@ -147,8 +147,8 @@ export async function mockGetLootMemory(): Promise<LootMemory> {
         kills: 13,
         trusted: false,
         items: [
-          { itemId: 21877, name: 'Ткань Пустоты', chance: 0.38, margin: 0.15, perKill: 0.9, priceCopper: 3450 },
-          { itemId: 25433, name: 'Обсидиановые бусы войны', chance: 0.31, margin: 0.14, perKill: 0.4, priceCopper: null },
+          { itemId: 21877, name: 'Ткань Пустоты', chance: 0.38, margin: 0.15, perKill: 0.9, priceCopper: 3450, quality: 1, iconUrl: null },
+          { itemId: 25433, name: 'Обсидиановые бусы войны', chance: 0.31, margin: 0.14, perKill: 0.4, priceCopper: null, quality: 3, iconUrl: null },
         ],
       },
     ],

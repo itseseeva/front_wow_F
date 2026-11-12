@@ -83,9 +83,19 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
       preferredPosition: 'top',
     },
     {
+      targetSelector: '[data-tour="rotation-timings"]',
+      titleRu: '3. Условие',
+      titleEn: '3. Condition',
+      descRu:
+        'Укажите КД умения и время каста. «По очереди» жмёт скиллы слева направо, а «По готовности» — прожимает умение сразу, как только оно откатится (удобно для проков и баффов).',
+      descEn:
+        'Set the ability cooldown and cast time. "Sequential" casts left-to-right, while "ASAP" triggers immediately whenever the skill comes off cooldown (great for procs and buffs).',
+      preferredPosition: 'top',
+    },
+    {
       targetSelector: '[data-tour="rotation-healing"]',
-      titleRu: '3. Лечение («HP ниже»)',
-      titleEn: '3. Healing ("HP below")',
+      titleRu: '4. Лечение («HP ниже»)',
+      titleEn: '4. Healing ("HP below")',
       descRu:
         'Шаг с порогом HP — это хил. В бою бот лечится, только если иначе проиграет гонку: сравнивает, кто кого убьёт быстрее. Вне боя долечивается до 80–98%.',
       descEn:
@@ -94,8 +104,8 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
     },
     {
       targetSelector: '[data-tour="rotation-water"]',
-      titleRu: '4. Вода',
-      titleEn: '4. Water',
+      titleRu: '5. Вода',
+      titleEn: '5. Water',
       descRu:
         'Только вне боя: мана ниже порога — пьёт до 90–100% (не дольше 35 с). Если на хил не хватает маны — пьёт сразу. Напали — дерётся.',
       descEn:
@@ -521,13 +531,28 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
   const [cardPosition, setCardPosition] = useState<{ top: number; left: number }>({ top: 100, left: 100 });
   const [hasOverlap, setHasOverlap] = useState<boolean>(false);
   const [isPositioned, setIsPositioned] = useState<boolean>(false);
+  const [hasEntered, setHasEntered] = useState<boolean>(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const observedTargetRef = useRef<HTMLElement | null>(null);
 
-  // Reset step index and positioning flag when activeSection changes
+  // Reset step index and entrance state when activeSection changes
   useEffect(() => {
     setCurrentStepIndex(0);
     setIsPositioned(false);
+    setHasEntered(false);
+
+    if (!activeSection) return;
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setHasEntered(true);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
   }, [activeSection]);
 
   const steps = activeSection ? TOUR_STEPS[activeSection] || [] : [];
@@ -776,8 +801,14 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
     }
   }
 
+  const isVisible = isPositioned && hasEntered;
+
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden select-none animate-fadeIn">
+    <div
+      className={`fixed inset-0 z-50 overflow-hidden select-none transition-opacity duration-300 ease-out ${
+        hasEntered ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
       {/* 1. Backdrop Dim with Sharp Rectangular Cutout */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -823,7 +854,9 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
       {/* 2. Sharp Target Highlight Frame (Stealth HUD Specular Border) */}
       {targetRect && (
         <div
-          className="absolute pointer-events-none z-20 rounded-xl transition-all duration-200 ease-out"
+          className={`absolute pointer-events-none z-20 rounded-xl transition-[top,left,width,height,opacity] duration-300 ease-out ${
+            isVisible ? 'opacity-100' : 'opacity-0'
+          }`}
           style={{
             top: targetRect.top,
             left: targetRect.left,
@@ -844,7 +877,12 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
 
       {/* 3. Silver-White Connecting Pointer Line */}
       {showPointerLine && (
-        <svg className="absolute inset-0 w-full h-full pointer-events-none z-30" xmlns="http://www.w3.org/2000/svg">
+        <svg
+          className={`absolute inset-0 w-full h-full pointer-events-none z-30 transition-opacity duration-300 ease-out ${
+            isVisible ? 'opacity-100' : 'opacity-0'
+          }`}
+          xmlns="http://www.w3.org/2000/svg"
+        >
           <line
             x1={lineStart.x}
             y1={lineStart.y}
@@ -872,8 +910,10 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
       <div
         ref={cardRef}
         onClick={(e) => e.stopPropagation()}
-        className={`absolute z-40 w-[340px] sm:w-[380px] max-w-[92vw] rounded-2xl border border-white/15 bg-zinc-950/94 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.85)] p-4 flex flex-col gap-2.5 text-zinc-100 ${
-          isPositioned ? 'opacity-100 transition-[top,left,opacity] duration-200 ease-out' : 'opacity-0 pointer-events-none'
+        className={`absolute z-40 w-[340px] sm:w-[380px] max-w-[92vw] rounded-2xl border border-white/15 bg-zinc-950/94 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.85)] p-4 flex flex-col gap-2.5 text-zinc-100 transition-[top,left,opacity,transform] duration-300 ease-out ${
+          isVisible
+            ? 'opacity-100 scale-100 translate-y-0'
+            : 'opacity-0 scale-[0.96] translate-y-1.5 pointer-events-none'
         }`}
         style={{
           top: cardPosition.top,

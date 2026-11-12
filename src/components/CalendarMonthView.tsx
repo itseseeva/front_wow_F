@@ -193,7 +193,7 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
             <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
               {isRu ? 'Маршруты месяца' : 'Month Routes'}
             </span>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 max-h-[62px] overflow-y-auto pr-1">
               {monthData.routes.map((r, rIdx) => {
                 const cleanName = r.name
                   .replace(/\s*\([^)]*\)/g, '')
@@ -205,7 +205,7 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
                   .replace(/Route\s+III\b/gi, 'Route 3')
                   .trim();
                 return (
-                  <div key={r.route_id} className="flex items-center gap-1.5 text-[10px] text-zinc-600 dark:text-zinc-400 truncate font-mono">
+                  <div key={r.route_id} className="flex items-center gap-1.5 text-[10px] leading-[18px] text-zinc-600 dark:text-zinc-400 truncate font-mono shrink-0">
                     <span className="text-[9px] font-semibold text-zinc-500 dark:text-zinc-400 w-3 shrink-0">
                       {rIdx + 1}
                     </span>

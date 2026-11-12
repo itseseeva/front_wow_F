@@ -16,6 +16,7 @@ interface LineSidebarRouteListProps {
   onRenameRoute?: (id: string, newName: string) => void;
   onRecordRoute?: () => void;
   onAutoRoute?: () => void;
+  isAutoRouteBuilding?: boolean;
   onSaveRecording?: (id: string) => void;
   onCancelRecording?: (id: string) => void;
   language?: 'ru' | 'en';
@@ -61,6 +62,7 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
   onRenameRoute,
   onRecordRoute,
   onAutoRoute,
+  isAutoRouteBuilding = false,
   onSaveRecording,
   onCancelRecording,
   language = 'ru',
@@ -347,15 +349,33 @@ export const LineSidebarRouteList: React.FC<LineSidebarRouteListProps> = ({
             {onAutoRoute && (
               <SpecularButton
                 data-tour="routes-autoroute"
+                disabled={isAutoRouteBuilding}
                 onClick={() => {
+                  if (isAutoRouteBuilding) return;
                   soundFx.playClick();
                   onAutoRoute();
                 }}
-                className="h-8 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-all active:scale-95 shadow-none"
+                className={`h-8 px-3 rounded-lg flex items-center gap-1.5 border border-transparent bg-black/[0.03] dark:bg-white/[0.04] text-xs font-mono transition-all shadow-none ${
+                  isAutoRouteBuilding
+                    ? 'opacity-50 cursor-not-allowed text-zinc-500 dark:text-zinc-400'
+                    : 'cursor-pointer hover:border-black/10 dark:hover:border-white/[0.08] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white active:scale-95'
+                }`}
                 title={isRu ? 'Построить автомаршрут вокруг персонажа' : 'Build auto route around character'}
               >
-                <Compass className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white" />
-                <span>{isRu ? 'Автомаршрут' : 'Auto Route'}</span>
+                {isAutoRouteBuilding ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-500 dark:text-zinc-400" />
+                ) : (
+                  <Compass className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-950 dark:group-hover:text-white" />
+                )}
+                <span>
+                  {isAutoRouteBuilding
+                    ? isRu
+                      ? 'Считаю…'
+                      : 'Building…'
+                    : isRu
+                    ? 'Автомаршрут'
+                    : 'Auto Route'}
+                </span>
               </SpecularButton>
             )}
 

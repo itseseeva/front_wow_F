@@ -23,6 +23,7 @@ import {
   ScheduleStatus,
   RoutesChangedDetail,
   LootStatus,
+  AutoRouteStatus,
 } from './types';
 import { soundFx } from './utils/audio';
 import { SpecularCard } from './components/ui/Specular';
@@ -85,6 +86,7 @@ export const App: React.FC = () => {
   const [isBotPaused, setIsBotPaused] = useState<boolean>(false);
   const [sessionSeconds, setSessionSeconds] = useState<number>(0);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [isAutoRouteBuilding, setIsAutoRouteBuilding] = useState<boolean>(false);
   const [helpModalSection, setHelpModalSection] = useState<HelpSectionId | null>(null);
   const [activeTourSection, setActiveTourSection] = useState<TourSectionId | null>(null);
 
@@ -844,21 +846,48 @@ export const App: React.FC = () => {
 
   // Start auto-route generation
   const handleStartAutoRoute = async () => {
+    if (isAutoRouteBuilding) return;
     soundFx.playClick();
     const isRu = language === 'ru';
     try {
       const api = await getPywebviewApi();
-      if ((api as any)?.start_autoroute) {
-        await (api as any).start_autoroute();
-      } else {
+      if (!window.pywebview) {
         startMockAutoRouteSimulation();
+        setIsAutoRouteBuilding(true);
+        setScheduleToast(
+          isRu ? 'Строю автомаршрут вокруг персонажа…' : 'Building auto route around character…'
+        );
+        return;
       }
-      setScheduleToast(
-        isRu ? 'Строю автомаршрут вокруг персонажа...' : 'Building auto route around character...'
-      );
-    } catch (e) {
+
+      if (!api?.start_autoroute) {
+        setGlobalError(
+          isRu
+            ? 'Бот не ответил: метод start_autoroute недоступен'
+            : 'Bot did not respond: start_autoroute unavailable'
+        );
+        return;
+      }
+
+      const res = await api.start_autoroute();
+      if (res?.ok) {
+        setIsAutoRouteBuilding(true);
+        setScheduleToast(
+          isRu ? 'Строю автомаршрут вокруг персонажа…' : 'Building auto route around character…'
+        );
+      } else {
+        setGlobalError(
+          res?.error || (isRu ? 'Не удалось построить автомаршрут' : 'Failed to build auto route')
+        );
+      }
+    } catch (e: unknown) {
       console.warn('start_autoroute error:', e);
-      startMockAutoRouteSimulation();
+      const errMsg = e instanceof Error ? e.message : String(e || '');
+      setGlobalError(
+        isRu
+          ? `Бот не ответил: ${errMsg || 'неизвестная ошибка'}`
+          : `Bot did not respond: ${errMsg || 'unknown error'}`
+      );
     }
   };
 
@@ -934,12 +963,43 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('wowbot:route-record-stopped', handleStopped);
   }, [fetchRoutes, language]);
 
+  // Listen for 'wowbot:autoroute-status' and sync initial status
+  useEffect(() => {
+    getPywebviewApi().then((api) => {
+      if (api?.get_autoroute_status) {
+        api.get_autoroute_status().then((res) => {
+          if (res && res.status) {
+            setIsAutoRouteBuilding(res.status === 'building');
+          }
+        }).catch(() => {});
+      }
+    });
+
+    const handleAutoRouteStatus = (e: Event) => {
+      let detail = (e as CustomEvent).detail as AutoRouteStatus | string | undefined;
+      if (typeof detail === 'string') {
+        try {
+          detail = JSON.parse(detail) as AutoRouteStatus;
+        } catch {
+          return;
+        }
+      }
+      if (detail && detail.status) {
+        setIsAutoRouteBuilding(detail.status === 'building');
+      }
+    };
+
+    window.addEventListener('wowbot:autoroute-status', handleAutoRouteStatus);
+    return () => window.removeEventListener('wowbot:autoroute-status', handleAutoRouteStatus);
+  }, []);
+
   // Listen for 'wowbot:routes-changed'
   useEffect(() => {
     const handleRoutesChanged = (e: any) => {
       const detail: RoutesChangedDetail | undefined = e?.detail;
       fetchRoutes();
       if (detail?.reason === 'autoroute') {
+        setIsAutoRouteBuilding(false);
         const isRu = language === 'ru';
         const name = detail.name || (isRu ? 'Автомаршрут' : 'Auto Route');
         setScheduleToast(
@@ -1499,6 +1559,7 @@ export const App: React.FC = () => {
                   onDeleteRoute={handleDeleteRoute}
                   onRecordRoute={handleStartRouteRecord}
                   onAutoRoute={handleStartAutoRoute}
+                  isAutoRouteBuilding={isAutoRouteBuilding}
                   onSaveRecording={handleSaveRecording}
                   onCancelRecording={handleCancelRecording}
                   language={language}
