@@ -24,6 +24,7 @@ import {
   RoutesChangedDetail,
   LootStatus,
   AutoRouteStatus,
+  TerrainStatus,
 } from './types';
 import { soundFx } from './utils/audio';
 import { SpecularCard } from './components/ui/Specular';
@@ -87,6 +88,8 @@ export const App: React.FC = () => {
   const [sessionSeconds, setSessionSeconds] = useState<number>(0);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [isAutoRouteBuilding, setIsAutoRouteBuilding] = useState<boolean>(false);
+  const [liveAutoRouteStatus, setLiveAutoRouteStatus] = useState<AutoRouteStatus | null>(null);
+  const [liveTerrainStatus, setLiveTerrainStatus] = useState<TerrainStatus | null>(null);
   const [helpModalSection, setHelpModalSection] = useState<HelpSectionId | null>(null);
   const [activeTourSection, setActiveTourSection] = useState<TourSectionId | null>(null);
 
@@ -854,6 +857,10 @@ export const App: React.FC = () => {
       if (!window.pywebview) {
         startMockAutoRouteSimulation();
         setIsAutoRouteBuilding(true);
+        setSelectedDate(todayDateStr);
+        setSelectedSessionId('live');
+        setSelectedPassIndex(null);
+        setActiveTab('summary');
         setScheduleToast(
           isRu ? 'Строю автомаршрут вокруг персонажа…' : 'Building auto route around character…'
         );
@@ -872,6 +879,10 @@ export const App: React.FC = () => {
       const res = await api.start_autoroute();
       if (res?.ok) {
         setIsAutoRouteBuilding(true);
+        setSelectedDate(todayDateStr);
+        setSelectedSessionId('live');
+        setSelectedPassIndex(null);
+        setActiveTab('summary');
         setScheduleToast(
           isRu ? 'Строю автомаршрут вокруг персонажа…' : 'Building auto route around character…'
         );
@@ -963,13 +974,14 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('wowbot:route-record-stopped', handleStopped);
   }, [fetchRoutes, language]);
 
-  // Listen for 'wowbot:autoroute-status' and sync initial status
+  // Listen for 'wowbot:autoroute-status' & 'wowbot:terrain-status' globally so tab transitions never miss an event
   useEffect(() => {
     getPywebviewApi().then((api) => {
       if (api?.get_autoroute_status) {
         api.get_autoroute_status().then((res) => {
           if (res && res.status) {
             setIsAutoRouteBuilding(res.status === 'building');
+            setLiveAutoRouteStatus(res);
           }
         }).catch(() => {});
       }
@@ -986,11 +998,30 @@ export const App: React.FC = () => {
       }
       if (detail && detail.status) {
         setIsAutoRouteBuilding(detail.status === 'building');
+        setLiveAutoRouteStatus(detail);
+      }
+    };
+
+    const handleTerrainStatus = (e: Event) => {
+      let detail = (e as CustomEvent).detail as TerrainStatus | string | undefined;
+      if (typeof detail === 'string') {
+        try {
+          detail = JSON.parse(detail) as TerrainStatus;
+        } catch {
+          return;
+        }
+      }
+      if (detail) {
+        setLiveTerrainStatus(detail.status === 'ready' ? null : detail);
       }
     };
 
     window.addEventListener('wowbot:autoroute-status', handleAutoRouteStatus);
-    return () => window.removeEventListener('wowbot:autoroute-status', handleAutoRouteStatus);
+    window.addEventListener('wowbot:terrain-status', handleTerrainStatus);
+    return () => {
+      window.removeEventListener('wowbot:autoroute-status', handleAutoRouteStatus);
+      window.removeEventListener('wowbot:terrain-status', handleTerrainStatus);
+    };
   }, []);
 
   // Listen for 'wowbot:routes-changed'
@@ -1697,6 +1728,8 @@ export const App: React.FC = () => {
                 lootStatus={lootStatus}
                 activeRoute={activeRoute}
                 scheduleStatus={scheduleStatus}
+                initialAutoRouteStatus={liveAutoRouteStatus}
+                initialTerrainStatus={liveTerrainStatus}
                 onStopBot={handleToggleBot}
               />
             </div>

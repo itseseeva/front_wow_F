@@ -37,6 +37,8 @@ interface DaySummaryViewProps {
   lootStatus?: LootStatus | null;
   activeRoute?: RouteItem | null;
   scheduleStatus?: ScheduleStatus | null;
+  initialAutoRouteStatus?: AutoRouteStatus | null;
+  initialTerrainStatus?: TerrainStatus | null;
   onStopBot?: () => void;
 }
 
@@ -125,18 +127,45 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
   lootStatus = null,
   activeRoute = null,
   scheduleStatus = null,
+  initialAutoRouteStatus = null,
+  initialTerrainStatus = null,
   onStopBot,
 }) => {
   const isRu = language === 'ru';
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
+  // Terrain & AutoRoute Status (always subscribed, even when bot is not running)
+  const [terrainStatus, setTerrainStatus] = useState<TerrainStatus | null>(initialTerrainStatus);
+  const [autoRouteStatus, setAutoRouteStatus] = useState<AutoRouteStatus | null>(initialAutoRouteStatus);
+  const [showAutoRouteReady, setShowAutoRouteReady] = useState<boolean>(() => {
+    if (initialAutoRouteStatus?.status === 'ready') {
+      return !initialAutoRouteStatus.finished_at_ms || Date.now() - initialAutoRouteStatus.finished_at_ms < 30000;
+    }
+    return false;
+  });
+  const autoRouteReadyTimerRef = useRef<any>(null);
+
+  const isTerrainBuilding = terrainStatus?.status === 'building';
+  const isTerrainError = terrainStatus?.status === 'error';
+  const isAutoRouteBuilding = !isTerrainBuilding && autoRouteStatus?.status === 'building';
+  const isAutoRouteReady = !isTerrainBuilding && autoRouteStatus?.status === 'ready' && showAutoRouteReady;
+  const isAutoRouteError = !isTerrainBuilding && autoRouteStatus?.status === 'error';
+  const hasScanActivity = Boolean(
+    isTerrainBuilding ||
+    isTerrainError ||
+    autoRouteStatus?.status === 'building' ||
+    isAutoRouteReady ||
+    isAutoRouteError
+  );
+  const showLiveTab = isBotRunning || hasScanActivity;
+
   const sessions = dayData?.sessions || [];
   const hasSessions = sessions.length > 0;
-  const hasLiveOrPastSessions = hasSessions || isBotRunning;
+  const hasLiveOrPastSessions = hasSessions || showLiveTab;
 
-  // Active LIVE selection: when bot is running, unless user explicitly selected a past session, LIVE is immediately open!
+  // Active LIVE selection: when bot is running or scanning/building route, unless user explicitly selected a past session, LIVE is immediately open!
   const isSpecificPastSessionSelected = sessions.some((s) => s.session_id === selectedSessionId);
-  const isLiveSelected = isBotRunning && !isSpecificPastSessionSelected;
+  const isLiveSelected = showLiveTab && !isSpecificPastSessionSelected;
 
   // Live session calculations
   const liveTotalLootCount = (lootStatus?.items || []).reduce((sum, item) => sum + item.count, 0);
@@ -168,12 +197,23 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Terrain Status (from wowbot:terrain-status)
-  const [terrainStatus, setTerrainStatus] = useState<TerrainStatus | null>(null);
+  // Terrain Status (from wowbot:terrain-status, always subscribed)
+  useEffect(() => {
+    if (initialTerrainStatus !== undefined) {
+      setTerrainStatus(initialTerrainStatus?.status === 'ready' ? null : initialTerrainStatus);
+    }
+  }, [initialTerrainStatus]);
 
   useEffect(() => {
-    const handleTerrain = (e: any) => {
-      const detail: TerrainStatus = e?.detail;
+    const handleTerrain = (e: Event) => {
+      let detail = (e as CustomEvent).detail as TerrainStatus | string | undefined;
+      if (typeof detail === 'string') {
+        try {
+          detail = JSON.parse(detail) as TerrainStatus;
+        } catch {
+          return;
+        }
+      }
       if (!detail) return;
       if (detail.status === 'ready') {
         setTerrainStatus(null);
@@ -185,19 +225,30 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     return () => window.removeEventListener('wowbot:terrain-status', handleTerrain);
   }, []);
 
-  // AutoRoute Status (from get_autoroute_status and wowbot:autoroute-status)
-  const [autoRouteStatus, setAutoRouteStatus] = useState<AutoRouteStatus | null>(null);
-  const [showAutoRouteReady, setShowAutoRouteReady] = useState<boolean>(false);
-  const autoRouteReadyTimerRef = useRef<any>(null);
-
-  // Restore state once when bot is running / block opens
+  // AutoRoute Status (from get_autoroute_status and wowbot:autoroute-status, always active)
   useEffect(() => {
-    if (!isBotRunning) return;
+    if (initialAutoRouteStatus) {
+      setAutoRouteStatus(initialAutoRouteStatus);
+      if (
+        initialAutoRouteStatus.status === 'ready' &&
+        (!initialAutoRouteStatus.finished_at_ms || Date.now() - initialAutoRouteStatus.finished_at_ms < 30000)
+      ) {
+        setShowAutoRouteReady(true);
+        if (autoRouteReadyTimerRef.current) clearTimeout(autoRouteReadyTimerRef.current);
+        autoRouteReadyTimerRef.current = setTimeout(() => {
+          setShowAutoRouteReady(false);
+        }, 10000);
+      }
+    }
+  }, [initialAutoRouteStatus]);
+
+  // Restore state whenever Summary opens / bot or route changes (no !isBotRunning guard)
+  useEffect(() => {
     getPywebviewApi().then((api) => {
       if (api?.get_autoroute_status) {
         api.get_autoroute_status().then((res) => {
           if (res && res.status) {
-            setAutoRouteStatus(prev => {
+            setAutoRouteStatus((prev) => {
               const incomingProg = typeof res.progress === 'number' ? Math.max(0, Math.min(1, res.progress)) : 0;
               const finalProg = res.status === 'ready' ? 1 : Math.max(prev?.progress ?? 0, incomingProg);
               return {
@@ -205,7 +256,10 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                 progress: finalProg,
               };
             });
-            if (res.status === 'ready') {
+            if (
+              res.status === 'ready' &&
+              (!res.finished_at_ms || Date.now() - res.finished_at_ms < 30000)
+            ) {
               setShowAutoRouteReady(true);
               if (autoRouteReadyTimerRef.current) clearTimeout(autoRouteReadyTimerRef.current);
               autoRouteReadyTimerRef.current = setTimeout(() => {
@@ -219,7 +273,17 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
         mockGetAutoRouteStatus().then((res) => {
           if (res && res.status !== 'idle') {
             setAutoRouteStatus(res);
-          } else if (!activeRoute) {
+            if (
+              res.status === 'ready' &&
+              (!res.finished_at_ms || Date.now() - res.finished_at_ms < 30000)
+            ) {
+              setShowAutoRouteReady(true);
+              if (autoRouteReadyTimerRef.current) clearTimeout(autoRouteReadyTimerRef.current);
+              autoRouteReadyTimerRef.current = setTimeout(() => {
+                setShowAutoRouteReady(false);
+              }, 10000);
+            }
+          } else if (isBotRunning && !activeRoute) {
             startMockAutoRouteSimulation();
           }
         });
@@ -229,10 +293,17 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
 
   // Listen to wowbot:autoroute-status window events
   useEffect(() => {
-    const handleAutoRoute = (e: any) => {
-      const detail: AutoRouteStatus = e?.detail;
+    const handleAutoRoute = (e: Event) => {
+      let detail = (e as CustomEvent).detail as AutoRouteStatus | string | undefined;
+      if (typeof detail === 'string') {
+        try {
+          detail = JSON.parse(detail) as AutoRouteStatus;
+        } catch {
+          return;
+        }
+      }
       if (!detail) return;
-      setAutoRouteStatus(prev => {
+      setAutoRouteStatus((prev) => {
         const incomingProg = typeof detail.progress === 'number' ? Math.max(0, Math.min(1, detail.progress)) : 0;
         const finalProg = detail.status === 'ready' ? 1 : Math.max(prev?.progress ?? 0, incomingProg);
         return {
@@ -458,6 +529,8 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                         ? `⏸ Пауза — управление у тебя. Нажми ${(pauseKey || 'PAUSE').toUpperCase()}, чтобы продолжить`
                         : `⏸ Paused — you are in control. Press ${(pauseKey || 'PAUSE').toUpperCase()} to resume`)
                     : (isRu ? 'Идёт сессия сбора в реальном времени' : 'Live gathering session in progress'))
+                : isLiveSelected && hasScanActivity
+                ? (isRu ? 'Построение автомаршрута' : 'Building auto route')
                 : hasSessions
                 ? `${getPluralSessions(sessions.length, isRu)} · ${getPluralRoutes(uniqueRoutesCount, isRu)}`
                 : (isRu ? 'В этот день бот не работал' : 'No sessions on this day')}
@@ -496,7 +569,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
             {/* 3. Chip Selector Row: frameless text tabs */}
             <div className="flex items-center justify-between gap-3 overflow-x-auto pb-1 scrollbar-none font-mono text-xs border-b border-black/5 dark:border-white/5">
               <div className="flex items-center gap-3 overflow-x-auto scrollbar-none">
-                {isBotRunning && (
+                {showLiveTab && (
                   <button
                     type="button"
                     onClick={() => {
@@ -515,8 +588,10 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                       <span className={`relative inline-flex rounded-full h-2 w-2 ${isBotPaused ? 'bg-amber-400' : 'bg-zinc-950 dark:bg-white'}`}></span>
                     </span>
                     <span>
-                      LIVE · {activeRoute ? `${formatRouteRoman(activeRoute.name)}${activeRoute.region ? ` (${activeRoute.region})` : ''}` : (isRu ? 'Текущая сессия' : 'Active Session')}
-                      {isBotPaused && (
+                      {isBotRunning
+                        ? `LIVE · ${activeRoute ? `${formatRouteRoman(activeRoute.name)}${activeRoute.region ? ` (${activeRoute.region})` : ''}` : (isRu ? 'Текущая сессия' : 'Active Session')}`
+                        : `LIVE · ${isRu ? 'Автомаршрут' : 'Auto Route'}`}
+                      {isBotRunning && isBotPaused && (
                         <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30">
                           {isRu ? 'ПАУЗА' : 'PAUSED'}
                         </span>
@@ -586,7 +661,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
             {/* LIVE TELEMETRY VIEW (immediately open, no container boxes) */}
             {isLiveSelected ? (
               <div className="flex flex-col gap-6 animate-fadeIn">
-                {isBotPaused && (
+                {isBotRunning && isBotPaused && (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 dark:text-amber-400 font-mono text-xs font-semibold shadow-sm">
                     <span>
                       {isRu
@@ -595,7 +670,8 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     </span>
                   </div>
                 )}
-                {/* Live 5 Metric Cards (frameless columns, no boxes) */}
+                {/* Live 5 Metric Cards (only when bot is running) */}
+                {isBotRunning && (
                 <div data-tour="summary-live-cards" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 py-1 font-mono">
                   {/* 1. Duration */}
                   <div className="flex flex-col justify-between gap-1">
@@ -680,15 +756,10 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* 1. Unified «Сканирование местности» loading block / AutoRoute ready / error */}
                 {(() => {
-                  const isTerrainBuilding = terrainStatus?.status === 'building';
-                  const isAutoRouteBuilding = !isTerrainBuilding && autoRouteStatus?.status === 'building';
-                  const isAutoRouteReady = !isTerrainBuilding && autoRouteStatus?.status === 'ready' && showAutoRouteReady;
-                  const isAutoRouteError = !isTerrainBuilding && autoRouteStatus?.status === 'error';
-                  const isTerrainError = terrainStatus?.status === 'error';
-
                   let scanTitle = isRu ? 'Сканирование местности' : 'Scanning terrain';
                   let scanSubtitle: string | null = null;
                   let scanPercent = 0;
@@ -702,7 +773,10 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     scanBottomText = isRu ? `прошло ${elapsed} с · осталось ~${eta}` : `elapsed ${elapsed}s · ~${eta} left`;
                   } else if (isAutoRouteBuilding) {
                     scanPercent = Math.min(100, Math.max(0, Math.round((autoRouteStatus.progress ?? 0) * 100)));
-                    scanSubtitle = getAutoRouteStageText(autoRouteStatus.stage, autoRouteStatus.done, autoRouteStatus.total, isRu);
+                    scanSubtitle =
+                      autoRouteStatus.stage == null && autoRouteStatus.note
+                        ? autoRouteStatus.note
+                        : getAutoRouteStageText(autoRouteStatus.stage, autoRouteStatus.done, autoRouteStatus.total, isRu);
                     const elapsed = autoRouteStatus.elapsed_s != null
                       ? autoRouteStatus.elapsed_s
                       : (autoRouteStatus.started_at_ms ? Math.max(0, Math.floor((nowMs - autoRouteStatus.started_at_ms) / 1000)) : 0);
@@ -776,9 +850,13 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                           <div className="w-full max-w-sm p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/80 text-xs text-zinc-300 text-left flex items-start gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1 shrink-0" />
                             <span>
-                              {isRu
-                                ? `Автомаршрут не вышел: ${autoRouteStatus.note || 'ошибка'}. Хожу по зоне вокруг места`
-                                : `Auto-route failed: ${autoRouteStatus.note || 'error'}. Patrolling local zone around area`}
+                              {isBotRunning
+                                ? isRu
+                                  ? `Автомаршрут не вышел: ${autoRouteStatus.note || 'ошибка'}. Хожу по зоне вокруг места`
+                                  : `Auto-route failed: ${autoRouteStatus.note || 'error'}. Patrolling local zone around area`
+                                : isRu
+                                ? `Круг не построен: ${autoRouteStatus.note || 'ошибка'}`
+                                : `Loop was not built: ${autoRouteStatus.note || 'error'}`}
                             </span>
                           </div>
                         </div>
@@ -797,8 +875,8 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                   );
                 })()}
 
-                {/* Live Gathering Loot Table or Empty State */}
-                {hasItems ? (
+                {/* Live Gathering Loot Table or Empty State (only when bot is running) */}
+                {isBotRunning && (hasItems ? (
                   <div className="flex flex-col gap-3 font-mono pt-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -889,7 +967,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                       </div>
                     </div>
                   )
-                ) : null}
+                ) : null)}
               </div>
             ) : (
               /* PAST SESSION OR ALL DAY SUMMARY (frameless, no container boxes) */
