@@ -512,7 +512,7 @@ export const ComboSequence: React.FC<Props> = ({
       </div>
 
       {/* 3. DOCKED BOTTOM EDITING PANEL (Ghost Mode) */}
-      <div className="w-full rounded-2xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent p-4 shadow-none transition-all duration-200">
+      <div data-tour="rotation-editor" className="w-full rounded-2xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent p-4 shadow-none transition-all duration-200">
         {editingStep && editingStepData ? (
           <div className="flex flex-col gap-3.5">
             {/* Panel Header */}
@@ -744,7 +744,7 @@ export const ComboSequence: React.FC<Props> = ({
                   </span>
 
                   {/* HP Below Function inserted into Container 1 */}
-                  <div className="flex flex-col gap-1 pt-1.5 border-t border-black/5 dark:border-white/5">
+                  <div data-tour="rotation-healing" className="flex flex-col gap-1 pt-1.5 border-t border-black/5 dark:border-white/5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[10px] font-mono text-zinc-600 dark:text-zinc-300 flex items-center gap-1.5 font-medium">
                         <Heart className="w-3.5 h-3.5 text-red-500 fill-red-500/40 animate-pulse shrink-0" />

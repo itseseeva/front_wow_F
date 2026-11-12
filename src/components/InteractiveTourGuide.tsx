@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { X, ChevronLeft, ChevronRight, Check, Sparkles, Lightbulb } from 'lucide-react';
 import { soundFx } from '../utils/audio';
 
@@ -25,7 +25,7 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
         'Первый раз в новой зоне карта собирается 2–3 минуты — бот в это время стоит. Дальше берётся с диска за пару секунд. Крутые склоны, стены и предметы внутри зданий он обходит, глубокую воду переплывает.',
       descEn:
         'The first time in a new zone, the map compiles in 2–3 minutes — the bot idles meanwhile. Afterwards it loads from disk in seconds. Steep slopes, walls, and interior obstacles are bypassed, deep water is swum across.',
-      preferredPosition: 'right',
+      preferredPosition: 'top',
     },
     {
       targetSelector: '[data-tour="routes-record"]',
@@ -57,7 +57,7 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
         'The bot spots ore and herbs on the minimap and diverts toward them if the detour is brief (up to ~20s run). Cycles tracking modes automatically. If stuck, takes a step back and paths around; stops if stuck 3 times in a minute.',
       tipRu: 'Записывайте маршрут там, где сами любите фармить: бот бежит по вашему следу и выглядит как вы.',
       tipEn: 'Record routes where you like to farm: the bot follows your footsteps and looks just like you.',
-      preferredPosition: 'right',
+      preferredPosition: 'top',
     },
   ],
 
@@ -83,7 +83,7 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
       preferredPosition: 'top',
     },
     {
-      targetSelector: '[data-tour="rotation-timings"]',
+      targetSelector: '[data-tour="rotation-healing"]',
       titleRu: '3. Лечение («HP ниже»)',
       titleEn: '3. Healing ("HP below")',
       descRu:
@@ -102,7 +102,7 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
         'Out of combat only: if mana drops below threshold, it drinks up to 90–100% (max 35s). If there isn’t enough mana to heal, it drinks immediately. If attacked, it engages in combat.',
       tipRu: 'Поставьте хил на «HP ниже 50%» — бот не будет тратить ману, когда моб и так умрёт первым.',
       tipEn: 'Set heals to "HP below 50%" — the bot won’t waste mana when the mob is going to die first anyway.',
-      preferredPosition: 'top',
+      preferredPosition: 'bottom',
     },
   ],
 
@@ -128,9 +128,19 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
       preferredPosition: 'bottom',
     },
     {
+      targetSelector: '[data-tour="schedule-windows"]',
+      titleRu: '3. Когда и сколько играть',
+      titleEn: '3. Playtime & Schedule',
+      descRu:
+        'Задайте временные окна, в которые бот может запускаться, и добавьте до 4 интервалов на день. Бот сам слегка сдвигает старт и конец каждого окна, чтобы расписание выглядело естественно.',
+      descEn:
+        'Set active playtime windows for the day and add up to 4 intervals. The bot slightly varies start and end times so your schedule looks natural.',
+      preferredPosition: 'top',
+    },
+    {
       targetSelector: '[data-tour="schedule-breaks"]',
-      titleRu: '3. Перерывы',
-      titleEn: '3. Breaks',
+      titleRu: '4. Перерывы',
+      titleEn: '4. Breaks',
       descRu:
         'Внутри игрового времени бот делает короткие перерывы на несколько минут (отойти от компьютера) и длинные раз в 2–3 сессии (поесть, отдохнуть). Можно включить случайные выходные раз в 10 дней.',
       descEn:
@@ -139,8 +149,8 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
     },
     {
       targetSelector: '[data-tour="schedule-finetune"]',
-      titleRu: '4. Мягкий конец',
-      titleEn: '4. Soft Exit',
+      titleRu: '5. Мягкий конец',
+      titleEn: '5. Soft Exit',
       descRu:
         'Когда время сессии вышло, бот не выдёргивает провод: он добивает моба, собирает руду или траву, добегает до безопасного места и только потом выходит.',
       descEn:
@@ -192,7 +202,7 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
         'Uncheck "Auto" to set the threshold manually in gold and silver. For example, 5 silver: anything worth under 5 silver is left on the corpse.',
       tipRu: 'Начните с «Авто» и посмотрите итог сессии — подправить порог можно всегда.',
       tipEn: 'Start with "Auto" and check your session earnings — you can adjust the threshold at any time.',
-      preferredPosition: 'top',
+      preferredPosition: 'bottom',
     },
   ],
 
@@ -228,7 +238,7 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
       preferredPosition: 'right',
     },
     {
-      targetSelector: '[data-tour="summary-live-cards"]',
+      targetSelector: '[data-tour="summary-heatmap"]',
       titleRu: '4. Карта прохода',
       titleEn: '4. Farm Map',
       descRu:
@@ -237,54 +247,98 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
         'The route map visually highlights where herbs/ores were gathered and where combat took place — helping identify the most lucrative sections of the loop.',
       tipRu: 'Пишет «нет цен» — проверьте в Настройках, что найдены ключи и выбран аукцион (или «Авто»).',
       tipEn: 'If it displays "no prices", check Settings to ensure auction keys are detected and realm auction is selected (or set to "Auto").',
-      preferredPosition: 'bottom',
+      preferredPosition: 'top',
     },
   ],
 
   settings: [
     {
+      targetSelector: '[data-tour="settings-schedule"]',
+      titleRu: '1. Расписание фарма',
+      titleEn: '1. Farm Schedule',
+      descRu:
+        'Включает автоматические сессии по вашему графику, перерывы и шанс случайного выходного. Подробное расписание по дням и часам настраивается во вкладке «Расписание».',
+      descEn:
+        'Enables automatic farming sessions by schedule, realistic breaks, and random days off. Fine-tune daily hours and windows in the Schedule tab.',
+      preferredPosition: 'bottom',
+    },
+    {
+      targetSelector: '[data-tour="settings-autoroute"]',
+      titleRu: '2. Автоматический маршрут',
+      titleEn: '2. Auto Route',
+      descRu:
+        'Длина автомаршрута задаёт размер сгенерированного круга (30–120 минут). Если рядом нет записанного маршрута, бот сам строит петлю по местам руды и трав.',
+      descEn:
+        'Sets the generated loop duration (30–120 minutes). If no recorded route is nearby, the bot automatically builds a loop along ore and herb spots.',
+      preferredPosition: 'bottom',
+    },
+    {
+      targetSelector: '[data-tour="settings-auction"]',
+      titleRu: '3. Цены аукциона',
+      titleEn: '3. Auction Prices',
+      descRu:
+        'Выберите сервер или оставьте «Авто» — бот будет подтягивать цены вашего аукциона, чтобы точно считать стоимость добычи и доход в час.',
+      descEn:
+        'Select your server or keep "Auto" so the bot pulls faction auction prices to calculate loot value and gold per hour.',
+      preferredPosition: 'bottom',
+    },
+    {
       targetSelector: '[data-tour="settings-keybinds"]',
-      titleRu: '1. Клавиши игры',
-      titleEn: '1. Game Keys',
+      titleRu: '4. Клавиши игры',
+      titleEn: '4. Game Keys',
       descRu:
         '«Взаимодействие с целью» и «Предыдущая цель» настройте в игре на те же клавиши, что указаны тут. Иначе бот не сможет лутать и целиться в моба за спиной.',
       descEn:
         'Configure "Interact With Target" and "Previous Target" in-game to match the keys specified here. Otherwise the bot cannot loot or acquire targets behind it.',
-      preferredPosition: 'bottom',
+      preferredPosition: 'top',
     },
     {
       targetSelector: '[data-tour="settings-pause"]',
-      titleRu: '2. Пауза',
-      titleEn: '2. Pause',
+      titleRu: '5. Пауза',
+      titleEn: '5. Pause',
       descRu:
         'Клавиша «Пауза» (по умолчанию Pause/Break) мгновенно отпускает управление. Нажали — играете руками; нажали ещё раз — бот продолжил с того же места.',
       descEn:
         'The emergency "Pause" key (default Pause/Break) instantly releases all keys and halts bot actions. Press again to resume seamlessly from the same spot.',
-      preferredPosition: 'bottom',
+      preferredPosition: 'top',
     },
     {
       targetSelector: '[data-tour="settings-radar"]',
-      titleRu: '3. Поиск трав и минералов',
-      titleEn: '3. Tracking Herbs & Minerals',
+      titleRu: '6. Поиск трав и минералов',
+      titleEn: '6. Tracking Herbs & Minerals',
       descRu:
         'Клавиши F9 и F10 аддон настраивает сам, выносить их на панель не нужно. Если играете собирателем — включите оба поиска, бот будет переключать их по очереди.',
       descEn:
         'Keys F9 and F10 are managed automatically by the addon without needing action bar slots. If gathering both professions, enable both tracking options so the bot cycles between them.',
-      preferredPosition: 'top',
-    },
-    {
-      targetSelector: '[data-tour="settings-autoroute"]',
-      titleRu: '4. Автомаршрут и аукцион',
-      titleEn: '4. Auto Route & Auction',
-      descRu:
-        'Длина автомаршрута задаёт размер сгенерированного круга (30–120 минут). В блоке аукциона выберите сервер или оставьте «Авто», чтобы бот знал цены вашей фракции.',
-      descEn:
-        'The route slider configures loop generation length (30–120 minutes). In the auction section, select your server or leave on "Auto" so the bot tracks your faction prices.',
       tipRu: 'Поменяли клавиши — сделайте /reload в игре, иначе аддон помнит старые.',
       tipEn: 'Whenever you change keybindings, run /reload in game chat, otherwise the addon continues using previous bindings.',
       preferredPosition: 'top',
     },
   ],
+};
+
+const FALLBACK_SELECTORS: Record<string, string[]> = {
+  '[data-tour="rotation-healing"]': ['[data-tour="rotation-keybind"]', '[data-tour="rotation-editor"]', '[data-tour="rotation-sequence"]'],
+  '[data-tour="rotation-keybind"]': ['[data-tour="rotation-editor"]', '[data-tour="rotation-sequence"]'],
+  '[data-tour="rotation-timings"]': ['[data-tour="rotation-editor"]', '[data-tour="rotation-sequence"]'],
+  '[data-tour="rotation-water"]': ['[data-tour="rotation-sequence"]'],
+  '[data-tour="loot-threshold-inputs"]': ['[data-tour="loot-auto-toggle"]', '[data-tour="loot-card"]'],
+  '[data-tour="loot-auto-toggle"]': ['[data-tour="loot-card"]'],
+  '[data-tour="schedule-windows"]': ['[data-tour="schedule-day-config"]', '[data-tour="schedule-styles"]', '[data-tour="schedule-days"]'],
+  '[data-tour="schedule-breaks"]': ['[data-tour="schedule-day-config"]', '[data-tour="schedule-styles"]', '[data-tour="schedule-days"]'],
+  '[data-tour="schedule-finetune"]': ['[data-tour="schedule-day-config"]', '[data-tour="schedule-styles"]', '[data-tour="schedule-days"]'],
+  '[data-tour="summary-heatmap"]': ['[data-tour="summary-live-cards"]', '[data-tour="summary-overview"]'],
+  '[data-tour="summary-gold-rate"]': ['[data-tour="summary-live-cards"]', '[data-tour="summary-overview"]'],
+  '[data-tour="summary-live-cards"]': ['[data-tour="summary-overview"]'],
+  '[data-tour="summary-calendar"]': ['[data-tour="summary-overview"]'],
+  '[data-tour="settings-schedule"]': ['[data-tour="settings-autoroute"]', '[data-tour="settings-keybinds"]'],
+  '[data-tour="settings-autoroute"]': ['[data-tour="settings-schedule"]', '[data-tour="settings-keybinds"]'],
+  '[data-tour="settings-auction"]': ['[data-tour="settings-autoroute"]', '[data-tour="settings-schedule"]'],
+  '[data-tour="settings-pause"]': ['[data-tour="settings-keybinds"]', '[data-tour="settings-autoroute"]'],
+  '[data-tour="settings-radar"]': ['[data-tour="settings-keybinds"]', '[data-tour="settings-autoroute"]'],
+  '[data-tour="settings-keybinds"]': ['[data-tour="settings-autoroute"]', '[data-tour="settings-schedule"]'],
+  '[data-tour="routes-record"]': ['[data-tour="routes-list"]'],
+  '[data-tour="routes-autoroute"]': ['[data-tour="routes-list"]'],
 };
 
 interface InteractiveTourGuideProps {
@@ -302,6 +356,157 @@ interface TargetRect {
   bottom: number;
 }
 
+type Side = 'top' | 'bottom' | 'left' | 'right';
+
+const GAP = 18;
+const MARGIN = 16;
+const TARGET_BUFFER = 6;
+
+const clamp = (val: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, val));
+
+const getIntersectionArea = (
+  a: { left: number; top: number; right: number; bottom: number },
+  b: { left: number; top: number; right: number; bottom: number }
+) => {
+  const xOverlap = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+  const yOverlap = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+  return xOverlap * yOverlap;
+};
+
+const isVisibleElement = (el: Element | null): el is HTMLElement => {
+  if (!(el instanceof HTMLElement)) return false;
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0;
+};
+
+const resolveTargetElement = (selector: string): HTMLElement | null => {
+  const primary = document.querySelector(selector);
+  if (isVisibleElement(primary)) return primary;
+
+  const fallbacks = FALLBACK_SELECTORS[selector] || [];
+  for (const fb of fallbacks) {
+    const el = document.querySelector(fb);
+    if (isVisibleElement(el)) return el;
+  }
+  return null;
+};
+
+const findScrollContainer = (el: HTMLElement): HTMLElement | null => {
+  let parent = el.parentElement;
+  while (parent) {
+    const style = window.getComputedStyle(parent);
+    if (
+      (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+      parent.scrollHeight > parent.clientHeight + 2
+    ) {
+      return parent;
+    }
+    parent = parent.parentElement;
+  }
+  return null;
+};
+
+const OPPOSITE_SIDE: Record<Side, Side> = {
+  top: 'bottom',
+  bottom: 'top',
+  left: 'right',
+  right: 'left',
+};
+
+const computeCardPlacement = (
+  targetRect: TargetRect,
+  cardWidth: number,
+  cardHeight: number,
+  vw: number,
+  vh: number,
+  preferred: Side
+): { top: number; left: number; hasOverlap: boolean } => {
+  const maxLeft = Math.max(MARGIN, vw - cardWidth - MARGIN);
+  const maxTop = Math.max(MARGIN, vh - cardHeight - MARGIN);
+
+  const bufferedTarget = {
+    left: targetRect.left - TARGET_BUFFER,
+    top: targetRect.top - TARGET_BUFFER,
+    right: targetRect.right + TARGET_BUFFER,
+    bottom: targetRect.bottom + TARGET_BUFFER,
+  };
+
+  const allSides: Side[] = ['bottom', 'top', 'right', 'left'];
+  const orderedSides: Side[] = [
+    preferred,
+    OPPOSITE_SIDE[preferred],
+    ...allSides.filter((s) => s !== preferred && s !== OPPOSITE_SIDE[preferred]),
+  ];
+
+  const makeSideCandidate = (side: Side) => {
+    let rawTop = 0;
+    let rawLeft = 0;
+    if (side === 'bottom') {
+      rawTop = targetRect.bottom + GAP;
+      rawLeft = targetRect.left + (targetRect.width - cardWidth) / 2;
+    } else if (side === 'top') {
+      rawTop = targetRect.top - GAP - cardHeight;
+      rawLeft = targetRect.left + (targetRect.width - cardWidth) / 2;
+    } else if (side === 'right') {
+      rawLeft = targetRect.right + GAP;
+      rawTop = targetRect.top + (targetRect.height - cardHeight) / 2;
+    } else {
+      rawLeft = targetRect.left - GAP - cardWidth;
+      rawTop = targetRect.top + (targetRect.height - cardHeight) / 2;
+    }
+    const left = clamp(rawLeft, MARGIN, maxLeft);
+    const top = clamp(rawTop, MARGIN, maxTop);
+    const rect = { left, top, right: left + cardWidth, bottom: top + cardHeight };
+    const overlap = getIntersectionArea(rect, bufferedTarget);
+    const exactOverlap = getIntersectionArea(rect, targetRect);
+    return { left, top, overlap, exactOverlap };
+  };
+
+  let bestCandidate: { left: number; top: number; overlap: number; exactOverlap: number } | null = null;
+
+  for (const side of orderedSides) {
+    const cand = makeSideCandidate(side);
+    if (cand.overlap === 0) {
+      return { top: cand.top, left: cand.left, hasOverlap: false };
+    }
+    if (!bestCandidate || cand.overlap < bestCandidate.overlap) {
+      bestCandidate = cand;
+    }
+  }
+
+  // Fallback corners if target is very tall/wide and all 4 direct sides intersect
+  const corners = [
+    { left: maxLeft, top: maxTop },
+    { left: maxLeft, top: MARGIN },
+    { left: MARGIN, top: maxTop },
+    { left: MARGIN, top: MARGIN },
+  ];
+
+  for (const corner of corners) {
+    const rect = {
+      left: corner.left,
+      top: corner.top,
+      right: corner.left + cardWidth,
+      bottom: corner.top + cardHeight,
+    };
+    const overlap = getIntersectionArea(rect, bufferedTarget);
+    const exactOverlap = getIntersectionArea(rect, targetRect);
+    if (overlap === 0) {
+      return { top: corner.top, left: corner.left, hasOverlap: false };
+    }
+    if (!bestCandidate || overlap < bestCandidate.overlap) {
+      bestCandidate = { ...corner, overlap, exactOverlap };
+    }
+  }
+
+  return {
+    top: bestCandidate?.top ?? maxTop,
+    left: bestCandidate?.left ?? maxLeft,
+    hasOverlap: (bestCandidate?.exactOverlap ?? 0) > 0,
+  };
+};
+
 export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
   activeSection,
   onClose,
@@ -310,104 +515,179 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
   const isRu = language === 'ru';
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
+  const [cardSize, setCardSize] = useState<{ width: number; height: number }>({ width: 360, height: 240 });
   const [cardPosition, setCardPosition] = useState<{ top: number; left: number }>({ top: 100, left: 100 });
+  const [hasOverlap, setHasOverlap] = useState<boolean>(false);
+  const [isPositioned, setIsPositioned] = useState<boolean>(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const observedTargetRef = useRef<HTMLElement | null>(null);
 
-  // Reset step index when activeSection changes
+  // Reset step index and positioning flag when activeSection changes
   useEffect(() => {
     setCurrentStepIndex(0);
+    setIsPositioned(false);
   }, [activeSection]);
 
   const steps = activeSection ? TOUR_STEPS[activeSection] || [] : [];
   const currentStep = steps[currentStepIndex] || null;
 
-  // Measure and track target element position
+  // Measure tooltip card dimensions accurately with ResizeObserver
+  useLayoutEffect(() => {
+    const cardEl = cardRef.current;
+    if (!cardEl || !activeSection || !currentStep) return;
+
+    const measure = () => {
+      const w = cardEl.offsetWidth;
+      const h = cardEl.offsetHeight;
+      if (w > 0 && h > 0) {
+        setCardSize((prev) => (prev.width === w && prev.height === h ? prev : { width: w, height: h }));
+      }
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(cardEl);
+    return () => ro.disconnect();
+  }, [activeSection, currentStep, currentStepIndex, language]);
+
+  // Measure target element position relative to viewport
   const updateTargetPosition = useCallback(() => {
     if (!currentStep) {
       setTargetRect(null);
       return;
     }
 
-    let el = document.querySelector(currentStep.targetSelector);
-    if (!el) {
-      if (currentStep.targetSelector.includes('loot')) {
-        el = document.querySelector('[data-tour="loot-auto-toggle"]') || document.querySelector('[data-tour="loot-card"]');
-      } else if (currentStep.targetSelector.includes('routes')) {
-        el = document.querySelector('[data-tour="routes-list"]');
-      } else if (currentStep.targetSelector.includes('summary')) {
-        el = document.querySelector('[data-tour="summary-live-cards"]');
-      }
-    }
+    const el = resolveTargetElement(currentStep.targetSelector);
+    observedTargetRef.current = el;
 
     if (!el) {
       setTargetRect(null);
       return;
     }
 
-    // Scroll into view if needed
-    el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-
     const rect = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
     const pad = 6;
-    const computedRect: TargetRect = {
-      top: Math.max(8, rect.top - pad),
-      left: Math.max(8, rect.left - pad),
-      width: rect.width + pad * 2,
-      height: rect.height + pad * 2,
-      right: rect.right + pad,
-      bottom: rect.bottom + pad,
-    };
-    setTargetRect(computedRect);
+
+    const left = Math.max(8, rect.left - pad);
+    const top = Math.max(8, rect.top - pad);
+    const right = Math.min(vw - 8, rect.right + pad);
+    const bottom = Math.min(vh - 8, rect.bottom + pad);
+
+    setTargetRect({
+      top,
+      left,
+      right,
+      bottom,
+      width: Math.max(16, right - left),
+      height: Math.max(16, bottom - top),
+    });
   }, [currentStep]);
 
+  // Smart scroll when step opens/changes so there is room for both target and card
   useEffect(() => {
+    if (!activeSection || !currentStep) return;
+
+    const performSmartScroll = () => {
+      const el = resolveTargetElement(currentStep.targetSelector);
+      if (!el) return;
+
+      const rect = el.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const estimatedCardH = cardRef.current?.offsetHeight || cardSize.height || 260;
+      const neededRoom = estimatedCardH + GAP + MARGIN + 8;
+      const preferred = currentStep.preferredPosition || 'bottom';
+      const scrollContainer = findScrollContainer(el);
+
+      const hasRoomBelow = vh - rect.bottom >= neededRoom;
+      const hasRoomAbove = rect.top >= neededRoom;
+      const isComfortablyInView = rect.top >= 24 && rect.bottom <= vh - 24;
+
+      if (isComfortablyInView && (hasRoomBelow || hasRoomAbove)) {
+        return;
+      }
+
+      if (scrollContainer) {
+        let desiredTop = rect.top;
+        if (rect.height > vh - 120) {
+          desiredTop = 32;
+        } else if (preferred === 'bottom') {
+          desiredTop = Math.max(32, vh - rect.height - neededRoom);
+        } else if (preferred === 'top') {
+          desiredTop = Math.min(vh - rect.height - 32, neededRoom);
+        } else {
+          desiredTop = Math.max(32, (vh - rect.height) / 2);
+        }
+
+        const delta = rect.top - desiredTop;
+        if (Math.abs(delta) > 8) {
+          scrollContainer.scrollBy({ top: delta, behavior: 'smooth' });
+        }
+      } else {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      }
+    };
+
+    // Wait one frame for any newly switched tab layout before scrolling
+    const rafId = requestAnimationFrame(performSmartScroll);
+    return () => cancelAnimationFrame(rafId);
+  }, [activeSection, currentStep, currentStepIndex]);
+
+  // Track target position across animations, scroll, resize, and DOM mutations
+  useEffect(() => {
+    if (!activeSection || !currentStep) return;
+
     updateTargetPosition();
-    const timer = setTimeout(updateTargetPosition, 250);
+
+    // Re-measure through tab-switch CSS animations (assembleIn = 320ms) and smooth scrolls
+    const timers = [50, 160, 340, 520].map((ms) => setTimeout(updateTargetPosition, ms));
+
+    let ro: ResizeObserver | null = null;
+    if (observedTargetRef.current) {
+      ro = new ResizeObserver(updateTargetPosition);
+      ro.observe(observedTargetRef.current);
+    }
+
     window.addEventListener('resize', updateTargetPosition);
     window.addEventListener('scroll', updateTargetPosition, true);
+
     return () => {
-      clearTimeout(timer);
+      timers.forEach(clearTimeout);
+      ro?.disconnect();
       window.removeEventListener('resize', updateTargetPosition);
       window.removeEventListener('scroll', updateTargetPosition, true);
     };
-  }, [updateTargetPosition]);
+  }, [activeSection, currentStep, updateTargetPosition]);
 
-  // Position the floating tooltip card relative to target element
-  useEffect(() => {
-    if (!targetRect) return;
+  // Position the floating tooltip card without overlapping targetRect
+  useLayoutEffect(() => {
+    if (!activeSection || !currentStep) return;
 
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const cardWidth = Math.min(380, vw - 32);
-    const cardHeight = 200; // estimated max height
+    const cardWidth = cardSize.width || Math.min(380, vw - 32);
+    const cardHeight = cardSize.height || 240;
 
-    let top = targetRect.bottom + 24;
-    let left = targetRect.left + (targetRect.width - cardWidth) / 2;
-
-    const preferred = currentStep?.preferredPosition || 'bottom';
-
-    if (preferred === 'top' || (preferred === 'bottom' && targetRect.bottom + cardHeight + 40 > vh)) {
-      if (targetRect.top - cardHeight - 24 > 10) {
-        top = targetRect.top - cardHeight - 24;
-      }
+    if (!targetRect) {
+      setCardPosition({
+        top: Math.max(MARGIN, (vh - cardHeight) / 2),
+        left: Math.max(MARGIN, (vw - cardWidth) / 2),
+      });
+      setHasOverlap(false);
+      setIsPositioned(true);
+      return;
     }
 
-    if (preferred === 'right' && targetRect.right + cardWidth + 24 < vw) {
-      top = Math.max(20, targetRect.top + (targetRect.height - cardHeight) / 2);
-      left = targetRect.right + 24;
-    } else if (preferred === 'left' && targetRect.left - cardWidth - 24 > 10) {
-      top = Math.max(20, targetRect.top + (targetRect.height - cardHeight) / 2);
-      left = targetRect.left - cardWidth - 24;
-    }
+    const preferred = currentStep.preferredPosition || 'bottom';
+    const placement = computeCardPlacement(targetRect, cardWidth, cardHeight, vw, vh, preferred);
 
-    // Bound inside viewport
-    left = Math.max(16, Math.min(vw - cardWidth - 16, left));
-    top = Math.max(16, Math.min(vh - cardHeight - 16, top));
+    setCardPosition({ top: placement.top, left: placement.left });
+    setHasOverlap(placement.hasOverlap);
+    setIsPositioned(true);
+  }, [activeSection, targetRect, currentStep, cardSize]);
 
-    setCardPosition({ top, left });
-  }, [targetRect, currentStep]);
-
-  // Keyboard navigation: Escape closes, Enter/Space/Right moves to next step
+  // Keyboard navigation: Escape closes, ArrowRight/Enter advances, ArrowLeft goes back
   useEffect(() => {
     if (!activeSection) return;
 
@@ -438,48 +718,69 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
   if (!activeSection || !currentStep) return null;
 
   const isLastStep = currentStepIndex >= steps.length - 1;
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 720;
 
-  // Calculate connection line coordinates
+  // Calculate crisp rectangular clip-path cutout for the backdrop blur layer
+  const blurClipPath = targetRect
+    ? `polygon(evenodd, 0px 0px, ${vw}px 0px, ${vw}px ${vh}px, 0px ${vh}px, 0px 0px, ${
+        targetRect.left + 2
+      }px ${targetRect.top + 2}px, ${targetRect.left + 2}px ${targetRect.bottom - 2}px, ${
+        targetRect.right - 2
+      }px ${targetRect.bottom - 2}px, ${targetRect.right - 2}px ${targetRect.top + 2}px, ${
+        targetRect.left + 2
+      }px ${targetRect.top + 2}px)`
+    : undefined;
+
+  // Calculate 4-edge connecting pointer line between targetRect and card
   let lineStart = { x: 0, y: 0 };
   let lineEnd = { x: 0, y: 0 };
+  const showPointerLine = Boolean(targetRect && isPositioned && !hasOverlap);
 
-  if (targetRect) {
-    const cardEl = cardRef.current;
-    const cardActualWidth = cardEl ? cardEl.offsetWidth : 360;
-    const cardActualHeight = cardEl ? cardEl.offsetHeight : 180;
+  if (targetRect && showPointerLine) {
+    const cardRight = cardPosition.left + cardSize.width;
+    const cardBottom = cardPosition.top + cardSize.height;
+    const cardCenterX = cardPosition.left + cardSize.width / 2;
+    const cardCenterY = cardPosition.top + cardSize.height / 2;
 
-    const cardCenter = {
-      x: cardPosition.left + cardActualWidth / 2,
-      y: cardPosition.top + cardActualHeight / 2,
-    };
-
-    const targetCenter = {
-      x: targetRect.left + targetRect.width / 2,
-      y: targetRect.top + targetRect.height / 2,
-    };
-
-    // Determine nearest points
-    if (cardCenter.y > targetCenter.y) {
+    if (cardPosition.top >= targetRect.bottom) {
       // Card is below target
-      lineStart = { x: targetCenter.x, y: targetRect.bottom };
-      lineEnd = { x: cardCenter.x, y: cardPosition.top };
-    } else {
+      lineStart = {
+        x: clamp(cardCenterX, targetRect.left + 14, targetRect.right - 14),
+        y: targetRect.bottom,
+      };
+      lineEnd = { x: cardCenterX, y: cardPosition.top };
+    } else if (cardBottom <= targetRect.top) {
       // Card is above target
-      lineStart = { x: targetCenter.x, y: targetRect.top };
-      lineEnd = { x: cardCenter.x, y: cardPosition.top + cardActualHeight };
+      lineStart = {
+        x: clamp(cardCenterX, targetRect.left + 14, targetRect.right - 14),
+        y: targetRect.top,
+      };
+      lineEnd = { x: cardCenterX, y: cardBottom };
+    } else if (cardPosition.left >= targetRect.right) {
+      // Card is right of target
+      lineStart = {
+        x: targetRect.right,
+        y: clamp(cardCenterY, targetRect.top + 14, targetRect.bottom - 14),
+      };
+      lineEnd = { x: cardPosition.left, y: cardCenterY };
+    } else {
+      // Card is left of target
+      lineStart = {
+        x: targetRect.left,
+        y: clamp(cardCenterY, targetRect.top + 14, targetRect.bottom - 14),
+      };
+      lineEnd = { x: cardRight, y: cardCenterY };
     }
   }
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden select-none animate-fadeIn">
-      {/* 1. Backdrop Blur with Sharp Cutout */}
-      {/* We use an SVG mask to blur and dim EVERYTHING EXCEPT the targetRect hole! */}
+      {/* 1. Backdrop Dim with Sharp Rectangular Cutout */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <mask id="tour-spotlight-mask">
-            {/* White covers all (visible) */}
             <rect width="100%" height="100%" fill="white" />
-            {/* Black cutout creates the transparent hole over target element */}
             {targetRect && (
               <rect
                 x={targetRect.left}
@@ -494,7 +795,6 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
           </mask>
         </defs>
 
-        {/* Backdrop Tint */}
         <rect
           width="100%"
           height="100%"
@@ -503,28 +803,13 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
         />
       </svg>
 
-      {/* Backdrop blur layer (blurred area around the cutout) */}
+      {/* Backdrop blur layer (matches targetRect rectangle cleanly) */}
       <div
         className="absolute inset-0 backdrop-blur-sm pointer-events-none"
-        style={{
-          maskImage: targetRect
-            ? `radial-gradient(circle at ${targetRect.left + targetRect.width / 2}px ${
-                targetRect.top + targetRect.height / 2
-              }px, transparent ${Math.max(targetRect.width, targetRect.height) / 2}px, black ${
-                Math.max(targetRect.width, targetRect.height) / 2 + 10
-              }px)`
-            : 'none',
-          WebkitMaskImage: targetRect
-            ? `radial-gradient(circle at ${targetRect.left + targetRect.width / 2}px ${
-                targetRect.top + targetRect.height / 2
-              }px, transparent ${Math.max(targetRect.width, targetRect.height) / 2}px, black ${
-                Math.max(targetRect.width, targetRect.height) / 2 + 10
-              }px)`
-            : 'none',
-        }}
+        style={blurClipPath ? { clipPath: blurClipPath, WebkitClipPath: blurClipPath } : undefined}
       />
 
-      {/* Click outside to close (transparent backdrop click catcher) */}
+      {/* Click outside to close */}
       <div
         className="absolute inset-0 z-10 cursor-pointer"
         onClick={() => {
@@ -536,17 +821,16 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
       {/* 2. Sharp Target Highlight Frame (Stealth HUD Specular Border) */}
       {targetRect && (
         <div
-          className="absolute pointer-events-none z-20 rounded-xl transition-all duration-300 ease-out"
+          className="absolute pointer-events-none z-20 rounded-xl transition-all duration-200 ease-out"
           style={{
             top: targetRect.top,
             left: targetRect.left,
             width: targetRect.width,
             height: targetRect.height,
-            border: '1.5px solid rgba(255, 255, 255, 0.55)',
-            boxShadow: '0 0 20px rgba(255, 255, 255, 0.18), inset 0 0 12px rgba(255, 255, 255, 0.05)',
+            border: '1.5px solid rgba(255, 255, 255, 0.6)',
+            boxShadow: '0 0 22px rgba(255, 255, 255, 0.2), inset 0 0 12px rgba(255, 255, 255, 0.06)',
           }}
         >
-          {/* Pulsing White Target Indicator Marker */}
           <div
             className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.95)] animate-ping opacity-75"
           />
@@ -557,9 +841,8 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
       )}
 
       {/* 3. Silver-White Connecting Pointer Line */}
-      {targetRect && (
+      {showPointerLine && (
         <svg className="absolute inset-0 w-full h-full pointer-events-none z-30" xmlns="http://www.w3.org/2000/svg">
-          {/* Soft outer glow line */}
           <line
             x1={lineStart.x}
             y1={lineStart.y}
@@ -569,7 +852,6 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
             strokeWidth="3.5"
             strokeLinecap="round"
           />
-          {/* Crisp white inner line */}
           <line
             x1={lineStart.x}
             y1={lineStart.y}
@@ -580,7 +862,6 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
             strokeDasharray="4 3"
             strokeLinecap="round"
           />
-          {/* Target anchor circle */}
           <circle cx={lineStart.x} cy={lineStart.y} r="3" fill="#ffffff" />
         </svg>
       )}
@@ -589,7 +870,9 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
       <div
         ref={cardRef}
         onClick={(e) => e.stopPropagation()}
-        className="absolute z-40 w-[340px] sm:w-[380px] max-w-[92vw] rounded-2xl border border-white/15 dark:border-white/15 bg-zinc-950/92 dark:bg-[#09090b]/92 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.85)] p-4 sm:p-5 flex flex-col gap-3 text-zinc-100 transition-all duration-250 ease-out animate-assemble"
+        className={`absolute z-40 w-[340px] sm:w-[380px] max-w-[92vw] rounded-2xl border border-white/15 bg-zinc-950/94 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.85)] p-4 flex flex-col gap-2.5 text-zinc-100 ${
+          isPositioned ? 'opacity-100 transition-[top,left,opacity] duration-200 ease-out' : 'opacity-0 pointer-events-none'
+        }`}
         style={{
           top: cardPosition.top,
           left: cardPosition.left,
@@ -630,7 +913,7 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
             {isRu ? currentStep.descRu : currentStep.descEn}
           </p>
           {currentStep.tipRu && (
-            <div className="p-2.5 rounded-xl bg-white/[0.05] border border-white/15 flex items-start gap-2 text-zinc-300 text-[11px] leading-relaxed mt-1">
+            <div className="p-2.5 rounded-xl bg-white/[0.05] border border-white/15 flex items-start gap-2 text-zinc-300 text-[11px] leading-relaxed mt-0.5">
               <Lightbulb className="w-3.5 h-3.5 text-white shrink-0 mt-0.5" />
               <div>
                 <span className="font-mono font-semibold text-white">{isRu ? 'Совет: ' : 'Tip: '}</span>
@@ -641,8 +924,7 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
         </div>
 
         {/* Card Footer: Back / Next Navigation */}
-        <div className="flex items-center justify-between pt-2 border-t border-white/10 mt-1">
-          {/* Back button */}
+        <div className="flex items-center justify-between pt-2 border-t border-white/10 mt-0.5">
           <button
             type="button"
             disabled={currentStepIndex === 0}
@@ -656,7 +938,6 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
             <span>{isRu ? 'Назад' : 'Back'}</span>
           </button>
 
-          {/* Next / Got It button (Stealth HUD Contrast White Button) */}
           <button
             type="button"
             onClick={() => {

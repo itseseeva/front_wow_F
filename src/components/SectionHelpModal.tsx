@@ -183,8 +183,17 @@ const SECTION_HELP_CONTENT: Record<HelpSectionId, SectionHelpData> = {
         icon: Sparkles,
       },
       {
-        titleRu: '3. Перерывы',
-        titleEn: '3. Breaks',
+        titleRu: '3. Когда и сколько играть',
+        titleEn: '3. Playtime & Schedule',
+        descRu:
+          'Задайте временные окна, в которые бот может запускаться, и добавьте до 4 интервалов на день. Бот сам слегка сдвигает старт и конец каждого окна, чтобы расписание выглядело естественно.',
+        descEn:
+          'Set active playtime windows for the day and add up to 4 intervals. The bot slightly varies start and end times so your schedule looks natural.',
+        icon: Clock,
+      },
+      {
+        titleRu: '4. Перерывы',
+        titleEn: '4. Breaks',
         descRu:
           'Внутри игрового времени бот делает короткие перерывы на несколько минут (отойти от компьютера) и длинные раз в 2–3 сессии (поесть, отдохнуть). Можно включить случайные выходные раз в 10 дней.',
         descEn:
@@ -192,8 +201,8 @@ const SECTION_HELP_CONTENT: Record<HelpSectionId, SectionHelpData> = {
         icon: Clock,
       },
       {
-        titleRu: '4. Мягкий конец',
-        titleEn: '4. Soft Exit',
+        titleRu: '5. Мягкий конец',
+        titleEn: '5. Soft Exit',
         descRu:
           'Когда время сессии вышло, бот не выдёргивает провод: он добивает моба, собирает руду или траву, добегает до безопасного места и только потом выходит.',
         descEn:
@@ -321,8 +330,26 @@ const SECTION_HELP_CONTENT: Record<HelpSectionId, SectionHelpData> = {
       'Keybinds configured here must match the key bindings in your World of Warcraft client settings — the bot presses them like a real player.',
     steps: [
       {
-        titleRu: '1. Клавиши игры',
-        titleEn: '1. Game Keys',
+        titleRu: '1. Расписание фарма',
+        titleEn: '1. Farm Schedule',
+        descRu:
+          'Включает автоматические сессии по вашему графику, перерывы и шанс случайного выходного. Подробное расписание по дням настраивается во вкладке «Расписание».',
+        descEn:
+          'Enables automatic farming sessions by schedule, realistic breaks, and random days off. Fine-tune daily hours and windows in the Schedule tab.',
+        icon: Clock,
+      },
+      {
+        titleRu: '2. Автомаршрут и аукцион',
+        titleEn: '2. Auto Route & Auction',
+        descRu:
+          'Длина автомаршрута задаёт размер сгенерированного круга (30–120 минут). В блоке аукциона выберите сервер или оставьте «Авто», чтобы бот знал цены вашей фракции.',
+        descEn:
+          'The route slider configures loop generation length (30–120 minutes). In the auction section, select your server or leave on "Auto" so the bot tracks your faction prices.',
+        icon: Coins,
+      },
+      {
+        titleRu: '3. Клавиши игры',
+        titleEn: '3. Game Keys',
         descRu:
           '«Взаимодействие с целью» и «Предыдущая цель» настройте в игре на те же клавиши, что указаны тут. Иначе бот не сможет лутать и целиться в моба за спиной.',
         descEn:
@@ -330,31 +357,13 @@ const SECTION_HELP_CONTENT: Record<HelpSectionId, SectionHelpData> = {
         icon: Sparkles,
       },
       {
-        titleRu: '2. Пауза',
-        titleEn: '2. Pause',
+        titleRu: '4. Пауза и поиск ресурсов',
+        titleEn: '4. Pause & Tracking',
         descRu:
-          'Клавиша «Пауза» (по умолчанию Pause/Break) мгновенно отпускает управление. Нажали — играете руками; нажали ещё раз — бот продолжил с того же места.',
+          'Клавиша «Пауза» мгновенно отпускает управление, а F9 и F10 аддон привязывает к поиску трав и минералов автоматически.',
         descEn:
-          'The emergency "Pause" key (default Pause/Break) instantly releases all keys and halts bot actions. Press again to resume seamlessly from the same spot.',
-        icon: Clock,
-      },
-      {
-        titleRu: '3. Поиск трав и минералов',
-        titleEn: '3. Tracking Herbs & Minerals',
-        descRu:
-          'Клавиши F9 и F10 аддон настраивает сам, выносить их на панель не нужно. Если играете собирателем — включите оба поиска, бот будет переключать их по очереди.',
-        descEn:
-          'Keys F9 and F10 are managed automatically by the addon without needing action bar slots. If gathering both professions, enable both tracking options so the bot cycles between them.',
+          'The emergency "Pause" key instantly releases control, while F9 and F10 are automatically bound to herb and mineral tracking by the addon.',
         icon: Layers,
-      },
-      {
-        titleRu: '4. Автомаршрут и аукцион',
-        titleEn: '4. Auto Route & Auction',
-        descRu:
-          'Длина автомаршрута задаёт размер сгенерированного круга (30–120 минут). В блоке аукциона выберите сервер или оставьте «Авто», чтобы бот знал цены вашей фракции.',
-        descEn:
-          'The route slider configures loop generation length (30–120 minutes). In the auction section, select your server or leave on "Auto" so the bot tracks your faction prices.',
-        icon: Coins,
       },
     ],
     tipRu: 'Поменяли клавиши — сделайте /reload в игре, иначе аддон помнит старые.',

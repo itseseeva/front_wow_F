@@ -357,7 +357,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* =========================================================================
           SECTION 1: РАСПИСАНИЕ ФАРМА (Schedule Settings)
           ========================================================================= */}
-      <div className="flex flex-col gap-3">
+      <div data-tour="settings-schedule" className="flex flex-col gap-3">
         <div className="flex items-center justify-between pb-2 border-b border-black/10 dark:border-white/[0.08]">
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-zinc-700 dark:text-zinc-300" strokeWidth={1.5} />

@@ -440,7 +440,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
 
   return (
     <div className="w-full max-w-4xl 2xl:max-w-5xl mx-auto flex flex-col gap-6">
-      <div className="w-full flex flex-col gap-5">
+      <div data-tour="summary-overview" className="w-full flex flex-col gap-5">
         {/* 1. Header: Date Title, sessions/routes subtitle & day duration (frameless) */}
         <div className="flex items-center justify-between pb-1">
           <div>
@@ -1022,7 +1022,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
 
       {/* 7. Heatmap Card & Passes Row for Active Session (only when viewing a past session or all-day) */}
       {!isLiveSelected && hasSessions && heatmap && heatmap.status === 'ready' && heatmap.image && (
-        <div className="w-full flex flex-col gap-2.5 select-none bg-transparent">
+        <div data-tour="summary-heatmap" className="w-full flex flex-col gap-2.5 select-none bg-transparent">
           {/* Header of Map: route name / map info */}
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">

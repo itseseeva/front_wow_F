@@ -742,7 +742,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         </SpecularCard>
 
         {/* DAY CONFIGURATION */}
-        <div className="flex flex-col gap-4">
+        <div data-tour="schedule-day-config" className="flex flex-col gap-4">
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
               <h2 className="text-sm sm:text-base font-mono font-bold text-white">

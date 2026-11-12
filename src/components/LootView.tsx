@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Coins, Sparkles, Info, ShieldCheck, Layers } from 'lucide-react';
+import { Coins, ShieldCheck } from 'lucide-react';
 import { AppSettings } from '../types';
-import { SpecularCard } from './ui/Specular';
 import { soundFx } from '../utils/audio';
 
 interface LootViewProps {
@@ -42,7 +41,6 @@ export const LootView: React.FC<LootViewProps> = ({
   const handleToggleAuto = () => {
     soundFx.playClick();
     if (isAuto) {
-      // Disabling Auto -> calculate copper value from current gold & silver
       const g = Math.max(0, goldVal);
       const s = Math.max(0, silverVal);
       const copper = g * 10000 + s * 100;
@@ -58,7 +56,6 @@ export const LootView: React.FC<LootViewProps> = ({
         );
       }
     } else {
-      // Enabling Auto -> lootMinValue = null
       onSettingsChange({
         ...settings,
         lootMinValue: null,
@@ -96,13 +93,13 @@ export const LootView: React.FC<LootViewProps> = ({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto flex flex-col gap-5 pt-2 sm:pt-4 pb-16 px-3 sm:px-6 select-none animate-fadeIn">
-      {/* Section Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-black/10 dark:border-white/10 pb-4">
+    <div className="w-full max-w-3xl 2xl:max-w-5xl mx-auto flex flex-col gap-6 pt-2 sm:pt-4 pb-20 px-3 sm:px-6 select-none animate-fadeIn text-zinc-900 dark:text-zinc-100">
+      {/* Section Header (Frameless, clean hairline divider) */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pb-3 border-b border-black/10 dark:border-white/[0.08]">
         <div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-zinc-950 dark:bg-white shadow-[0_0_8px_rgba(0,0,0,0.4)] dark:shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
-            <h1 className="text-lg sm:text-xl font-bold font-mono tracking-tight text-zinc-950 dark:text-white">
+            <Coins className="w-4 h-4 text-zinc-500 dark:text-zinc-400" strokeWidth={1.5} />
+            <h1 className="text-sm sm:text-base font-semibold font-mono tracking-wide text-zinc-800 dark:text-zinc-100">
               {isRu ? 'Настройки лута' : 'Loot Settings'}
             </h1>
           </div>
@@ -113,13 +110,11 @@ export const LootView: React.FC<LootViewProps> = ({
           </p>
         </div>
 
-        {/* Status Pill */}
-        <div className="flex items-center gap-2 self-start sm:self-auto px-3 py-1.5 rounded-lg border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.03] text-xs font-mono">
-          <Coins className="w-3.5 h-3.5 text-zinc-600 dark:text-zinc-400" />
-          <span className="text-zinc-500 dark:text-zinc-400">
-            {isRu ? 'Режим:' : 'Mode:'}
-          </span>
-          <span className="font-semibold text-zinc-950 dark:text-white">
+        {/* Inline Status Indicator (No container box) */}
+        <div className="flex items-center gap-2 text-xs font-mono text-zinc-500 dark:text-zinc-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+          <span>{isRu ? 'Режим:' : 'Mode:'}</span>
+          <span className="font-semibold text-zinc-700 dark:text-zinc-200">
             {isAuto
               ? isRu
                 ? 'Автоматический'
@@ -129,42 +124,32 @@ export const LootView: React.FC<LootViewProps> = ({
         </div>
       </div>
 
-      {/* Main Card: Фильтр добычи с мобов */}
-      <SpecularCard
-        data-tour="loot-card"
-        className="p-4 sm:p-6 rounded-2xl border border-black/10 dark:border-white/10 bg-white/40 dark:bg-zinc-900/40 backdrop-blur-xl shadow-lg flex flex-col gap-5"
-      >
-        {/* Card Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-black/[0.04] dark:bg-white/[0.06] border border-black/10 dark:border-white/10 flex items-center justify-center text-zinc-900 dark:text-white shrink-0">
-              <Coins className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-sm sm:text-base font-bold font-mono text-zinc-950 dark:text-white">
-                {isRu ? 'Фильтр добычи с мобов' : 'Mob Loot Filter'}
-              </h2>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
-                {isRu
-                  ? 'Определяет, какие предметы персонаж забирает с тел убитых монстров'
-                  : 'Configures which dropped items are collected into your inventory'}
-              </p>
-            </div>
-          </div>
+      {/* Main Ghost Section: Фильтр добычи с мобов (No visible container) */}
+      <div data-tour="loot-card" className="flex flex-col gap-5 bg-transparent">
+        {/* Subheader */}
+        <div className="flex flex-col gap-0.5">
+          <h2 className="text-xs sm:text-sm font-mono font-medium text-zinc-700 dark:text-zinc-200 uppercase tracking-wider">
+            {isRu ? 'Фильтр добычи с мобов' : 'Mob Loot Filter'}
+          </h2>
+          <p className="text-[11px] text-zinc-500 font-mono">
+            {isRu
+              ? 'Определяет, какие предметы персонаж забирает с тел убитых монстров'
+              : 'Configures which dropped items are collected into your inventory'}
+          </p>
         </div>
 
-        {/* Toggle «Авто» */}
+        {/* Toggle «Авто» (Frameless row with subtle hover only) */}
         <div
           data-tour="loot-auto-toggle"
-          className="p-3.5 sm:p-4 rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.03] flex items-center justify-between gap-4 transition-all"
+          className="py-3 px-2 -mx-2 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex items-center justify-between gap-4 transition-all"
         >
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white">
+              <span className="text-xs sm:text-sm font-mono font-medium text-zinc-800 dark:text-zinc-200">
                 {isRu ? 'Авто' : 'Auto'}
               </span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-black/10 dark:border-white/10 text-zinc-500 dark:text-zinc-400">
-                {isRu ? 'Рекомендуется' : 'Recommended'}
+              <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400">
+                · {isRu ? 'рекомендуется' : 'recommended'}
               </span>
             </div>
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-1 leading-relaxed">
@@ -178,46 +163,44 @@ export const LootView: React.FC<LootViewProps> = ({
             type="button"
             onClick={handleToggleAuto}
             aria-label={isRu ? 'Переключить режим Авто' : 'Toggle Auto mode'}
-            className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ease-in-out shrink-0 ${
-              isAuto ? 'bg-zinc-950 dark:bg-white' : 'bg-black/15 dark:bg-white/15'
+            className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ease-in-out shrink-0 ${
+              isAuto ? 'bg-zinc-700 dark:bg-zinc-300' : 'bg-zinc-300 dark:bg-zinc-700'
             }`}
           >
             <div
               className={`w-4 h-4 rounded-full bg-white dark:bg-zinc-950 shadow-sm transform transition-transform duration-200 ease-in-out ${
-                isAuto ? 'translate-x-6' : 'translate-x-0'
+                isAuto ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
           </button>
         </div>
 
-        {/* Custom Price Inputs (when Auto is turned off) */}
+        {/* Custom Price Inputs (when Auto is turned off) — Clean frameless gray layout */}
         {!isAuto && (
           <div
             data-tour="loot-threshold-inputs"
-            className="flex flex-col gap-3 p-4 rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.04] animate-fadeIn"
+            className="flex flex-col gap-4 pt-4 border-t border-black/10 dark:border-white/[0.08] animate-fadeIn"
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-mono font-medium text-zinc-800 dark:text-zinc-200">
+              <span className="text-xs font-mono font-medium text-zinc-700 dark:text-zinc-300">
                 {isRu ? 'Порог минимальной стоимости' : 'Minimum Value Threshold'}
               </span>
               <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
                 {isRu ? 'В меди:' : 'In copper:'}{' '}
-                <span className="text-zinc-950 dark:text-white font-semibold">
+                <span className="text-zinc-800 dark:text-zinc-200 font-semibold tabular-nums">
                   {goldVal * 10000 + silverVal * 100}
                 </span>
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Gold Input */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02]">
-                <div className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-black/10 dark:bg-white/15 text-zinc-950 dark:text-white flex items-center justify-center font-bold text-xs select-none">
-                    ●
-                  </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8">
+              {/* Gold Input (Frameless row with underline input) */}
+              <div className="flex items-center justify-between py-2 border-b border-black/10 dark:border-white/[0.08]">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-500 select-none" />
                   <label
                     htmlFor="loot-gold-input"
-                    className="text-xs font-mono text-zinc-700 dark:text-zinc-300"
+                    className="text-xs font-mono text-zinc-600 dark:text-zinc-400"
                   >
                     {isRu ? 'Золото' : 'Gold'}
                   </label>
@@ -231,23 +214,21 @@ export const LootView: React.FC<LootViewProps> = ({
                     value={goldVal === 0 ? '' : goldVal}
                     placeholder="0"
                     onChange={(e) => handleGoldChange(e.target.value)}
-                    className="w-20 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-right text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
+                    className="w-20 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-transparent text-right text-xs font-mono font-semibold text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 outline-none focus:border-zinc-600 dark:focus:border-zinc-400 transition-colors"
                   />
-                  <span className="text-xs font-mono text-zinc-700 dark:text-white font-bold">
+                  <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400 font-semibold">
                     g
                   </span>
                 </div>
               </div>
 
-              {/* Silver Input */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02]">
-                <div className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-zinc-400/20 text-zinc-500 dark:text-zinc-300 flex items-center justify-center font-bold text-xs select-none">
-                    ●
-                  </span>
+              {/* Silver Input (Frameless row with underline input) */}
+              <div className="flex items-center justify-between py-2 border-b border-black/10 dark:border-white/[0.08]">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-zinc-500/60 dark:bg-zinc-600 select-none" />
                   <label
                     htmlFor="loot-silver-input"
-                    className="text-xs font-mono text-zinc-700 dark:text-zinc-300"
+                    className="text-xs font-mono text-zinc-600 dark:text-zinc-400"
                   >
                     {isRu ? 'Серебро' : 'Silver'}
                   </label>
@@ -262,17 +243,16 @@ export const LootView: React.FC<LootViewProps> = ({
                     value={silverVal === 0 ? '' : silverVal}
                     placeholder="0"
                     onChange={(e) => handleSilverChange(e.target.value)}
-                    className="w-20 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 text-right text-xs font-mono font-semibold text-zinc-950 dark:text-white outline-none focus:border-zinc-950 dark:focus:border-white"
+                    className="w-20 h-8 px-2 rounded-lg border border-black/15 dark:border-white/15 bg-transparent text-right text-xs font-mono font-semibold text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 outline-none focus:border-zinc-600 dark:focus:border-zinc-400 transition-colors"
                   />
-                  <span className="text-xs font-mono text-zinc-400 dark:text-zinc-300 font-bold">
+                  <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400 font-semibold">
                     s
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Gray hint under inputs */}
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono mt-1 leading-relaxed">
+            <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
               {isRu
                 ? 'Предметы дешевле порога бот оставляет на трупе. Травы и руду берёт всегда.'
                 : 'Items cheaper than the threshold are left on the corpse. Herbs and ores are always looted.'}
@@ -280,30 +260,23 @@ export const LootView: React.FC<LootViewProps> = ({
           </div>
         )}
 
-        {/* Feature note box */}
-        <div className="flex items-start gap-2.5 p-3 rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] text-xs font-mono text-zinc-600 dark:text-zinc-400">
-          <ShieldCheck className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0 mt-0.5" />
-          <div className="flex flex-col gap-1 leading-relaxed">
+        {/* Frameless muted gray notes */}
+        <div className="flex flex-col gap-2.5 pt-4 border-t border-black/10 dark:border-white/[0.08] text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
+          <div className="flex items-start gap-2.5 leading-relaxed">
+            <ShieldCheck className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" strokeWidth={1.5} />
             <span>
               {isRu
                 ? 'Сбор трав и добыча руды не зависят от порога стоимости: ценные реагенты подбираются в 100% случаев.'
                 : 'Herb harvesting and ore mining are exempt from value thresholds: valuable nodes are collected 100% of the time.'}
             </span>
           </div>
-        </div>
-
-        {/* Gray note at bottom of card */}
-        <div className="pt-2 border-t border-black/5 dark:border-white/5">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
+          <p className="text-zinc-500 pl-6">
             {isRu
               ? 'Порог применится после /reload в игре.'
               : 'The threshold will take effect after /reload in-game.'}
           </p>
         </div>
-      </SpecularCard>
-
-      {/* Reserved spacing for future loot memory & vendor selling cards */}
-      <div className="hidden sm:block min-h-[40px]" />
+      </div>
     </div>
   );
 };
