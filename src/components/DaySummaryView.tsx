@@ -892,6 +892,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                       earnedComplete={lootStatus?.earned_complete}
                       language={language}
                       variant="frameless"
+                      showTotalHeader={false}
                     />
                   </div>
                 ) : !terrainStatus && (!autoRouteStatus || autoRouteStatus.status === 'idle' || (autoRouteStatus.status === 'ready' && !showAutoRouteReady)) ? (
@@ -922,9 +923,9 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
             ) : (
               /* PAST SESSION OR ALL DAY SUMMARY (frameless, no container boxes) */
               <div className="flex flex-col gap-6">
-                {/* 4. Metric Cards Grid: Duration, Items Gathered (sum), Earned Gold, Gold/hour, Nodes, Gap */}
+                {/* 4. Metric Cards Grid: Duration, Items Gathered, Earned Gold, Gold/hour, Avg Gap */}
                 {currentSummary && (
-                  <div data-tour="summary-live-cards" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6 py-2 font-mono">
+                  <div data-tour="summary-live-cards" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 py-2 font-mono">
                     {/* 1. Duration */}
                     <div className="flex flex-col justify-between gap-1">
                       <div className="flex items-center justify-between">
@@ -988,22 +989,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                       </div>
                     </div>
 
-                    {/* 5. Nodes Gathered */}
-                    <div className="flex flex-col justify-between gap-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-zinc-500">{isRu ? 'Узлов собрано' : 'Nodes Gathered'}</span>
-                      </div>
-                      <div>
-                        <span className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white tracking-tight">
-                          {currentSummary.kills != null ? currentSummary.kills : '—'}
-                        </span>
-                        <p className="text-[10px] text-zinc-500 mt-0.5 truncate">
-                          {currentSummary.kills_per_hour != null ? `${currentSummary.kills_per_hour}/ч` : '—'}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* 6. Avg Kill Gap */}
+                    {/* 5. Avg Kill Gap */}
                     <div className="flex flex-col justify-between gap-1">
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] text-zinc-500">{isRu ? 'Пауза' : 'Avg Gap'}</span>
@@ -1053,6 +1039,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                       lootLost={currentSummary?.loot_lost}
                       language={language}
                       variant="frameless"
+                      showTotalHeader={false}
                     />
                   </div>
                 )}

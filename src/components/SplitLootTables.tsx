@@ -11,6 +11,7 @@ interface SplitLootTablesProps {
   lootLost?: number | null;
   language: 'ru' | 'en';
   variant?: 'modal' | 'frameless';
+  showTotalHeader?: boolean;
 }
 
 const computeTableTotal = (rows: LootRow[]): number | null => {
@@ -35,6 +36,15 @@ const LootSubTable: React.FC<{
   const isRu = language === 'ru';
   const totalCopper = useMemo(() => computeTableTotal(rows), [rows]);
 
+  const sortedRows = useMemo(() => {
+    return [...rows].sort((a, b) => {
+      const valA = a.value ?? a.price ?? -1;
+      const valB = b.value ?? b.price ?? -1;
+      if (valB !== valA) return valB - valA;
+      return (b.count ?? 0) - (a.count ?? 0);
+    });
+  }, [rows]);
+
   const content = (
     <div className="flex flex-col justify-between gap-3 font-mono h-full">
       <div className="flex flex-col gap-3">
@@ -43,13 +53,21 @@ const LootSubTable: React.FC<{
             {title}
           </span>
           <span className="text-[11px] text-zinc-500">
-            {rows.length} {isRu ? 'поз.' : 'items'}
+            {sortedRows.length} {isRu ? 'поз.' : 'items'}
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div
+          className="max-h-[304px] overflow-y-auto overflow-x-auto overscroll-y-contain pr-1"
+          onWheel={(e) => {
+            const el = e.currentTarget;
+            if (el.scrollHeight > el.clientHeight) {
+              e.stopPropagation();
+            }
+          }}
+        >
           <table className="w-full text-left text-[11px]">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-zinc-50/95 dark:bg-[#09090b]/95 backdrop-blur-sm">
               <tr className="border-b border-black/10 dark:border-white/10 text-[10px] text-zinc-400 uppercase tracking-wider">
                 <th className="pb-2 font-normal">{isRu ? 'Название' : 'Item'}</th>
                 <th className="pb-2 font-normal text-right whitespace-nowrap">{isRu ? 'Кол-во' : 'Count'}</th>
@@ -58,14 +76,14 @@ const LootSubTable: React.FC<{
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5 dark:divide-white/5">
-              {rows.length === 0 ? (
+              {sortedRows.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-2.5 text-zinc-500">
                     {isRu ? 'Ничего' : 'Nothing'}
                   </td>
                 </tr>
               ) : (
-                rows.map((item, idx) => {
+                sortedRows.map((item, idx) => {
                   const displayName = item.name || (isRu ? `Предмет #${item.item_id}` : `Item #${item.item_id}`);
                   const rarity = getRarityMeta(item.quality);
 
@@ -137,6 +155,7 @@ export const SplitLootTables: React.FC<SplitLootTablesProps> = ({
   lootLost,
   language,
   variant = 'frameless',
+  showTotalHeader = true,
 }) => {
   const isRu = language === 'ru';
 
@@ -152,8 +171,8 @@ export const SplitLootTables: React.FC<SplitLootTablesProps> = ({
 
   return (
     <div className="flex flex-col gap-4 font-mono">
-      {/* Overall Earned Total above tables */}
-      {earnedCopper !== undefined && (
+      {/* Overall Earned Total above tables (shown when not already in top cards) */}
+      {showTotalHeader && earnedCopper !== undefined && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs px-0.5">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-zinc-500 dark:text-zinc-400">
