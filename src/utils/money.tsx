@@ -1,4 +1,28 @@
 import React from 'react';
+import coinGoldImg from '../assets/coins/coin-gold.png';
+import coinSilverImg from '../assets/coins/coin-silver.png';
+import coinCopperImg from '../assets/coins/coin-copper.png';
+
+export type CoinKind = 'gold' | 'silver' | 'copper';
+
+const COIN_SRC: Record<CoinKind, string> = {
+  gold: coinGoldImg,
+  silver: coinSilverImg,
+  copper: coinCopperImg,
+};
+
+export const CoinIcon: React.FC<{
+  kind: CoinKind;
+  alt?: string;
+  className?: string;
+}> = ({ kind, alt = '', className = '' }) => (
+  <img
+    src={COIN_SRC[kind]}
+    alt={alt}
+    draggable={false}
+    className={`inline-block w-[0.95em] h-[0.95em] shrink-0 select-none [image-rendering:pixelated] ${className}`}
+  />
+);
 
 /**
  * Format copper currency like World of Warcraft:
@@ -50,11 +74,14 @@ export const MoneyBadge: React.FC<{
   copper: number | null | undefined;
   language?: 'ru' | 'en';
   className?: string;
-}> = ({ copper, language = 'ru', className = '' }) => {
+  nullText?: string;
+}> = ({ copper, language = 'ru', className = '', nullText }) => {
+  const sizeClass = /\btext-(xs|sm|base|lg|xl|2xl|3xl)\b/.test(className) ? '' : 'text-xs';
+
   if (copper === null || copper === undefined) {
     return (
-      <span className={`text-zinc-500 italic font-mono text-xs ${className}`}>
-        {language === 'ru' ? 'нет цены' : 'no price'}
+      <span className={`text-zinc-500 font-mono ${sizeClass} ${className}`}>
+        {nullText ?? (language === 'ru' ? 'нет цены' : 'no price')}
       </span>
     );
   }
@@ -66,37 +93,42 @@ export const MoneyBadge: React.FC<{
   const s = Math.floor((total % 10000) / 100);
   const c = total % 100;
 
-  const gUnit = language === 'ru' ? 'з' : 'g';
-  const sUnit = language === 'ru' ? 'с' : 's';
-  const cUnit = language === 'ru' ? 'м' : 'c';
+  const titleText = formatCopper(copper, language);
 
   if (g === 0 && s === 0 && c === 0) {
     return (
-      <span className={`font-mono text-xs tabular-nums text-zinc-500 ${className}`}>
-        0{cUnit}
+      <span
+        title={titleText}
+        className={`inline-flex items-center gap-1 font-mono ${sizeClass} tabular-nums ${className}`}
+      >
+        <span className="text-zinc-700 dark:text-zinc-300">0</span>
+        <CoinIcon kind="copper" alt={language === 'ru' ? 'м' : 'c'} />
       </span>
     );
   }
 
   return (
-    <span className={`inline-flex items-center gap-1.5 font-mono text-xs tabular-nums ${className}`}>
+    <span
+      title={titleText}
+      className={`inline-flex items-center gap-2 font-mono ${sizeClass} tabular-nums ${className}`}
+    >
       {sign}
       {g > 0 && (
-        <span className="text-zinc-950 dark:text-white font-semibold">
-          {g}
-          <span className="text-[10px] ml-0.5 opacity-70">{gUnit}</span>
+        <span className="inline-flex items-center gap-1 font-semibold text-zinc-900 dark:text-zinc-100">
+          <span>{g}</span>
+          <CoinIcon kind="gold" alt={language === 'ru' ? 'з' : 'g'} />
         </span>
       )}
       {s > 0 && (
-        <span className="text-zinc-600 dark:text-zinc-400 font-medium">
-          {s}
-          <span className="text-[10px] ml-0.5 opacity-70">{sUnit}</span>
+        <span className="inline-flex items-center gap-1 font-medium text-zinc-700 dark:text-zinc-200">
+          <span>{s}</span>
+          <CoinIcon kind="silver" alt={language === 'ru' ? 'с' : 's'} />
         </span>
       )}
       {c > 0 && (
-        <span className="text-zinc-500 dark:text-zinc-500">
-          {c}
-          <span className="text-[10px] ml-0.5 opacity-70">{cUnit}</span>
+        <span className="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-300">
+          <span>{c}</span>
+          <CoinIcon kind="copper" alt={language === 'ru' ? 'м' : 'c'} />
         </span>
       )}
     </span>

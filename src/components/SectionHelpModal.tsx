@@ -217,53 +217,53 @@ const SECTION_HELP_CONTENT: Record<HelpSectionId, SectionHelpData> = {
   loot: {
     titleRu: 'Лут',
     titleEn: 'Loot',
-    badgeRu: 'Фильтр • Место в сумке',
-    badgeEn: 'Filter • Bag Space',
+    badgeRu: 'Память дропа • Место в сумке',
+    badgeEn: 'Drop Memory • Bag Space',
     icon: Coins,
     introRu:
-      'Бот не тащит в сумку мусор: с мобов берёт только то, что стоит места в сумке.',
+      'Торговца нет — сумка не пустеет, каждая ячейка на счету. Бот оставляет на трупе то, что не стоит места.',
     introEn:
-      'The bot never clutters your bags with junk: from slain mobs, it only picks up items worth inventory space.',
+      'No vendor means bags never empty—every slot counts. The bot leaves behind anything not worth the bag space.',
     steps: [
       {
-        titleRu: '1. Правило',
-        titleEn: '1. Rule',
+        titleRu: '1. Цена ячейки',
+        titleEn: '1. Slot Value',
         descRu:
-          'С мобов берётся только то, что стоит дороже порога. Предметы дешевле бот оставляет на трупе — сумка не забивается серыми вещами за пару копеек.',
+          'Бот прикидывает, чем заполнится сумка за ближайшие часы: сначала травы и руда, потом лучшее с мобов. Что не влезает — остаётся на трупе.',
         descEn:
-          'Only items valued above the threshold are looted from corpses. Cheaper trash items are left behind, keeping bags free of low-value junk.',
-        icon: Shield,
-      },
-      {
-        titleRu: '2. Что берёт всегда',
-        titleEn: '2. Always Looted',
-        descRu:
-          'Травы и руду бот берёт ВСЕГДА, даже если порог высокий: на них он и зарабатывает.',
-        descEn:
-          'Herbs and mining ores are ALWAYS collected, even with high value thresholds: they are the main source of income.',
+          'The bot estimates what will fill your bags over the next hours: herbs and ore first, then the best mob drops. Anything that will not fit stays on the corpse.',
         icon: Sparkles,
       },
       {
-        titleRu: '3. Авто',
-        titleEn: '3. Auto',
+        titleRu: '2. Не брать дешевле',
+        titleEn: '2. Never Loot Below',
         descRu:
-          'В режиме «Авто» бот сам прикидывает порог по уровню зоны и вашим свободным слотам. Для большинства зон этого достаточно.',
+          'Ваша граница: дешевле неё бот не возьмёт никогда, даже если место есть.',
         descEn:
-          'In "Auto" mode, the bot dynamically calculates the threshold based on zone level and available bag slots. This is optimal for most zones.',
+          'Your hard minimum floor: the bot will never pick up items cheaper than this, even with free bag space.',
+        icon: Coins,
+      },
+      {
+        titleRu: '3. Пока опыта мало',
+        titleEn: '3. Early Learning',
+        descRu:
+          'Первые 20 убийств вида моба бот судит по ценам того, что вы собираете.',
+        descEn:
+          'For the first 20 kills of a mob type, the bot estimates thresholds from the value of what you gather.',
         icon: Zap,
       },
       {
-        titleRu: '4. Свой порог',
-        titleEn: '4. Custom Threshold',
+        titleRu: '4. Память дропа',
+        titleEn: '4. Drop Memory',
         descRu:
-          'Снимите галочку «Авто» и задайте порог в серебре и золоте руками. Например: 5 серебра — всё, что дешевле 5 серебряных монет, останется на мобе.',
+          'Бот запоминает каждого убитого моба и что с него упало. Память копится от сессии к сессии — это настоящий дроп Forever в ваших местах фарма.',
         descEn:
-          'Uncheck "Auto" to set the threshold manually in gold and silver. For example, 5 silver: anything worth under 5 silver is left on the corpse.',
-        icon: Coins,
+          'The bot records every mob killed and what dropped from it. Memory accumulates across sessions—real Forever drop rates in your farming spots.',
+        icon: Shield,
       },
     ],
-    tipRu: 'Начните с «Авто» и посмотрите итог сессии — подправить порог можно всегда.',
-    tipEn: 'Start with "Auto" and check your session earnings — you can adjust the threshold at any time.',
+    tipRu: 'Загляните в «Память дропа» после пары часов в одной зоне — там видно, что реально падает и почём.',
+    tipEn: 'Check «Drop memory» after a couple hours in one zone to see what actually drops and its auction value.',
   },
 
   summary: {

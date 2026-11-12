@@ -163,46 +163,46 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
 
   loot: [
     {
-      targetSelector: '[data-tour="loot-card"]',
-      titleRu: '1. Правило',
-      titleEn: '1. Rule',
-      descRu:
-        'С мобов берётся только то, что стоит дороже порога. Предметы дешевле бот оставляет на трупе — сумка не забивается серыми вещами за пару копеек.',
-      descEn:
-        'Only items valued above the threshold are looted from corpses. Cheaper trash items are left behind, keeping bags free of low-value junk.',
-      preferredPosition: 'bottom',
-    },
-    {
-      targetSelector: '[data-tour="loot-card"]',
-      titleRu: '2. Что берёт всегда',
-      titleEn: '2. Always Looted',
-      descRu:
-        'Травы и руду бот берёт ВСЕГДА, даже если порог высокий: на них он и зарабатывает.',
-      descEn:
-        'Herbs and mining ores are ALWAYS collected, even with high value thresholds: they are the main source of income.',
-      preferredPosition: 'bottom',
-    },
-    {
       targetSelector: '[data-tour="loot-auto-toggle"]',
-      titleRu: '3. Авто',
-      titleEn: '3. Auto',
+      titleRu: '1. Цена ячейки',
+      titleEn: '1. Slot Value',
       descRu:
-        'В режиме «Авто» бот сам прикидывает порог по уровню зоны и вашим свободным слотам. Для большинства зон этого достаточно.',
+        'Бот прикидывает, чем заполнится сумка за ближайшие часы: сначала травы и руда, потом лучшее с мобов. Что не влезает — остаётся на трупе.',
       descEn:
-        'In "Auto" mode, the bot dynamically calculates the threshold based on zone level and available bag slots. This is optimal for most zones.',
+        'The bot estimates what will fill your bags over the next hours: herbs and ore first, then the best mob drops. Anything that will not fit stays on the corpse.',
       preferredPosition: 'bottom',
     },
     {
       targetSelector: '[data-tour="loot-threshold-inputs"]',
-      titleRu: '4. Свой порог',
-      titleEn: '4. Custom Threshold',
+      titleRu: '2. Не брать дешевле',
+      titleEn: '2. Never Loot Below',
       descRu:
-        'Снимите галочку «Авто» и задайте порог в серебре и золоте руками. Например: 5 серебра — всё, что дешевле 5 серебряных монет, останется на мобе.',
+        'Ваша граница: дешевле неё бот не возьмёт никогда, даже если место есть.',
       descEn:
-        'Uncheck "Auto" to set the threshold manually in gold and silver. For example, 5 silver: anything worth under 5 silver is left on the corpse.',
-      tipRu: 'Начните с «Авто» и посмотрите итог сессии — подправить порог можно всегда.',
-      tipEn: 'Start with "Auto" and check your session earnings — you can adjust the threshold at any time.',
+        'Your hard minimum floor: the bot will never pick up items cheaper than this, even with free bag space.',
       preferredPosition: 'bottom',
+    },
+    {
+      targetSelector: '[data-tour="loot-now"]',
+      titleRu: '3. Пока опыта мало',
+      titleEn: '3. Early Learning',
+      descRu:
+        'Первые 20 убийств вида моба бот судит по ценам того, что вы собираете.',
+      descEn:
+        'For the first 20 kills of a mob type, the bot estimates thresholds from the value of what you gather.',
+      preferredPosition: 'bottom',
+    },
+    {
+      targetSelector: '[data-tour="loot-memory"]',
+      titleRu: '4. Память дропа',
+      titleEn: '4. Drop Memory',
+      descRu:
+        'Бот запоминает каждого убитого моба и что с него упало. Память копится от сессии к сессии — это настоящий дроп Forever в ваших местах фарма.',
+      descEn:
+        'The bot records every mob killed and what dropped from it. Memory accumulates across sessions—real Forever drop rates in your farming spots.',
+      tipRu: 'Загляните в «Память дропа» после пары часов в одной зоне — там видно, что реально падает и почём.',
+      tipEn: 'Check «Drop memory» after a couple hours in one zone to see what actually drops and its auction value.',
+      preferredPosition: 'top',
     },
   ],
 
@@ -324,6 +324,8 @@ const FALLBACK_SELECTORS: Record<string, string[]> = {
   '[data-tour="rotation-water"]': ['[data-tour="rotation-sequence"]'],
   '[data-tour="loot-threshold-inputs"]': ['[data-tour="loot-auto-toggle"]', '[data-tour="loot-card"]'],
   '[data-tour="loot-auto-toggle"]': ['[data-tour="loot-card"]'],
+  '[data-tour="loot-now"]': ['[data-tour="loot-card"]'],
+  '[data-tour="loot-memory"]': ['[data-tour="loot-now"]', '[data-tour="loot-card"]'],
   '[data-tour="schedule-windows"]': ['[data-tour="schedule-day-config"]', '[data-tour="schedule-styles"]', '[data-tour="schedule-days"]'],
   '[data-tour="schedule-breaks"]': ['[data-tour="schedule-day-config"]', '[data-tour="schedule-styles"]', '[data-tour="schedule-days"]'],
   '[data-tour="schedule-finetune"]': ['[data-tour="schedule-day-config"]', '[data-tour="schedule-styles"]', '[data-tour="schedule-days"]'],

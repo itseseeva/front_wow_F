@@ -1,4 +1,4 @@
-import { PriceStatus, LootRow, LootStatus } from '../types';
+import { PriceStatus, LootRow, LootStatus, LootFilterStatus, LootMemory } from '../types';
 
 export const MOCK_PRICE_STATUS: PriceStatus = {
   configured: true,
@@ -95,5 +95,62 @@ export async function mockRefreshPrices(): Promise<{ ok: boolean } & PriceStatus
     ...MOCK_PRICE_STATUS,
     updated_at_ms: Date.now(),
     loading: false,
+  };
+}
+
+export async function mockGetLootStatus(minValue: number | null): Promise<LootFilterStatus> {
+  const autoThreshold = 12005; // 1з 20с 5м
+  if (minValue != null && minValue > autoThreshold) {
+    return {
+      ok: true,
+      active: true,
+      thresholdCopper: minValue,
+      source: 'floor',
+      leftThisSession: 14,
+      minValue,
+    };
+  }
+  return {
+    ok: true,
+    active: true,
+    thresholdCopper: autoThreshold,
+    source: 'memory',
+    leftThisSession: 14,
+    minValue,
+  };
+}
+
+export async function mockGetLootMemory(): Promise<LootMemory> {
+  return {
+    ok: true,
+    updatedAtMs: Date.now() - 18 * 60 * 1000,
+    mobs: [
+      {
+        npcId: 18477,
+        name: 'Сквернохвостый сатир',
+        zoneId: 3520,
+        zone: 'Долина Призрачной Луны',
+        kills: 42,
+        trusted: true,
+        items: [
+          { itemId: 21877, name: 'Ткань Пустоты', chance: 0.47, margin: 0.08, perKill: 1.2, priceCopper: 3450 },
+          { itemId: 22575, name: 'Частица тени', chance: 0.24, margin: 0.07, perKill: 0.3, priceCopper: 48200 },
+          { itemId: 27854, name: 'Копченое мясо талбука', chance: 0.14, margin: 0.05, perKill: 0.2, priceCopper: 900 },
+          { itemId: 25440, name: null, chance: 0.09, margin: 0.04, perKill: 0.1, priceCopper: null },
+        ],
+      },
+      {
+        npcId: 19954,
+        name: 'Мародер из клана Кровавой Глазницы',
+        zoneId: 3518,
+        zone: 'Награнд',
+        kills: 13,
+        trusted: false,
+        items: [
+          { itemId: 21877, name: 'Ткань Пустоты', chance: 0.38, margin: 0.15, perKill: 0.9, priceCopper: 3450 },
+          { itemId: 25433, name: 'Обсидиановые бусы войны', chance: 0.31, margin: 0.14, perKill: 0.4, priceCopper: null },
+        ],
+      },
+    ],
   };
 }

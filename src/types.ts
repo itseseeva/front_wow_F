@@ -48,6 +48,43 @@ export interface LootStatus {
   earned_complete: boolean;
 }
 
+export type LootFilterSource = 'memory' | 'gathered' | 'floor' | 'none' | null;
+
+export interface LootFilterStatus {
+  ok: boolean;
+  active: boolean;                 // фильтр работает в игре
+  thresholdCopper: number | null;  // порог прямо сейчас, медь; null — порога нет / не знаем
+  source: LootFilterSource;
+  leftThisSession: number;         // сколько предметов оставлено на трупах за сессию
+  minValue: number | null;         // «не брать дешевле» из настроек (медь) или null
+}
+
+export interface LootMemoryItem {
+  itemId: number;
+  name: string | null;             // null — показать «Предмет #itemId»
+  chance: number;                  // 0..1 — с какой долей трупов падает
+  margin: number;                  // 0..1 — точность ± (95%)
+  perKill: number;                 // штук в среднем за одно убийство
+  priceCopper: number | null;      // цена на аукционе за штуку, null — нет цены
+}
+
+export interface LootMob {
+  npcId: number;
+  name: string | null;             // имя моба (null — показать «Моб #npcId»)
+  zoneId: number | null;
+  zone: string | null;             // название зоны по-русски
+  kills: number;
+  trusted: boolean;                // true — убийств достаточно (20+), память по этому мобу уже решает
+  items: LootMemoryItem[];         // до 8 предметов, самые частые первыми
+}
+
+export interface LootMemory {
+  ok: boolean;
+  error?: string;
+  updatedAtMs: number | null;      // когда игра сохранила память (null — ещё ни разу)
+  mobs: LootMob[];
+}
+
 export type AuctionRuleset = 'normal' | 'pvp' | 'rp' | 'rp_pvp' | null;
 
 export interface PriceStatus {
@@ -399,6 +436,10 @@ declare global {
 
         // AutoRoute API
         get_autoroute_status?(): Promise<{ ok: boolean } & AutoRouteStatus>;
+
+        // Loot Filter & Drop Memory API
+        get_loot_status?(): Promise<LootFilterStatus>;
+        get_loot_memory?(): Promise<LootMemory>;
       };
     };
   }
