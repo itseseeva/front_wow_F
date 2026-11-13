@@ -555,6 +555,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
             </SpecularButton>
 
             <SpecularButton
+              data-tour="summary-sales-log"
               onClick={() => {
                 soundFx.playClick();
                 setIsSalesLogOpen(true);

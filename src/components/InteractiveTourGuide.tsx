@@ -252,12 +252,22 @@ export const TOUR_STEPS: Record<TourSectionId, TourStep[]> = {
       titleRu: '4. Карта прохода',
       titleEn: '4. Farm Map',
       descRu:
-        'На карте маршрута видно, где бот подбирал траву и руду, а где дрался с мобами — можно оценить, какая часть круга приносит больше всего.',
+        'Нажмите «Карта», чтобы открыть тепловую карту маршрута: на ней видно, где бот подбирал траву и руду, а где дрался с мобами, и можно переключать проходы.',
       descEn:
-        'The route map visually highlights where herbs/ores were gathered and where combat took place — helping identify the most lucrative sections of the loop.',
-      tipRu: 'Пишет «нет цен» — проверьте в Настройках, что найдены ключи и выбран аукцион (или «Авто»).',
-      tipEn: 'If it displays "no prices", check Settings to ensure auction keys are detected and realm auction is selected (or set to "Auto").',
-      preferredPosition: 'top',
+        'Click "Map" to open the route heatmap: see where herbs and ores were gathered, where combat occurred, and switch between individual passes.',
+      preferredPosition: 'bottom',
+    },
+    {
+      targetSelector: '[data-tour="summary-sales-log"]',
+      titleRu: '5. Журнал продаж',
+      titleEn: '5. Sales Log',
+      descRu:
+        'Здесь видно всё, что бот продал торговцу за выбранный день: количество, выручку и цену на аукционе. Если нужный предмет ушёл дёшево — нажмите «Больше не продавать».',
+      descEn:
+        'Shows everything the bot sold to vendors on the selected day: quantity, payout, and auction value. Click "Never sell" if a valuable item was sold too cheap.',
+      tipRu: 'Новые продажи появляются после /reload или выхода из игры; запрет продажи также начнёт действовать после /reload.',
+      tipEn: 'New sales appear after /reload or logging out; blocking an item also takes effect after the next /reload.',
+      preferredPosition: 'bottom',
     },
   ],
 
@@ -340,6 +350,7 @@ const FALLBACK_SELECTORS: Record<string, string[]> = {
   '[data-tour="schedule-breaks"]': ['[data-tour="schedule-day-config"]', '[data-tour="schedule-styles"]', '[data-tour="schedule-days"]'],
   '[data-tour="schedule-finetune"]': ['[data-tour="schedule-day-config"]', '[data-tour="schedule-styles"]', '[data-tour="schedule-days"]'],
   '[data-tour="summary-heatmap"]': ['[data-tour="summary-live-cards"]', '[data-tour="summary-overview"]'],
+  '[data-tour="summary-sales-log"]': ['[data-tour="summary-heatmap"]', '[data-tour="summary-overview"]'],
   '[data-tour="summary-gold-rate"]': ['[data-tour="summary-live-cards"]', '[data-tour="summary-overview"]'],
   '[data-tour="summary-live-cards"]': ['[data-tour="summary-overview"]'],
   '[data-tour="summary-calendar"]': ['[data-tour="summary-overview"]'],
