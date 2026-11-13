@@ -13,6 +13,28 @@ interface SalesLogModalProps {
   isOpen: boolean;
   onClose: () => void;
   language: 'ru' | 'en';
+  date: string;
+}
+
+const RU_MONTHS_GEN = [
+  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+];
+
+const EN_MONTHS_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+function formatDateTitle(dateStr: string, isRu: boolean): string {
+  const parts = dateStr.split('-');
+  if (parts.length < 3) return dateStr;
+  const day = parseInt(parts[2], 10);
+  const month = parseInt(parts[1], 10);
+  if (isRu) {
+    return `${day} ${RU_MONTHS_GEN[month - 1] || ''}`;
+  }
+  return `${EN_MONTHS_NAMES[month - 1] || ''} ${day}`;
 }
 
 function formatDateTime(ms: number | null | undefined, isRu: boolean, includeSeconds = false): string {
@@ -35,6 +57,7 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
   isOpen,
   onClose,
   language,
+  date,
 }) => {
   const isRu = language === 'ru';
   const [loading, setLoading] = useState(false);
@@ -52,14 +75,15 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
       const api = await getPywebviewApi();
       let res: SaleLog | null = null;
       if (api?.get_sale_log) {
-        res = await api.get_sale_log();
+        res = await api.get_sale_log(date);
       } else if (!window.pywebview?.api) {
         // Fallback to mock in browser development mode
-        res = await mockGetSaleLog();
+        res = await mockGetSaleLog(date);
       } else {
         // Old backend without method: show empty state
         res = {
           ok: true,
+          date: date ?? null,
           items: [],
           totalCopper: 0,
           blocked: [],
@@ -68,27 +92,28 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
       }
 
       if (res) {
+        const blockedSet = new Set(res.blocked || []);
+        const rows = (res.items || []).map((row) => ({
+          ...row,
+          source: 'mob' as const,
+          blocked: blockedSet.has(row.item_id),
+        }));
+        setItems(rows);
+        setTotalCopper(res.totalCopper ?? 0);
+        setUpdatedAtMs(res.updatedAtMs ?? null);
         if (!res.ok) {
           setError(res.error || (isRu ? 'Ошибка получения журнала продаж' : 'Failed to fetch sales log'));
-        } else {
-          const blockedSet = new Set(res.blocked || []);
-          const rows = (res.items || []).map((row) => ({
-            ...row,
-            source: 'mob' as const,
-            blocked: blockedSet.has(row.item_id),
-          }));
-          setItems(rows);
-          setTotalCopper(res.totalCopper ?? 0);
-          setUpdatedAtMs(res.updatedAtMs ?? null);
         }
       }
     } catch (err: any) {
       console.warn('get_sale_log error:', err);
+      setItems([]);
+      setTotalCopper(0);
       setError(err?.message || (isRu ? 'Ошибка получения журнала продаж' : 'Failed to fetch sales log'));
     } finally {
       setLoading(false);
     }
-  }, [isRu]);
+  }, [isRu, date]);
 
   useEffect(() => {
     if (isOpen) {
@@ -182,6 +207,9 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
               <h2 className="text-sm font-semibold text-zinc-100">
                 {isRu ? 'Журнал продаж' : 'Sales log'}
               </h2>
+              <span className="text-xs text-zinc-400">
+                · {formatDateTitle(date, isRu)}
+              </span>
               {items.length > 0 && (
                 <span className="text-[11px] text-zinc-500">
                   ({items.length} {isRu ? 'поз.' : 'records'})
@@ -208,7 +236,7 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
             <div className="flex flex-col items-end text-right">
               <div className="flex items-center gap-1.5 text-xs font-semibold">
                 <span className="text-zinc-500 text-[11px] font-normal">
-                  {isRu ? 'всего:' : 'total:'}
+                  {isRu ? 'за день:' : 'day total:'}
                 </span>
                 <MoneyBadge copper={totalCopper} language={language} />
               </div>
@@ -243,7 +271,7 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
                 {isRu ? 'Загрузка журнала продаж...' : 'Loading sales log...'}
               </span>
             </div>
-          ) : error ? (
+          ) : error && items.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-2 text-rose-400 py-16 text-center">
               <AlertTriangle className="w-6 h-6 text-rose-400" />
               <span className="text-xs">{error}</span>
@@ -252,13 +280,23 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
             <div className="flex-1 flex flex-col items-center justify-center py-16 px-4 text-center gap-2">
               <ReceiptText className="w-8 h-8 text-zinc-600 mb-1" />
               <p className="text-xs text-zinc-400 max-w-md leading-relaxed">
+                {isRu ? 'В этот день продаж не было' : 'No sales on this day'}
+              </p>
+              <p className="text-[11px] text-zinc-500 max-w-md leading-relaxed">
                 {isRu
-                  ? 'Продаж ещё не было. Журнал обновляется после /reload или выхода из игры.'
-                  : 'No sales yet. The log updates after /reload or exiting the game.'}
+                  ? 'Новые продажи появляются после /reload или выхода из игры'
+                  : 'New sales appear after /reload or logging out'}
               </p>
             </div>
           ) : (
-            <div
+            <>
+              {error && (
+                <div className="mb-2.5 flex items-center gap-1.5 text-[11px] text-zinc-400 shrink-0">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400/80 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+              <div
               className="flex-1 overflow-y-auto overflow-x-auto overscroll-y-contain pr-1.5 max-h-[360px] 2xl:max-h-[460px] [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.25)_transparent]"
               onWheel={(e) => {
                 const el = e.currentTarget;
@@ -380,7 +418,13 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
                   )}
                 </tbody>
               </table>
-            </div>
+              </div>
+              <p className="mt-2.5 text-[11px] text-zinc-500 font-mono leading-normal shrink-0">
+                {isRu
+                  ? 'Новые продажи появляются после /reload или выхода из игры'
+                  : 'New sales appear after /reload or logging out'}
+              </p>
+            </>
           )}
         </div>
 

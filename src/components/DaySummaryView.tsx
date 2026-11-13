@@ -1216,6 +1216,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
         isOpen={isSalesLogOpen}
         onClose={() => setIsSalesLogOpen(false)}
         language={language}
+        date={selectedDate}
       />
     </div>
   );

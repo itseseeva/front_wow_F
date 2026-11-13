@@ -528,14 +528,26 @@ let mockSaleRowsList: SaleRow[] = [
   },
 ];
 
-export async function mockGetSaleLog(): Promise<SaleLog> {
-  const items = mockSaleRowsList.map((r) => ({
+function toLocalDateStr(ms: number): string {
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export async function mockGetSaleLog(date?: string): Promise<SaleLog> {
+  const allItems = mockSaleRowsList.map((r) => ({
     ...r,
     blocked: mockBlockedSaleItemIds.has(r.item_id),
   }));
+  const items = date
+    ? allItems.filter((r) => r.sold_at_ms != null && toLocalDateStr(r.sold_at_ms) === date)
+    : allItems;
   const totalCopper = items.reduce((acc, it) => acc + (it.sold_copper || 0), 0);
   return {
     ok: true,
+    date: date ?? null,
     items,
     totalCopper,
     blocked: Array.from(mockBlockedSaleItemIds),

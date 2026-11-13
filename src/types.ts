@@ -54,6 +54,7 @@ export interface SaleRow extends LootRow {
 export interface SaleLog {
   ok: boolean;
   error?: string;
+  date: string | null;          // день, за который пришёл список (null — все)
   items: SaleRow[];             // от новых к старым
   totalCopper: number;
   blocked: number[];            // item_id из списка «не продавать»
@@ -469,7 +470,7 @@ declare global {
         get_loot_memory?(): Promise<LootMemory>;
 
         // Sales Log API
-        get_sale_log?(): Promise<SaleLog>;
+        get_sale_log?(date?: string): Promise<SaleLog>;   // date — 'YYYY-MM-DD'; без даты — все продажи
         set_sale_block?(item_id: number, blocked: boolean): Promise<SaleBlockResult>;
       };
     };
