@@ -1,4 +1,4 @@
-import { PriceStatus, LootRow, LootStatus, LootFilterStatus, LootMemory } from '../types';
+import { PriceStatus, LootRow, LootStatus, LootFilterStatus, LootMemory, SaleRow, SaleLog, SaleBlockResult } from '../types';
 
 export const MOCK_PRICE_STATUS: PriceStatus = {
   configured: true,
@@ -324,5 +324,236 @@ export async function mockGetLootMemory(): Promise<LootMemory> {
         ],
       },
     ],
+  };
+}
+
+let mockBlockedSaleItemIds = new Set<number>([21877, 25433]);
+
+let mockSaleRowsList: SaleRow[] = [
+  {
+    item_id: 22575,
+    name: 'Частица тени',
+    count: 2,
+    price: 48200,
+    value: 96400,
+    vendor: 400,
+    sold_copper: 800,
+    quality: 2,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 6 * 60 * 1000,
+    blocked: false,
+  },
+  {
+    item_id: 21877,
+    name: 'Ткань Пустоты',
+    count: 20,
+    price: 3450,
+    value: 69000,
+    vendor: 150,
+    sold_copper: 3000,
+    quality: 1,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 14 * 60 * 1000,
+    blocked: true,
+  },
+  {
+    item_id: 25412,
+    name: 'Изношенная кольчуга',
+    count: 1,
+    price: null,
+    value: null,
+    vendor: 4500,
+    sold_copper: 4500,
+    quality: 0,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 22 * 60 * 1000,
+    blocked: false,
+  },
+  {
+    item_id: 25433,
+    name: 'Изогнутый клык',
+    count: 12,
+    price: null,
+    value: null,
+    vendor: 350,
+    sold_copper: 4200,
+    quality: 0,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 35 * 60 * 1000,
+    blocked: false,
+  },
+  {
+    item_id: 24414,
+    name: 'Сломанный кинжал',
+    count: 3,
+    price: null,
+    value: null,
+    vendor: 1100,
+    sold_copper: 3300,
+    quality: 0,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 48 * 60 * 1000,
+    blocked: false,
+  },
+  {
+    item_id: 27481,
+    name: 'Тяжелый камень',
+    count: 15,
+    price: 500,
+    value: 7500,
+    vendor: 120,
+    sold_copper: 1800,
+    quality: 1,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 61 * 60 * 1000,
+    blocked: false,
+  },
+  {
+    item_id: 25420,
+    name: 'Рваное кожаное оплечье',
+    count: 1,
+    price: null,
+    value: null,
+    vendor: 3200,
+    sold_copper: 3200,
+    quality: 0,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 73 * 60 * 1000,
+    blocked: false,
+  },
+  {
+    item_id: 25425,
+    name: 'Потрескавшийся череп',
+    count: 8,
+    price: null,
+    value: null,
+    vendor: 200,
+    sold_copper: 1600,
+    quality: 0,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 84 * 60 * 1000,
+    blocked: false,
+  },
+  {
+    item_id: 22573,
+    name: 'Частица земли',
+    count: 3,
+    price: 18500,
+    value: 55500,
+    vendor: 300,
+    sold_copper: 900,
+    quality: 2,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 95 * 60 * 1000,
+    blocked: false,
+  },
+  {
+    item_id: 25430,
+    name: 'Зазубренный наконечник стрелы',
+    count: 14,
+    price: null,
+    value: null,
+    vendor: 200,
+    sold_copper: 2800,
+    quality: 0,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 110 * 60 * 1000,
+    blocked: false,
+  },
+  {
+    item_id: 25433,
+    name: 'Обсидиановые бусы войны',
+    count: 2,
+    price: 12000,
+    value: 24000,
+    vendor: 800,
+    sold_copper: 1600,
+    quality: 3,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 125 * 60 * 1000,
+    blocked: true,
+  },
+  {
+    item_id: 25440,
+    name: 'Клок жесткой шерсти',
+    count: 22,
+    price: null,
+    value: null,
+    vendor: 100,
+    sold_copper: 2200,
+    quality: 0,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 140 * 60 * 1000,
+    blocked: false,
+  },
+  {
+    item_id: 25445,
+    name: 'Потускневшее кольцо',
+    count: 2,
+    price: null,
+    value: null,
+    vendor: 2500,
+    sold_copper: 5000,
+    quality: 0,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 155 * 60 * 1000,
+    blocked: false,
+  },
+  {
+    item_id: 23440,
+    name: 'Неочищенный алмаз',
+    count: 1,
+    price: 45000,
+    value: 45000,
+    vendor: 850,
+    sold_copper: 850,
+    quality: 2,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 170 * 60 * 1000,
+    blocked: false,
+  },
+];
+
+export async function mockGetSaleLog(): Promise<SaleLog> {
+  const items = mockSaleRowsList.map((r) => ({
+    ...r,
+    blocked: mockBlockedSaleItemIds.has(r.item_id),
+  }));
+  const totalCopper = items.reduce((acc, it) => acc + (it.sold_copper || 0), 0);
+  return {
+    ok: true,
+    items,
+    totalCopper,
+    blocked: Array.from(mockBlockedSaleItemIds),
+    updatedAtMs: Date.now() - 3 * 60 * 1000,
+  };
+}
+
+export async function mockSetSaleBlock(item_id: number, blocked: boolean): Promise<SaleBlockResult> {
+  if (blocked) {
+    mockBlockedSaleItemIds.add(item_id);
+  } else {
+    mockBlockedSaleItemIds.delete(item_id);
+  }
+  mockSaleRowsList = mockSaleRowsList.map((r) =>
+    r.item_id === item_id ? { ...r, blocked } : r
+  );
+  return {
+    ok: true,
+    blocked: Array.from(mockBlockedSaleItemIds),
   };
 }

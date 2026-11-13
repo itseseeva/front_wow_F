@@ -45,6 +45,27 @@ export interface LootRow {
   source?: 'gather' | 'mob' | null;     // откуда: сбор (жила, куст) или с мобов; null — старые записи
 }
 
+export interface SaleRow extends LootRow {
+  sold_copper: number;          // выручка за всю строку, медь
+  sold_at_ms: number | null;    // когда продано
+  blocked: boolean;             // предмет в списке «не продавать»
+}
+
+export interface SaleLog {
+  ok: boolean;
+  error?: string;
+  items: SaleRow[];             // от новых к старым
+  totalCopper: number;
+  blocked: number[];            // item_id из списка «не продавать»
+  updatedAtMs: number | null;
+}
+
+export interface SaleBlockResult {
+  ok: boolean;
+  error?: string;
+  blocked: number[];
+}
+
 export interface LootStatus {
   items: LootRow[];
   earned_copper: number | null;
@@ -446,6 +467,10 @@ declare global {
         // Loot Filter & Drop Memory API
         get_loot_status?(): Promise<LootFilterStatus>;
         get_loot_memory?(): Promise<LootMemory>;
+
+        // Sales Log API
+        get_sale_log?(): Promise<SaleLog>;
+        set_sale_block?(item_id: number, blocked: boolean): Promise<SaleBlockResult>;
       };
     };
   }

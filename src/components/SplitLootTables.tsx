@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { LootRow } from '../types';
 import { MoneyBadge } from '../utils/money';
 import { ItemIcon, getRarityMeta } from './ItemIcon';
@@ -12,6 +12,7 @@ interface SplitLootTablesProps {
   language: 'ru' | 'en';
   variant?: 'modal' | 'frameless';
   showTotalHeader?: boolean;
+  highlightNew?: boolean;
 }
 
 const computeTableTotal = (rows: LootRow[]): number | null => {
@@ -32,9 +33,65 @@ const LootSubTable: React.FC<{
   rows: LootRow[];
   language: 'ru' | 'en';
   variant: 'modal' | 'frameless';
-}> = ({ title, rows, language, variant }) => {
+  highlightNew?: boolean;
+}> = ({ title, rows, language, variant, highlightNew = false }) => {
   const isRu = language === 'ru';
   const totalCopper = useMemo(() => computeTableTotal(rows), [rows]);
+  const prevCountsRef = useRef<Map<string, number> | null>(null);
+  const [pulsingKeys, setPulsingKeys] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!highlightNew) {
+      prevCountsRef.current = null;
+      setPulsingKeys({});
+      return;
+    }
+
+    const nextMap = new Map<string, number>();
+    for (const r of rows) {
+      const k = `${r.source || 'mob'}:${r.item_id}`;
+      nextMap.set(k, (nextMap.get(k) || 0) + r.count);
+    }
+
+    if (prevCountsRef.current === null) {
+      prevCountsRef.current = nextMap;
+      return;
+    }
+
+    const now = Date.now();
+    const newlyPulsing: string[] = [];
+    for (const [k, count] of nextMap.entries()) {
+      const prev = prevCountsRef.current.get(k);
+      if (prev === undefined || count > prev) {
+        newlyPulsing.push(k);
+      }
+    }
+    prevCountsRef.current = nextMap;
+
+    if (newlyPulsing.length > 0) {
+      const expiresAt = now + 3000;
+      setPulsingKeys((prev) => {
+        const updated = { ...prev };
+        for (const k of newlyPulsing) {
+          updated[k] = expiresAt;
+        }
+        return updated;
+      });
+
+      const timer = setTimeout(() => {
+        const t = Date.now();
+        setPulsingKeys((prev) => {
+          const cleaned: Record<string, number> = {};
+          for (const [k, exp] of Object.entries(prev)) {
+            if (exp > t) cleaned[k] = exp;
+          }
+          return cleaned;
+        });
+      }, 3050);
+
+      return () => clearTimeout(timer);
+    }
+  }, [rows, highlightNew]);
 
   const sortedRows = useMemo(() => {
     return [...rows].sort((a, b) => {
@@ -86,11 +143,17 @@ const LootSubTable: React.FC<{
                 sortedRows.map((item, idx) => {
                   const displayName = item.name || (isRu ? `Предмет #${item.item_id}` : `Item #${item.item_id}`);
                   const rarity = getRarityMeta(item.quality);
+                  const rowKey = `${item.source || 'mob'}:${item.item_id}`;
+                  const isPulsing = highlightNew && Boolean(pulsingKeys[rowKey]);
 
                   return (
                     <tr
                       key={`${item.item_id}-${idx}`}
-                      className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
+                      className={`transition-colors ${
+                        isPulsing
+                          ? 'bg-black/[0.06] dark:bg-white/[0.08] animate-pulse'
+                          : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
+                      }`}
                     >
                       <td className="py-1.5 pr-2 font-medium text-zinc-800 dark:text-zinc-200 max-w-[160px]" title={displayName}>
                         <div className="flex items-center gap-2 min-w-0">
@@ -156,6 +219,7 @@ export const SplitLootTables: React.FC<SplitLootTablesProps> = ({
   language,
   variant = 'frameless',
   showTotalHeader = true,
+  highlightNew = false,
 }) => {
   const isRu = language === 'ru';
 
@@ -202,6 +266,7 @@ export const SplitLootTables: React.FC<SplitLootTablesProps> = ({
           rows={gatherRows}
           language={language}
           variant={variant}
+          highlightNew={highlightNew}
         />
 
         <LootSubTable
@@ -209,6 +274,7 @@ export const SplitLootTables: React.FC<SplitLootTablesProps> = ({
           rows={mobRows}
           language={language}
           variant={variant}
+          highlightNew={highlightNew}
         />
       </div>
     </div>

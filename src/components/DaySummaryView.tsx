@@ -12,14 +12,16 @@ import {
   TrendingUp,
   Coins,
   Sparkles,
+  ReceiptText,
 } from 'lucide-react';
-import { SpecularCard } from './ui/Specular';
+import { SpecularCard, SpecularButton } from './ui/Specular';
 import { HeatmapViewer } from './HeatmapViewer';
 import { soundFx } from '../utils/audio';
 import { formatRouteRoman } from '../utils/roman';
 import { MoneyBadge } from '../utils/money';
 import { SplitLootTables } from './SplitLootTables';
 import { RouteItem } from './StealthHUDLeftSidebar';
+import { SalesLogModal } from './SalesLogModal';
 
 interface DaySummaryViewProps {
   selectedDate: string;
@@ -134,6 +136,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
 }) => {
   const isRu = language === 'ru';
   const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [isSalesLogOpen, setIsSalesLogOpen] = useState(false);
 
   // Terrain & AutoRoute Status (always subscribed, even when bot is not running)
   const [terrainStatus, setTerrainStatus] = useState<TerrainStatus | null>(initialTerrainStatus);
@@ -538,16 +541,28 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
             </p>
           </div>
 
-          {hasSessions && dayData?.total?.duration_s != null && (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <SpecularButton
+              onClick={() => {
+                soundFx.playClick();
+                setIsSalesLogOpen(true);
+              }}
+              className="h-7 px-2.5 rounded-lg flex items-center gap-1.5 cursor-pointer border border-black/10 dark:border-white/10 bg-transparent text-[11px] text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-all font-mono"
+              title={isRu ? 'Открыть журнал продаж' : 'Open sales log'}
+            >
+              <ReceiptText className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
+              <span>{isRu ? 'Журнал продаж' : 'Sales log'}</span>
+            </SpecularButton>
+
+            {hasSessions && dayData?.total?.duration_s != null && (
               <span className="text-[10px] 2xl:text-xs font-mono text-zinc-600 dark:text-zinc-400">
                 {isRu ? 'за день: ' : 'day total: '}
                 <strong className="text-zinc-950 dark:text-white font-semibold">
                   {formatDuration(dayData.total.duration_s)}
                 </strong>
               </span>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* 2. Content: Empty day notice OR Sessions selector & Telemetry */}
@@ -893,6 +908,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                       language={language}
                       variant="frameless"
                       showTotalHeader={false}
+                      highlightNew
                     />
                   </div>
                 ) : !terrainStatus && (!autoRouteStatus || autoRouteStatus.status === 'idle' || (autoRouteStatus.status === 'ready' && !showAutoRouteReady)) ? (
@@ -1194,6 +1210,13 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
           )}
         </div>
       )}
+
+      {/* Sales Log Modal */}
+      <SalesLogModal
+        isOpen={isSalesLogOpen}
+        onClose={() => setIsSalesLogOpen(false)}
+        language={language}
+      />
     </div>
   );
 };
