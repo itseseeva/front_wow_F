@@ -7,8 +7,7 @@ import {
   Calendar as CalendarIcon,
   Clock,
   Coffee,
-  Loader2,
-  Maximize2,
+  Map as MapIcon,
   TrendingUp,
   Coins,
   Sparkles,
@@ -543,6 +542,19 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
 
           <div className="flex items-center gap-3">
             <SpecularButton
+              data-tour="summary-heatmap"
+              onClick={() => {
+                soundFx.playClick();
+                setIsViewerOpen(true);
+              }}
+              className="h-7 px-2.5 rounded-lg flex items-center gap-1.5 cursor-pointer border border-black/10 dark:border-white/10 bg-transparent text-[11px] text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-all font-mono"
+              title={isRu ? 'Открыть тепловую карту прогона' : 'Open session heatmap'}
+            >
+              <MapIcon className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
+              <span>{isRu ? 'Карта' : 'Map'}</span>
+            </SpecularButton>
+
+            <SpecularButton
               onClick={() => {
                 soundFx.playClick();
                 setIsSalesLogOpen(true);
@@ -1065,150 +1077,35 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
         )}
       </div>
 
-      {/* 7. Heatmap Card & Passes Row for Active Session (only when viewing a past session or all-day) */}
-      {!isLiveSelected && hasSessions && heatmap && heatmap.status === 'ready' && heatmap.image && (
-        <div data-tour="summary-heatmap" className="w-full flex flex-col gap-2.5 select-none bg-transparent">
-          {/* Header of Map: route name / map info */}
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
-                {isRu ? 'Тепловая карта прогона' : 'Session Heatmap'}
-              </span>
-              {heatmapLabel && (
-                <span className="text-[11px] font-mono text-zinc-500">
-                  · {heatmapLabel}
-                </span>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                soundFx.playClick();
-                setIsViewerOpen(true);
-              }}
-              className="p-1 rounded text-zinc-400 hover:text-zinc-950 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
-              title={isRu ? 'Полноэкранный просмотр (зум и сдвиг)' : 'Open fullscreen viewer'}
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Seamless Map Container with loading spinner if pass is changing */}
-          <div
-            onClick={() => {
-              soundFx.playClick();
-              setIsViewerOpen(true);
-            }}
-            className="group relative w-full h-[210px] sm:h-[245px] xl:h-[275px] overflow-hidden rounded-xl cursor-zoom-in transition-all flex items-center justify-center bg-transparent border-0 shadow-none"
-          >
-            <img
-              src={heatmap.image}
-              alt={heatmap.route_name || 'Session Heatmap'}
-              className={`max-h-full max-w-full w-auto h-auto object-contain select-none rounded-xl transition-all duration-300 group-hover:scale-[1.01] ${
-                isHeatmapLoading ? 'opacity-40 grayscale' : 'opacity-100'
-              }`}
-              loading="lazy"
-            />
-
-            {isHeatmapLoading && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <Loader2 className="w-6 h-6 animate-spin text-zinc-200 drop-shadow" />
-              </div>
-            )}
-
-            {/* Hover Hint */}
-            <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-zinc-950/80 backdrop-blur-sm border border-white/10 text-[10px] font-mono text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 pointer-events-none shadow-md">
-              <Maximize2 className="w-3 h-3 text-zinc-400" />
-              <span>{isRu ? 'Клик для зума' : 'Click to zoom'}</span>
-            </div>
-          </div>
-
-          {/* 8. Passes Buttons Row: «Все», «1», «2», … до passes */}
-          {activeSession && activeSession.passes > 0 && (
-            <div className="flex flex-col gap-1.5 px-1 pt-1 font-mono">
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider pr-1 shrink-0">
-                  {isRu ? 'Проход:' : 'Pass:'}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    soundFx.playClick();
-                    onSelectPassIndex(null);
-                  }}
-                  className={`px-2.5 py-1 rounded-md border text-xs transition-all cursor-pointer shrink-0 ${
-                    selectedPassIndex === null
-                      ? 'border-zinc-950 dark:border-white bg-black/5 dark:bg-white/10 text-zinc-950 dark:text-white font-semibold'
-                      : 'border-black/10 dark:border-white/10 text-zinc-500 hover:text-zinc-950 dark:hover:text-white'
-                  }`}
-                >
-                  {isRu ? 'Все' : 'All'}
-                </button>
-
-                {Array.from({ length: activeSession.passes }).map((_, idx) => {
-                  const passNum = idx + 1;
-                  const isPassSelected = selectedPassIndex === passNum;
-
-                  return (
-                    <button
-                      key={passNum}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        soundFx.playClick();
-                        onSelectPassIndex(passNum);
-                      }}
-                      className={`min-w-[28px] px-2 py-1 rounded-md border text-xs text-center transition-all cursor-pointer shrink-0 ${
-                        isPassSelected
-                          ? 'border-zinc-950 dark:border-white bg-black/5 dark:bg-white/10 text-zinc-950 dark:text-white font-semibold'
-                          : 'border-black/10 dark:border-white/10 text-zinc-500 hover:text-zinc-950 dark:hover:text-white'
-                      }`}
-                    >
-                      {passNum}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* 9. Selected Pass Info Details Row */}
-              {activePassInfo && (
-                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 pl-0.5 flex items-center gap-2">
-                  <span>
-                    {isRu ? `проход ${activePassInfo.index}: ` : `pass ${activePassInfo.index}: `}
-                    <strong>
-                      {activePassInfo.direction === 'forward'
-                        ? (isRu ? 'туда' : 'forward')
-                        : activePassInfo.direction === 'back'
-                        ? (isRu ? 'обратно' : 'back')
-                        : (isRu ? 'круг' : 'loop')}
-                    </strong>
-                    {' · '}
-                    {formatDuration(activePassInfo.duration_s)}
-                    {' · '}
-                    {isRu ? `узлов ${activePassInfo.nodes}` : `nodes ${activePassInfo.nodes}`}
-                    {' · '}
-                    {isRu ? `упоров ${activePassInfo.stucks}` : `stucks ${activePassInfo.stucks}`}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Fullscreen Viewer Modal */}
-          {isViewerOpen && (
-            <HeatmapViewer
-              image={heatmap.image}
-              routeName={heatmap.route_name || heatmapLabel}
-              width={heatmap.width}
-              height={heatmap.height}
-              onClose={() => setIsViewerOpen(false)}
-              language={language}
-            />
-          )}
-        </div>
+      {/* Fullscreen Heatmap Viewer Modal */}
+      {isViewerOpen && (
+        <HeatmapViewer
+          image={!isLiveSelected && hasSessions ? heatmap?.image : undefined}
+          routeName={
+            (!isLiveSelected && hasSessions && (heatmap?.route_name || heatmapLabel)) ||
+            formatDateTitle(selectedDate, isRu)
+          }
+          width={heatmap?.width}
+          height={heatmap?.height}
+          onClose={() => setIsViewerOpen(false)}
+          language={language}
+          passes={!isLiveSelected && hasSessions ? (activeSession?.passes || 0) : 0}
+          selectedPassIndex={selectedPassIndex}
+          onSelectPassIndex={onSelectPassIndex}
+          activePassInfo={activePassInfo}
+          isLoading={!isLiveSelected && hasSessions && isHeatmapLoading}
+          emptyMessage={
+            !hasSessions
+              ? (isRu ? 'В этот день бот не работал — карты прогона нет' : 'No sessions on this day — no heatmap recorded')
+              : isLiveSelected
+              ? (isRu ? 'Карта появится после завершения текущей сессии' : 'Heatmap will appear after the current session finishes')
+              : heatmap?.status === 'building'
+              ? (isRu ? 'Тепловая карта ещё строится…' : 'Session heatmap is still building…')
+              : heatmap?.status === 'error'
+              ? (heatmap.error || (isRu ? 'Не удалось построить карту' : 'Failed to build heatmap'))
+              : (isRu ? 'Для этой сессии карта не записана' : 'No heatmap recorded for this session')
+          }
+        />
       )}
 
       {/* Sales Log Modal */}

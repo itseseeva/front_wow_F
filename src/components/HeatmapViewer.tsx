@@ -1,15 +1,33 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ZoomIn, ZoomOut, RotateCcw, MapPin } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, RotateCcw, MapPin, Loader2 } from 'lucide-react';
+import { PassInfo } from '../types';
 import { soundFx } from '../utils/audio';
 
 interface HeatmapViewerProps {
-  image: string;
+  image?: string;
   routeName?: string;
   width?: number;
   height?: number;
   onClose: () => void;
   language?: 'ru' | 'en';
+  passes?: number;
+  selectedPassIndex?: number | null;
+  onSelectPassIndex?: (pass: number | null) => void;
+  activePassInfo?: PassInfo | null;
+  isLoading?: boolean;
+  emptyMessage?: string;
+}
+
+function formatPassDuration(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  if (hrs > 0) {
+    return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
@@ -19,6 +37,12 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
   height,
   onClose,
   language = 'ru',
+  passes = 0,
+  selectedPassIndex = null,
+  onSelectPassIndex,
+  activePassInfo = null,
+  isLoading = false,
+  emptyMessage,
 }) => {
   const isRu = language === 'ru';
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -38,7 +62,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
 
   // Backend generated images place a legend on the right ~22.5% of the canvas.
   // When detected, we cleanly crop out the right panel so only the pure map is visible.
-  const hasBackendPanel = Boolean(!image.includes('EZF') && (width ? width > 1300 : true));
+  const hasBackendPanel = Boolean(image && !image.includes('EZF') && (width ? width > 1300 : true));
 
   // Reset to original 1x scale and centered pan
   const handleReset = useCallback(() => {
@@ -162,49 +186,51 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
         </div>
 
         {/* Center Slot: Zoom Controls (strictly centered, far away from corners) */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 font-mono text-xs z-10">
-          <button
-            type="button"
-            onClick={() => {
-              soundFx.playClick();
-              setScale((prev) => Math.max(1, prev * 0.8));
-              if (scale <= 1.25) setPan({ x: 0, y: 0 });
-            }}
-            disabled={scale <= 1}
-            className="p-1.5 rounded-lg border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-25 disabled:pointer-events-none cursor-pointer transition-colors"
-            title={isRu ? 'Отдалить' : 'Zoom out'}
-          >
-            <ZoomOut className="w-4 h-4" />
-          </button>
-
-          <span className="px-2.5 py-1 min-w-[58px] text-center rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs font-mono tabular-nums text-zinc-200 font-semibold">
-            {scale.toFixed(1)}×
-          </span>
-
-          <button
-            type="button"
-            onClick={() => {
-              soundFx.playClick();
-              setScale((prev) => Math.min(6, prev * 1.25));
-            }}
-            disabled={scale >= 6}
-            className="p-1.5 rounded-lg border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-25 disabled:pointer-events-none cursor-pointer transition-colors"
-            title={isRu ? 'Приблизить' : 'Zoom in'}
-          >
-            <ZoomIn className="w-4 h-4" />
-          </button>
-
-          {scale > 1.05 && (
+        {image && (
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 font-mono text-xs z-10">
             <button
               type="button"
-              onClick={handleReset}
-              className="p-1.5 rounded-lg border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] cursor-pointer transition-colors ml-1"
-              title={isRu ? 'Сбросить масштаб (1×)' : 'Reset zoom (1×)'}
+              onClick={() => {
+                soundFx.playClick();
+                setScale((prev) => Math.max(1, prev * 0.8));
+                if (scale <= 1.25) setPan({ x: 0, y: 0 });
+              }}
+              disabled={scale <= 1}
+              className="p-1.5 rounded-lg border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-25 disabled:pointer-events-none cursor-pointer transition-colors"
+              title={isRu ? 'Отдалить' : 'Zoom out'}
             >
-              <RotateCcw className="w-4 h-4" />
+              <ZoomOut className="w-4 h-4" />
             </button>
-          )}
-        </div>
+
+            <span className="px-2.5 py-1 min-w-[58px] text-center rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs font-mono tabular-nums text-zinc-200 font-semibold">
+              {scale.toFixed(1)}×
+            </span>
+
+            <button
+              type="button"
+              onClick={() => {
+                soundFx.playClick();
+                setScale((prev) => Math.min(6, prev * 1.25));
+              }}
+              disabled={scale >= 6}
+              className="p-1.5 rounded-lg border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-25 disabled:pointer-events-none cursor-pointer transition-colors"
+              title={isRu ? 'Приблизить' : 'Zoom in'}
+            >
+              <ZoomIn className="w-4 h-4" />
+            </button>
+
+            {scale > 1.05 && (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="p-1.5 rounded-lg border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] cursor-pointer transition-colors ml-1"
+                title={isRu ? 'Сбросить масштаб (1×)' : 'Reset zoom (1×)'}
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Right Slot: Standalone Isolated Close Button - strictly on its own */}
         <div className="flex items-center">
@@ -224,51 +250,145 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
         </div>
       </div>
 
+      {/* Optional Passes Selector Sub-bar */}
+      {passes > 0 && onSelectPassIndex && (
+        <div
+          className="w-full px-4 sm:px-6 py-2 border-b border-white/[0.06] bg-[#09090b] flex flex-wrap items-center justify-between gap-2 z-20 shrink-0 font-mono"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none text-xs">
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wider pr-1 shrink-0">
+              {isRu ? 'Проход:' : 'Pass:'}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => {
+                soundFx.playClick();
+                onSelectPassIndex(null);
+              }}
+              className={`px-2.5 py-1 rounded-md border text-xs transition-all cursor-pointer shrink-0 ${
+                selectedPassIndex === null
+                  ? 'border-white bg-white/10 text-white font-semibold'
+                  : 'border-white/10 text-zinc-400 hover:text-white hover:border-white/20'
+              }`}
+            >
+              {isRu ? 'Все' : 'All'}
+            </button>
+
+            {Array.from({ length: passes }).map((_, idx) => {
+              const passNum = idx + 1;
+              const isPassSelected = selectedPassIndex === passNum;
+              return (
+                <button
+                  key={passNum}
+                  type="button"
+                  onClick={() => {
+                    soundFx.playClick();
+                    onSelectPassIndex(passNum);
+                  }}
+                  className={`min-w-[28px] px-2 py-1 rounded-md border text-xs text-center transition-all cursor-pointer shrink-0 ${
+                    isPassSelected
+                      ? 'border-white bg-white/10 text-white font-semibold'
+                      : 'border-white/10 text-zinc-400 hover:text-white hover:border-white/20'
+                  }`}
+                >
+                  {passNum}
+                </button>
+              );
+            })}
+          </div>
+
+          {activePassInfo && (
+            <div className="text-[11px] text-zinc-400 flex items-center gap-2">
+              <span>
+                {isRu ? `проход ${activePassInfo.index}: ` : `pass ${activePassInfo.index}: `}
+                <strong className="text-zinc-200">
+                  {activePassInfo.direction === 'forward'
+                    ? (isRu ? 'туда' : 'forward')
+                    : activePassInfo.direction === 'back'
+                    ? (isRu ? 'обратно' : 'back')
+                    : (isRu ? 'круг' : 'loop')}
+                </strong>
+                {' · '}
+                {formatPassDuration(activePassInfo.duration_s)}
+                {' · '}
+                {isRu ? `узлов ${activePassInfo.nodes}` : `nodes ${activePassInfo.nodes}`}
+                {' · '}
+                {isRu ? `упоров ${activePassInfo.stucks}` : `stucks ${activePassInfo.stucks}`}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Main Interactive Canvas Area */}
       <div
         className={`flex-1 relative flex items-center justify-center overflow-hidden bg-[#09090b] ${
-          isDragging ? 'cursor-grabbing' : scale > 1 ? 'cursor-grab' : 'cursor-default'
+          !image ? 'cursor-default' : isDragging ? 'cursor-grabbing' : scale > 1 ? 'cursor-grab' : 'cursor-default'
         }`}
         onDoubleClick={handleDoubleClick}
       >
-        <div
-          style={{
-            transform: `translate3d(${pan.x}px, ${pan.y}px, 0px) scale(${scale})`,
-            transformOrigin: '0 0',
-            transition: isDragging ? 'none' : 'transform 0.05s ease-out',
-          }}
-          className="relative max-w-full max-h-full flex items-center justify-center pointer-events-none"
-        >
-          {hasBackendPanel ? (
-            /* Clean map portion: right 22.5% info panel is completely cut out */
-            <div
-              className="relative overflow-hidden rounded-lg flex items-center justify-start bg-transparent"
-              style={{
-                height: '82vh',
-                aspectRatio: '0.78',
-                maxWidth: '92vw',
-              }}
-            >
+        {image ? (
+          <div
+            style={{
+              transform: `translate3d(${pan.x}px, ${pan.y}px, 0px) scale(${scale})`,
+              transformOrigin: '0 0',
+              transition: isDragging ? 'none' : 'transform 0.05s ease-out',
+            }}
+            className={`relative max-w-full max-h-full flex items-center justify-center pointer-events-none transition-opacity duration-200 ${
+              isLoading ? 'opacity-40 grayscale' : 'opacity-100'
+            }`}
+          >
+            {hasBackendPanel ? (
+              /* Clean map portion: right 22.5% info panel is completely cut out */
+              <div
+                className="relative overflow-hidden rounded-lg flex items-center justify-start bg-transparent"
+                style={{
+                  height: passes > 0 ? '77vh' : '82vh',
+                  aspectRatio: '0.78',
+                  maxWidth: '92vw',
+                }}
+              >
+                <img
+                  src={image}
+                  alt={routeName || 'Session Heatmap'}
+                  draggable={false}
+                  className="h-full max-w-none object-cover object-left select-none"
+                  style={{
+                    width: '128.5%', // 100 / 0.778 ≈ 128.5%
+                  }}
+                />
+              </div>
+            ) : (
+              /* Standalone map without panel (seamless, no container border) */
               <img
                 src={image}
                 alt={routeName || 'Session Heatmap'}
                 draggable={false}
-                className="h-full max-w-none object-cover object-left select-none"
-                style={{
-                  width: '128.5%', // 100 / 0.778 ≈ 128.5%
-                }}
+                className={`max-w-[92vw] ${passes > 0 ? 'max-h-[77vh]' : 'max-h-[82vh]'} w-auto h-auto object-contain select-none`}
               />
-            </div>
-          ) : (
-            /* Standalone map without panel (seamless, no container border) */
-            <img
-              src={image}
-              alt={routeName || 'Session Heatmap'}
-              draggable={false}
-              className="max-w-[92vw] max-h-[82vh] w-auto h-auto object-contain select-none"
-            />
-          )}
-        </div>
+            )}
+          </div>
+        ) : !isLoading ? (
+          <div className="flex flex-col items-center justify-center gap-3 text-center px-6 font-mono">
+            <MapPin className="w-8 h-8 text-zinc-600" />
+            <p className="text-xs text-zinc-400 max-w-md leading-relaxed">
+              {emptyMessage || (isRu ? 'Карта маршрута недоступна' : 'Route heatmap is unavailable')}
+            </p>
+          </div>
+        ) : null}
+
+        {isLoading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none font-mono">
+            <Loader2 className="w-7 h-7 animate-spin text-zinc-200 drop-shadow" />
+            {!image && (
+              <span className="text-xs text-zinc-400">
+                {isRu ? 'Загрузка карты...' : 'Loading map...'}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Bottom Hint Banner: 100% Solid Opaque Zinc-950 */}
@@ -277,9 +397,11 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <p className="text-[11px] font-mono text-zinc-500">
-          {isRu
-            ? 'Колёсико — масштаб (1×–6×) • Перетаскивание мышью — сдвиг • 2× клик — сброс • Esc — закрыть'
-            : 'Mouse wheel — zoom (1×–6×) • Mouse drag — pan • Double-click — reset • Esc — close'}
+          {image
+            ? (isRu
+                ? 'Колёсико — масштаб (1×–6×) • Перетаскивание мышью — сдвиг • 2× клик — сброс • Esc — закрыть'
+                : 'Mouse wheel — zoom (1×–6×) • Mouse drag — pan • Double-click — reset • Esc — close')
+            : (isRu ? 'Esc — закрыть' : 'Esc — close')}
         </p>
       </div>
     </div>

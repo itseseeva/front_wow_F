@@ -185,7 +185,7 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/40 backdrop-blur-md select-none animate-in fade-in duration-150"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:py-6 sm:pr-6 sm:pl-[14%] md:pl-[16%] bg-black/40 backdrop-blur-md select-none animate-in fade-in duration-150"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
           soundFx.playClick();
