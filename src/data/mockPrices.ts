@@ -526,6 +526,21 @@ let mockSaleRowsList: SaleRow[] = [
     sold_at_ms: Date.now() - 170 * 60 * 1000,
     blocked: false,
   },
+  {
+    item_id: 25416,
+    name: 'Сломанная кольчужная рукавица',
+    count: 1,
+    price: null,
+    value: null,
+    vendor: 150,
+    sold_copper: 0,
+    quality: 0,
+    icon_url: null,
+    source: 'mob',
+    sold_at_ms: Date.now() - 180 * 60 * 1000,
+    blocked: false,
+    dropped: true,
+  },
 ];
 
 function toLocalDateStr(ms: number): string {
@@ -544,7 +559,7 @@ export async function mockGetSaleLog(date?: string): Promise<SaleLog> {
   const items = date
     ? allItems.filter((r) => r.sold_at_ms != null && toLocalDateStr(r.sold_at_ms) === date)
     : allItems;
-  const totalCopper = items.reduce((acc, it) => acc + (it.sold_copper || 0), 0);
+  const totalCopper = items.reduce((acc, it) => acc + (it.dropped ? 0 : (it.sold_copper || 0)), 0);
   return {
     ok: true,
     date: date ?? null,

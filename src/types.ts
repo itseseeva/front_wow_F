@@ -49,6 +49,7 @@ export interface SaleRow extends LootRow {
   sold_copper: number;          // выручка за всю строку, медь
   sold_at_ms: number | null;    // когда продано
   blocked: boolean;             // предмет в списке «не продавать»
+  dropped?: boolean;            // выброшено, а не продано
 }
 
 export interface SaleLog {

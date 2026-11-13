@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ReceiptText, AlertTriangle, ShieldAlert, Loader2, Search } from 'lucide-react';
+import { X, ReceiptText, AlertTriangle, ShieldAlert, Loader2, Search, Trash2, ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { SaleRow, SaleLog, SaleBlockResult } from '../types';
 import { MoneyBadge } from '../utils/money';
 import { ItemIcon, getRarityMeta } from './ItemIcon';
@@ -8,6 +8,9 @@ import { SpecularButton } from './ui/Specular';
 import { soundFx } from '../utils/audio';
 import { getPywebviewApi } from '../utils/pywebviewBridge';
 import { mockGetSaleLog, mockSetSaleBlock } from '../data/mockPrices';
+
+type SortKey = 'count' | 'sold_copper' | 'value' | 'sold_at_ms';
+type SortDir = 'desc' | 'asc';
 
 interface SalesLogModalProps {
   isOpen: boolean;
@@ -67,10 +70,14 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
   const [updatedAtMs, setUpdatedAtMs] = useState<number | null>(null);
   const [pendingItemIds, setPendingItemIds] = useState<Set<number>>(new Set());
   const [searchFilter, setSearchFilter] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('sold_at_ms');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
 
-  const fetchSalesLog = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchSalesLog = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const api = await getPywebviewApi();
       let res: SaleLog | null = null;
@@ -103,25 +110,45 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
         setUpdatedAtMs(res.updatedAtMs ?? null);
         if (!res.ok) {
           setError(res.error || (isRu ? 'Ошибка получения журнала продаж' : 'Failed to fetch sales log'));
+        } else {
+          setError(null);
         }
       }
     } catch (err: any) {
       console.warn('get_sale_log error:', err);
-      setItems([]);
-      setTotalCopper(0);
-      setError(err?.message || (isRu ? 'Ошибка получения журнала продаж' : 'Failed to fetch sales log'));
+      if (!silent) {
+        setItems([]);
+        setTotalCopper(0);
+        setError(err?.message || (isRu ? 'Ошибка получения журнала продаж' : 'Failed to fetch sales log'));
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [isRu, date]);
 
   useEffect(() => {
     if (isOpen) {
-      fetchSalesLog();
+      fetchSalesLog(false);
     } else {
       setSearchFilter('');
       setError(null);
+      setSortKey('sold_at_ms');
+      setSortDir('desc');
     }
+  }, [isOpen, fetchSalesLog]);
+
+  // Auto-refresh prices when backend emits wowbot:prices while modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePrices = () => {
+      fetchSalesLog(true);
+    };
+    window.addEventListener('wowbot:prices', handlePrices);
+    return () => {
+      window.removeEventListener('wowbot:prices', handlePrices);
+    };
   }, [isOpen, fetchSalesLog]);
 
   // Handle ESC key press
@@ -172,14 +199,47 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
     }
   };
 
+  const handleSortClick = (key: SortKey) => {
+    soundFx.playClick();
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === 'desc' ? 'asc' : 'desc'));
+    } else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
+  };
+
   const filteredItems = useMemo(() => {
     const q = searchFilter.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((it) => {
-      const name = it.name ? it.name.toLowerCase() : `item #${it.item_id}`;
-      return name.includes(q);
+    const base = q
+      ? items.filter((it) => {
+          const name = it.name ? it.name.toLowerCase() : `item #${it.item_id}`;
+          return name.includes(q);
+        })
+      : [...items];
+
+    const getSortVal = (item: SaleRow, key: SortKey): number | null => {
+      if (key === 'count') return item.count ?? 0;
+      if (key === 'sold_copper') return item.dropped ? null : (item.sold_copper ?? 0);
+      if (key === 'value') return item.value ?? null;
+      if (key === 'sold_at_ms') return item.sold_at_ms ?? null;
+      return null;
+    };
+
+    base.sort((a, b) => {
+      const va = getSortVal(a, sortKey);
+      const vb = getSortVal(b, sortKey);
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (va !== vb) {
+        return sortDir === 'desc' ? vb - va : va - vb;
+      }
+      return (b.sold_at_ms ?? 0) - (a.sold_at_ms ?? 0);
     });
-  }, [items, searchFilter]);
+
+    return base;
+  }, [items, searchFilter, sortKey, sortDir]);
 
   if (!isOpen) return null;
 
@@ -309,10 +369,44 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
                 <thead className="sticky top-0 z-10 bg-zinc-950/80 backdrop-blur-md">
                   <tr className="border-b border-white/10 text-[10px] text-zinc-400 uppercase tracking-wider">
                     <th className="pb-2.5 font-normal">{isRu ? 'Предмет' : 'Item'}</th>
-                    <th className="pb-2.5 font-normal text-right whitespace-nowrap">{isRu ? 'Штук' : 'Count'}</th>
-                    <th className="pb-2.5 font-normal text-right whitespace-nowrap">{isRu ? 'Продано за' : 'Sold for'}</th>
-                    <th className="pb-2.5 font-normal text-right whitespace-nowrap">{isRu ? 'На аукционе' : 'On Auction'}</th>
-                    <th className="pb-2.5 font-normal text-right whitespace-nowrap">{isRu ? 'Когда' : 'When'}</th>
+                    {(
+                      [
+                        { key: 'count' as SortKey, labelRu: 'Штук', labelEn: 'Count' },
+                        { key: 'sold_copper' as SortKey, labelRu: 'Продано за', labelEn: 'Sold for' },
+                        { key: 'value' as SortKey, labelRu: 'На аукционе', labelEn: 'On Auction' },
+                        { key: 'sold_at_ms' as SortKey, labelRu: 'Когда', labelEn: 'When' },
+                      ] as const
+                    ).map((col) => {
+                      const isActive = sortKey === col.key;
+                      const SortIcon = isActive
+                        ? sortDir === 'desc'
+                          ? ArrowDown
+                          : ArrowUp
+                        : ArrowUpDown;
+                      return (
+                        <th key={col.key} className="pb-2.5 px-2 font-normal text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handleSortClick(col.key)}
+                            className={`group inline-flex items-center justify-end gap-1 cursor-pointer select-none transition-colors uppercase tracking-wider ${
+                              isActive ? 'text-zinc-100 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+                            }`}
+                            title={
+                              isRu
+                                ? 'Сортировать (сначала от большего к меньшему)'
+                                : 'Sort (descending first)'
+                            }
+                          >
+                            <SortIcon
+                              className={`w-3 h-3 shrink-0 transition-opacity ${
+                                isActive ? 'text-zinc-200 opacity-100' : 'opacity-30 group-hover:opacity-80'
+                              }`}
+                            />
+                            <span>{isRu ? col.labelRu : col.labelEn}</span>
+                          </button>
+                        </th>
+                      );
+                    })}
                     <th className="pb-2.5 font-normal text-right whitespace-nowrap pr-1">{isRu ? 'Действие' : 'Action'}</th>
                   </tr>
                 </thead>
@@ -328,12 +422,12 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
                       const displayName = item.name || (isRu ? `Предмет #${item.item_id}` : `Item #${item.item_id}`);
                       const rarity = getRarityMeta(item.quality);
                       const isPending = pendingItemIds.has(item.item_id);
-                      const isSoldBelowMarket = item.value != null && item.value > item.sold_copper;
+                      const isSoldBelowMarket = !item.dropped && item.value != null && item.value > item.sold_copper;
 
                       return (
                         <tr
                           key={`${item.item_id}-${item.sold_at_ms ?? idx}-${idx}`}
-                          className="hover:bg-white/[0.04] transition-colors"
+                          className={`hover:bg-white/[0.04] transition-colors ${item.dropped ? 'opacity-70' : ''}`}
                         >
                           {/* 1. Item Icon & Name */}
                           <td className="py-2 pr-3 font-medium text-zinc-200 max-w-[220px]" title={displayName}>
@@ -357,9 +451,16 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
                             ×{item.count}
                           </td>
 
-                          {/* 3. Sold For (sold_copper) */}
+                          {/* 3. Sold For (sold_copper) or Dropped */}
                           <td className="py-2 px-2 text-right tabular-nums whitespace-nowrap font-medium text-zinc-200">
-                            <MoneyBadge copper={item.sold_copper} language={language} />
+                            {item.dropped ? (
+                              <span className="inline-flex items-center justify-end gap-1 text-zinc-500 font-normal">
+                                <Trash2 className="w-3 h-3 text-zinc-500 shrink-0" />
+                                <span>{isRu ? 'выброшено' : 'dropped'}</span>
+                              </span>
+                            ) : (
+                              <MoneyBadge copper={item.sold_copper} language={language} />
+                            )}
                           </td>
 
                           {/* 4. On Auction (value) - with warning if value > sold_copper */}
