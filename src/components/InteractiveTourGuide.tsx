@@ -354,14 +354,23 @@ const FALLBACK_SELECTORS: Record<string, string[]> = {
   '[data-tour="summary-gold-rate"]': ['[data-tour="summary-live-cards"]', '[data-tour="summary-overview"]'],
   '[data-tour="summary-live-cards"]': ['[data-tour="summary-overview"]'],
   '[data-tour="summary-calendar"]': ['[data-tour="summary-overview"]'],
-  '[data-tour="settings-schedule"]': ['[data-tour="settings-autoroute"]', '[data-tour="settings-keybinds"]'],
-  '[data-tour="settings-autoroute"]': ['[data-tour="settings-schedule"]', '[data-tour="settings-keybinds"]'],
-  '[data-tour="settings-auction"]': ['[data-tour="settings-autoroute"]', '[data-tour="settings-schedule"]'],
-  '[data-tour="settings-pause"]': ['[data-tour="settings-keybinds"]', '[data-tour="settings-autoroute"]'],
-  '[data-tour="settings-radar"]': ['[data-tour="settings-keybinds"]', '[data-tour="settings-autoroute"]'],
-  '[data-tour="settings-keybinds"]': ['[data-tour="settings-autoroute"]', '[data-tour="settings-schedule"]'],
+  '[data-tour="settings-schedule"]': ['[data-tour="settings-tabs"]', '[data-tour="settings-autoroute"]', '[data-tour="settings-keybinds"]'],
+  '[data-tour="settings-autoroute"]': ['[data-tour="settings-tabs"]', '[data-tour="settings-schedule"]', '[data-tour="settings-keybinds"]'],
+  '[data-tour="settings-auction"]': ['[data-tour="settings-tabs"]', '[data-tour="settings-autoroute"]', '[data-tour="settings-schedule"]'],
+  '[data-tour="settings-pause"]': ['[data-tour="settings-keybinds"]', '[data-tour="settings-tabs"]'],
+  '[data-tour="settings-radar"]': ['[data-tour="settings-keybinds"]', '[data-tour="settings-tabs"]'],
+  '[data-tour="settings-keybinds"]': ['[data-tour="settings-tabs"]', '[data-tour="settings-autoroute"]'],
   '[data-tour="routes-record"]': ['[data-tour="routes-list"]'],
   '[data-tour="routes-autoroute"]': ['[data-tour="routes-list"]'],
+};
+
+const SETTINGS_TOUR_TAB_MAP: Record<string, 'keybinds' | 'schedule' | 'autoroute' | 'auction'> = {
+  '[data-tour="settings-schedule"]': 'schedule',
+  '[data-tour="settings-autoroute"]': 'autoroute',
+  '[data-tour="settings-auction"]': 'auction',
+  '[data-tour="settings-keybinds"]': 'keybinds',
+  '[data-tour="settings-pause"]': 'keybinds',
+  '[data-tour="settings-radar"]': 'keybinds',
 };
 
 interface InteractiveTourGuideProps {
@@ -568,6 +577,17 @@ export const InteractiveTourGuide: React.FC<InteractiveTourGuideProps> = ({
 
   const steps = activeSection ? TOUR_STEPS[activeSection] || [] : [];
   const currentStep = steps[currentStepIndex] || null;
+
+  // Automatically switch SettingsView sub-tab so every Settings tour step is visible
+  useEffect(() => {
+    if (activeSection !== 'settings' || !currentStep) return;
+    const targetTab = SETTINGS_TOUR_TAB_MAP[currentStep.targetSelector];
+    if (targetTab) {
+      window.dispatchEvent(
+        new CustomEvent('wowbot:settings-tour-tab', { detail: { tab: targetTab } })
+      );
+    }
+  }, [activeSection, currentStep, currentStepIndex]);
 
   // Measure tooltip card dimensions accurately with ResizeObserver
   useLayoutEffect(() => {

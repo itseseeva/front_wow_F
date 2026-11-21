@@ -6,7 +6,7 @@ import { MoneyBadge } from '../utils/money';
 import { ItemIcon, getRarityMeta } from './ItemIcon';
 import { SpecularButton } from './ui/Specular';
 import { soundFx } from '../utils/audio';
-import { getPywebviewApi } from '../utils/pywebviewBridge';
+import { getPywebviewApi, isBridgeReady } from '../utils/pywebviewBridge';
 import { mockGetSaleLog, mockSetSaleBlock } from '../data/mockPrices';
 
 type SortKey = 'count' | 'sold_copper' | 'value' | 'sold_at_ms';
@@ -83,7 +83,7 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
       let res: SaleLog | null = null;
       if (api?.get_sale_log) {
         res = await api.get_sale_log(date);
-      } else if (!window.pywebview?.api) {
+      } else if (!isBridgeReady() && !window.pywebview) {
         // Fallback to mock in browser development mode
         res = await mockGetSaleLog(date);
       } else {
@@ -172,7 +172,7 @@ export const SalesLogModal: React.FC<SalesLogModalProps> = ({
       let res: SaleBlockResult | null = null;
       if (api?.set_sale_block) {
         res = await api.set_sale_block(itemId, nextBlocked);
-      } else if (!window.pywebview?.api) {
+      } else if (!isBridgeReady() && !window.pywebview) {
         res = await mockSetSaleBlock(itemId, nextBlocked);
       }
 

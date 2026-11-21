@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ComboChain, ChainStep } from '../data/skillsLibrary';
-import { Plus, Clock, RotateCcw, X, Check, Zap, Heart, Droplet, ArrowLeft, ArrowRight, PawPrint } from 'lucide-react';
+import { Plus, Clock, RotateCcw, X, Check, Zap, Heart, Droplet, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Language, Theme } from '../utils/i18n';
 import { soundFx } from '../utils/audio';
 
 interface Props {
   chains: ComboChain[];
   onChainsChange: (chains: ComboChain[]) => void;
-  mountKey?: string;
-  onMountKeyChange?: (key: string) => void;
   activeCasting?: { chainId: string; stepId: string } | null;
   isBotRunning?: boolean;
   onToast?: (message: string) => void;
@@ -63,8 +61,6 @@ const getPhysicalKeyFromEvent = (e: React.KeyboardEvent): string | null => {
 export const ComboSequence: React.FC<Props> = ({
   chains,
   onChainsChange,
-  mountKey = '',
-  onMountKeyChange,
   activeCasting = null,
   language = 'ru',
 }) => {
@@ -93,7 +89,7 @@ export const ComboSequence: React.FC<Props> = ({
   });
 
   // Active key listening on '+' morph button
-  const [isAddingNewStep, setIsAddingNewStep] = useState<'regular' | 'water' | 'mount' | null>(null);
+  const [isAddingNewStep, setIsAddingNewStep] = useState<'regular' | 'water' | null>(null);
   const addingBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // Active key listening in bottom editor panel
@@ -468,7 +464,7 @@ export const ComboSequence: React.FC<Props> = ({
           </button>
         )}
 
-        {/* Blue Water / Mana Droplet Button/Slot (directly to the right of '+', next to Mount Paw) */}
+        {/* Blue Water / Mana Droplet Button/Slot (to the right of '+') */}
         <div data-tour="rotation-water" className="inline-flex shrink-0 relative group">
           {isAddingNewStep === 'water' ? (
             <button
@@ -508,10 +504,16 @@ export const ComboSequence: React.FC<Props> = ({
                     : 'border border-blue-500/45 bg-blue-500/10 hover:border-blue-400 hover:bg-blue-500/15 text-blue-400'
                 }`}
               >
-                <Droplet className="w-5 h-5 stroke-[1.75] text-blue-400 fill-blue-400/25 mt-1 pointer-events-none transition-transform group-hover:scale-105" />
-                <span className="absolute top-1 right-1 text-[9px] font-mono font-bold leading-none text-blue-600 dark:text-blue-300 bg-blue-500/15 border border-blue-500/30 rounded px-1 py-[1px] max-w-[26px] truncate pointer-events-none select-none">
+                <Droplet className="absolute top-1 right-1 w-2.5 h-2.5 stroke-[2] text-blue-400 fill-blue-400/35 pointer-events-none" />
+                <div
+                  className={`w-full text-center font-mono font-bold text-xs tracking-wide transition-colors pointer-events-none select-none ${
+                    waterStep.key
+                      ? 'text-blue-600 dark:text-blue-300'
+                      : 'text-blue-400/60'
+                  }`}
+                >
                   {waterStep.key || '—'}
-                </span>
+                </div>
                 {waterStep.mpBelowPercent != null && (
                   <span className="absolute bottom-0.5 right-1 text-[7px] font-mono font-medium leading-none text-blue-400/80 pointer-events-none select-none">
                     &lt;{waterStep.mpBelowPercent}%
@@ -540,83 +542,6 @@ export const ComboSequence: React.FC<Props> = ({
             >
               <Droplet className="w-5 h-5 stroke-[1.75] text-blue-400 group-hover:scale-110 transition-transform" />
             </button>
-          )}
-        </div>
-
-        {/* Orange Mount Paw Keybind Button (to the right of blue '+') - pure keybind, no extra settings */}
-        <div className="inline-flex shrink-0 relative group">
-          {isAddingNewStep === 'mount' ? (
-            <button
-              ref={addingBtnRef}
-              type="button"
-              tabIndex={0}
-              autoFocus
-              onBlur={() => setIsAddingNewStep(null)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  setIsAddingNewStep(null);
-                  return;
-                }
-                const captured = getPhysicalKeyFromEvent(e);
-                if (captured !== null) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  soundFx.playClick();
-                  onMountKeyChange?.(captured.toUpperCase());
-                  setIsAddingNewStep(null);
-                }
-              }}
-              className="w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg border-2 border-orange-400 bg-orange-500/20 text-orange-300 shadow-[0_0_14px_rgba(249,115,22,0.5)] scale-105 animate-pulse font-mono font-bold text-[11px] sm:text-xs flex items-center justify-center cursor-pointer shrink-0 transition-all outline-none"
-              title={isRu ? 'Нажмите клавишу маунта (Esc для отмены)' : 'Press key for mount (Esc to cancel)'}
-            >
-              {isRu ? 'ЖМИ' : 'PRESS'}
-            </button>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  soundFx.playClick();
-                  setIsAddingNewStep('mount');
-                }}
-                title={
-                  mountKey
-                    ? (isRu ? `Маунт [${mountKey}] — нажмите, чтобы изменить клавишу` : `Mount [${mountKey}] — click to rebind`)
-                    : (isRu ? 'Назначить клавишу маунта' : 'Assign mount keybind')
-                }
-                className={`w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg p-1 transition-all flex items-center justify-center cursor-pointer shrink-0 relative ${
-                  mountKey
-                    ? 'border border-orange-500/45 bg-orange-500/10 hover:border-orange-400 hover:bg-orange-500/15 text-orange-600 dark:text-orange-300'
-                    : 'border border-dashed border-orange-500/60 hover:border-orange-400 hover:bg-orange-500/10 text-orange-400 hover:text-orange-300'
-                }`}
-              >
-                {mountKey ? (
-                  <>
-                    <PawPrint className="w-5 h-5 stroke-[1.75] text-orange-400 fill-orange-400/15 mt-1 pointer-events-none transition-transform group-hover:scale-105" />
-                    <span className="absolute top-1 right-1 text-[9px] font-mono font-bold leading-none text-orange-600 dark:text-orange-300 bg-orange-500/15 border border-orange-500/30 rounded px-1 py-[1px] max-w-[26px] truncate pointer-events-none select-none">
-                      {mountKey}
-                    </span>
-                  </>
-                ) : (
-                  <PawPrint className="w-5 h-5 stroke-[1.75] text-orange-400 group-hover:scale-110 transition-transform" />
-                )}
-              </button>
-
-              {mountKey && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    soundFx.playClick();
-                    onMountKeyChange?.('');
-                  }}
-                  title={isRu ? 'Очистить клавишу маунта' : 'Clear mount key'}
-                  className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-zinc-200 dark:bg-zinc-900 border border-black/20 dark:border-white/30 text-zinc-700 dark:text-zinc-300 text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-zinc-950 hover:text-white dark:hover:bg-white dark:hover:text-black cursor-pointer z-30"
-                >
-                  ✕
-                </button>
-              )}
-            </>
           )}
         </div>
       </div>

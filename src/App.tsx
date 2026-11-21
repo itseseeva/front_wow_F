@@ -29,7 +29,7 @@ import {
 import { soundFx } from './utils/audio';
 import { SpecularCard } from './components/ui/Specular';
 import { Crosshair, AlertTriangle, X, BarChart3, Clock } from 'lucide-react';
-import { getPywebviewApi } from './utils/pywebviewBridge';
+import { getPywebviewApi, isBridgeReady } from './utils/pywebviewBridge';
 import { DaySummaryView } from './components/DaySummaryView';
 import {
   getMockCalendarMonth,
@@ -176,7 +176,6 @@ export const App: React.FC = () => {
     let autoRouteMinutes = 30;
     let auctionHouseId: number | null = null;
     let lootMinValue: number | null = null;
-    let mountKey = '';
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -192,7 +191,6 @@ export const App: React.FC = () => {
         if (parsed.autoRouteMinutes != null) autoRouteMinutes = Number(parsed.autoRouteMinutes);
         if (parsed.auctionHouseId !== undefined) auctionHouseId = parsed.auctionHouseId != null ? Number(parsed.auctionHouseId) : null;
         if (parsed.lootMinValue !== undefined) lootMinValue = parsed.lootMinValue != null ? Number(parsed.lootMinValue) : null;
-        if (parsed.mountKey !== undefined) mountKey = String(parsed.mountKey || '');
       } catch (e) {}
     }
     return {
@@ -209,7 +207,6 @@ export const App: React.FC = () => {
       autoRouteMinutes,
       auctionHouseId,
       lootMinValue,
-      mountKey,
     };
   });
 
@@ -226,6 +223,8 @@ export const App: React.FC = () => {
   const isConfigLoadingRef = useRef<boolean>(false);
   const skipNextAutosaveRef = useRef<boolean>(false);
   const hasSeededBrowserMockRoutesRef = useRef<boolean>(false);
+  const routesRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef<boolean>(true);
   const isBotRunningRef = useRef<boolean>(isBotRunning);
   const sessionSecondsRef = useRef<number>(sessionSeconds);
   const [activeCasting] = useState<{ chainId: string; stepId: string } | null>(null);
@@ -364,7 +363,6 @@ export const App: React.FC = () => {
           autoRouteMinutes: customSettings.autoRouteMinutes != null ? Number(customSettings.autoRouteMinutes) : 30,
           auctionHouseId: customSettings.auctionHouseId !== undefined ? (customSettings.auctionHouseId != null ? Number(customSettings.auctionHouseId) : null) : null,
           lootMinValue: customSettings.lootMinValue !== undefined ? (customSettings.lootMinValue != null ? Number(customSettings.lootMinValue) : null) : null,
-          mountKey: customSettings.mountKey || '',
         },
         chains: [
           {
@@ -425,12 +423,35 @@ export const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [chains, settings, scheduleSettings, saveCurrentConfigToBackend]);
 
-  // Fetch routes from backend (browser-only mock fallback when window.pywebview is absent)
-  const fetchRoutes = useCallback(async () => {
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (routesRetryTimerRef.current !== null) {
+        clearTimeout(routesRetryTimerRef.current);
+        routesRetryTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Fetch routes from backend (retries up to 10x every 300ms if api exists without list_routes yet;
+  // browser-only mock fallback when window.pywebview is absent)
+  const fetchRoutes = useCallback(async (attempt = 0): Promise<boolean> => {
+    const currentAttempt = typeof attempt === 'number' ? attempt : 0;
+    if (routesRetryTimerRef.current !== null) {
+      clearTimeout(routesRetryTimerRef.current);
+      routesRetryTimerRef.current = null;
+    }
+
     try {
-      const api = await getPywebviewApi();
-      if (api?.list_routes) {
-        const res = await api.list_routes();
+      const api =
+        currentAttempt === 0
+          ? await getPywebviewApi()
+          : (typeof window !== 'undefined' ? window.pywebview?.api ?? null : null);
+      const rawApi = api || (typeof window !== 'undefined' ? window.pywebview?.api : undefined);
+
+      if (typeof rawApi?.list_routes === 'function') {
+        const res = await rawApi.list_routes();
         if (res && res.ok && Array.isArray(res.routes)) {
           const isRu = language === 'ru';
           const mapped: RouteItem[] = res.routes.map((r) => ({
@@ -445,8 +466,24 @@ export const App: React.FC = () => {
             active: Boolean(res.active_id && r.id === res.active_id),
           }));
           setRoutes(mapped);
+          return true;
         }
-      } else if (typeof window !== 'undefined' && !window.pywebview) {
+        return false;
+      }
+
+      if (rawApi || (typeof window !== 'undefined' && window.pywebview)) {
+        if (currentAttempt < 10 && isMountedRef.current) {
+          routesRetryTimerRef.current = setTimeout(() => {
+            routesRetryTimerRef.current = null;
+            if (isMountedRef.current) {
+              void fetchRoutes(currentAttempt + 1);
+            }
+          }, 300);
+        }
+        return false;
+      }
+
+      if (typeof window !== 'undefined' && !window.pywebview) {
         if (!hasSeededBrowserMockRoutesRef.current) {
           hasSeededBrowserMockRoutesRef.current = true;
           setRoutes(BROWSER_MOCK_ROUTES);
@@ -455,6 +492,7 @@ export const App: React.FC = () => {
     } catch (err) {
       console.warn('list_routes error:', err);
     }
+    return false;
   }, [language]);
 
   // Load config from backend; enables autosave ONLY after a successful load_config()
@@ -508,7 +546,6 @@ export const App: React.FC = () => {
                 autoRouteMinutes: parsed.settings.autoRouteMinutes != null ? Number(parsed.settings.autoRouteMinutes) : (prev.autoRouteMinutes ?? 30),
                 auctionHouseId: parsed.settings.auctionHouseId !== undefined ? (parsed.settings.auctionHouseId != null ? Number(parsed.settings.auctionHouseId) : null) : (prev.auctionHouseId ?? null),
                 lootMinValue: parsed.settings.lootMinValue !== undefined ? (parsed.settings.lootMinValue != null ? Number(parsed.settings.lootMinValue) : null) : (prev.lootMinValue ?? null),
-                mountKey: parsed.settings.mountKey !== undefined ? String(parsed.settings.mountKey || '') : (prev.mountKey ?? ''),
               }));
             }
 
@@ -564,39 +601,55 @@ export const App: React.FC = () => {
     return false;
   }, []);
 
-  // 2) Startup bootstrap: load config and routes immediately if api exists,
-  // via getPywebviewApi(), and on 'pywebviewready'
+  // 2) Startup bootstrap: load config and routes when bridge is actually ready
+  // (list_routes is a function), via getPywebviewApi(), and always on 'pywebviewready'
   useEffect(() => {
     let cancelled = false;
     let ranWithApi = false;
+    let bootstrapInFlight = false;
 
-    const runWithApi = () => {
-      if (cancelled || ranWithApi) return;
-      ranWithApi = true;
-      loadConfigFromBackend();
-      fetchRoutes();
+    const runWithApi = async () => {
+      if (cancelled || ranWithApi || bootstrapInFlight || !isBridgeReady()) return;
+      bootstrapInFlight = true;
+      try {
+        const [configOk, routesOk] = await Promise.all([
+          loadConfigFromBackend(),
+          fetchRoutes(),
+        ]);
+        if (!cancelled && configOk && routesOk) {
+          ranWithApi = true;
+        }
+      } finally {
+        bootstrapInFlight = false;
+      }
     };
 
-    if (typeof window !== 'undefined' && window.pywebview?.api) {
-      runWithApi();
+    if (isBridgeReady()) {
+      void runWithApi();
     } else {
       getPywebviewApi().then((api) => {
         if (cancelled) return;
-        if (api) {
-          runWithApi();
+        if (api && isBridgeReady()) {
+          void runWithApi();
         } else if (typeof window !== 'undefined' && !window.pywebview) {
-          fetchRoutes();
+          void fetchRoutes();
         }
       });
     }
 
-    const onPywebviewReady = () => {
+    const onPywebviewReady = async () => {
       if (cancelled) return;
-      if (typeof window !== 'undefined' && window.pywebview?.api) {
-        runWithApi();
-      } else {
-        loadConfigFromBackend();
-        fetchRoutes();
+      bootstrapInFlight = true;
+      try {
+        const [configOk, routesOk] = await Promise.all([
+          loadConfigFromBackend(),
+          fetchRoutes(),
+        ]);
+        if (!cancelled && configOk && routesOk) {
+          ranWithApi = true;
+        }
+      } finally {
+        bootstrapInFlight = false;
       }
     };
 
@@ -1740,12 +1793,6 @@ export const App: React.FC = () => {
                   onChainsChange={(newChains) => {
                     setChains(newChains);
                     saveCurrentConfigToBackend(newChains, settings, scheduleSettings);
-                  }}
-                  mountKey={settings.mountKey || ''}
-                  onMountKeyChange={(key) => {
-                    const updated = { ...settings, mountKey: key };
-                    setSettings(updated);
-                    saveCurrentConfigToBackend(chains, updated, scheduleSettings);
                   }}
                   activeCasting={activeCasting}
                   isBotRunning={isBotRunning}
