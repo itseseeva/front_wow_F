@@ -59,6 +59,33 @@ function formatDuration(totalSeconds: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+const BROWSER_MOCK_ROUTES: RouteItem[] = [
+  {
+    id: 'route_1',
+    name: 'Маршрут I',
+    type: 'КРУГ',
+    duration: '≈132 с бега • 44 точки',
+    points: 44,
+    active: true,
+  },
+  {
+    id: 'route_2',
+    name: 'Маршрут II',
+    type: 'КРУГ',
+    duration: '≈145 с бега • 52 точки',
+    points: 52,
+    active: false,
+  },
+  {
+    id: 'route_3',
+    name: 'Маршрут III',
+    type: 'ТОЧКА-ТОЧКА',
+    duration: '≈98 с бега • 32 точки',
+    points: 32,
+    active: false,
+  },
+];
+
 export const App: React.FC = () => {
   // Navigation: 'routes' | 'rotation' | 'settings'
   const [activeTab, setActiveTab] = useState<NavTab>('routes');
@@ -102,51 +129,9 @@ export const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [globalError]);
 
-  // Routes Management
-  const [routes, setRoutes] = useState<RouteItem[]>(() => {
-    const saved = localStorage.getItem('wowbot_routes');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((r: RouteItem) => ({
-            ...r,
-            name: formatRouteRoman(r.name),
-          }));
-        }
-      } catch {}
-    }
-    return [
-      {
-        id: 'route_1',
-        name: 'Маршрут I',
-        type: 'КРУГ',
-        duration: '≈132 с бега • 44 точки',
-        points: 44,
-        active: true,
-      },
-      {
-        id: 'route_2',
-        name: 'Маршрут II',
-        type: 'КРУГ',
-        duration: '≈145 с бега • 52 точки',
-        points: 52,
-        active: false,
-      },
-      {
-        id: 'route_3',
-        name: 'Маршрут III',
-        type: 'ТОЧКА-ТОЧКА',
-        duration: '≈98 с бега • 32 точки',
-        points: 32,
-        active: false,
-      },
-    ];
-  });
-
-  useEffect(() => {
-    localStorage.setItem('wowbot_routes', JSON.stringify(routes));
-  }, [routes]);
+  // Routes Management: backend is the source of truth (never stored in localStorage;
+  // in pywebview starts empty until list_routes() responds; mock routes are browser-only)
+  const [routes, setRoutes] = useState<RouteItem[]>([]);
 
   // Combo Chains
   const [chains, setChains] = useState<ComboChain[]>(() => {
@@ -191,6 +176,7 @@ export const App: React.FC = () => {
     let autoRouteMinutes = 30;
     let auctionHouseId: number | null = null;
     let lootMinValue: number | null = null;
+    let mountKey = '';
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -206,6 +192,7 @@ export const App: React.FC = () => {
         if (parsed.autoRouteMinutes != null) autoRouteMinutes = Number(parsed.autoRouteMinutes);
         if (parsed.auctionHouseId !== undefined) auctionHouseId = parsed.auctionHouseId != null ? Number(parsed.auctionHouseId) : null;
         if (parsed.lootMinValue !== undefined) lootMinValue = parsed.lootMinValue != null ? Number(parsed.lootMinValue) : null;
+        if (parsed.mountKey !== undefined) mountKey = String(parsed.mountKey || '');
       } catch (e) {}
     }
     return {
@@ -222,6 +209,7 @@ export const App: React.FC = () => {
       autoRouteMinutes,
       auctionHouseId,
       lootMinValue,
+      mountKey,
     };
   });
 
@@ -235,6 +223,9 @@ export const App: React.FC = () => {
   const rawLoadedSettingsRef = useRef<Record<string, any>>({});
   const isInitialMount = useRef<boolean>(true);
   const isConfigLoadedRef = useRef<boolean>(false);
+  const isConfigLoadingRef = useRef<boolean>(false);
+  const skipNextAutosaveRef = useRef<boolean>(false);
+  const hasSeededBrowserMockRoutesRef = useRef<boolean>(false);
   const isBotRunningRef = useRef<boolean>(isBotRunning);
   const sessionSecondsRef = useRef<number>(sessionSeconds);
   const [activeCasting] = useState<{ chainId: string; stepId: string } | null>(null);
@@ -373,6 +364,7 @@ export const App: React.FC = () => {
           autoRouteMinutes: customSettings.autoRouteMinutes != null ? Number(customSettings.autoRouteMinutes) : 30,
           auctionHouseId: customSettings.auctionHouseId !== undefined ? (customSettings.auctionHouseId != null ? Number(customSettings.auctionHouseId) : null) : null,
           lootMinValue: customSettings.lootMinValue !== undefined ? (customSettings.lootMinValue != null ? Number(customSettings.lootMinValue) : null) : null,
+          mountKey: customSettings.mountKey || '',
         },
         chains: [
           {
@@ -394,6 +386,9 @@ export const App: React.FC = () => {
       try {
         const api = await getPywebviewApi();
         if (api?.save_config) {
+          if (!isConfigLoadedRef.current) {
+            return false;
+          }
           const res = await api.save_config(JSON.stringify(configObj, null, 2));
           if (res && !res.ok) {
             const errText = res.error || (language === 'ru' ? 'Ошибка сохранения' : 'Save error');
@@ -411,7 +406,7 @@ export const App: React.FC = () => {
     [chains, settings, scheduleSettings, language]
   );
 
-  // Debounced autosave on chain/settings edit (only after initial load_config completes)
+  // Debounced autosave on chain/settings edit (only after successful load_config)
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -420,13 +415,17 @@ export const App: React.FC = () => {
     if (!isConfigLoadedRef.current) {
       return;
     }
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
+    }
     const timer = setTimeout(() => {
       saveCurrentConfigToBackend();
     }, 600);
     return () => clearTimeout(timer);
   }, [chains, settings, scheduleSettings, saveCurrentConfigToBackend]);
 
-  // Fetch routes from backend
+  // Fetch routes from backend (browser-only mock fallback when window.pywebview is absent)
   const fetchRoutes = useCallback(async () => {
     try {
       const api = await getPywebviewApi();
@@ -447,104 +446,166 @@ export const App: React.FC = () => {
           }));
           setRoutes(mapped);
         }
+      } else if (typeof window !== 'undefined' && !window.pywebview) {
+        if (!hasSeededBrowserMockRoutesRef.current) {
+          hasSeededBrowserMockRoutesRef.current = true;
+          setRoutes(BROWSER_MOCK_ROUTES);
+        }
       }
     } catch (err) {
       console.warn('list_routes error:', err);
     }
   }, [language]);
 
-  // 2) Load config on startup: call api.load_config() once
-  useEffect(() => {
-    let cancelled = false;
+  // Load config from backend; enables autosave ONLY after a successful load_config()
+  const loadConfigFromBackend = useCallback(async () => {
+    if (isConfigLoadedRef.current || isConfigLoadingRef.current) {
+      return isConfigLoadedRef.current;
+    }
 
-    const initConfig = async () => {
-      try {
-        const api = await getPywebviewApi();
-        if (api?.load_config) {
-          const res = await api.load_config();
-          if (cancelled) return;
+    const api = await getPywebviewApi();
+    if (!api?.load_config) {
+      return false;
+    }
 
-          if (res && res.ok && res.config) {
-            let parsed = res.config;
-            if (typeof parsed === 'string') {
-              try {
-                parsed = JSON.parse(parsed);
-              } catch (e) {
-                console.warn('load_config JSON parse error:', e);
-              }
+    if (isConfigLoadedRef.current || isConfigLoadingRef.current) {
+      return isConfigLoadedRef.current;
+    }
+
+    isConfigLoadingRef.current = true;
+    try {
+      const res = await api.load_config();
+      if (res && res.ok) {
+        let didHydrateState = false;
+
+        if (res.config) {
+          let parsed = res.config;
+          if (typeof parsed === 'string') {
+            try {
+              parsed = JSON.parse(parsed);
+            } catch (e) {
+              console.warn('load_config JSON parse error:', e);
+            }
+          }
+
+          if (parsed && typeof parsed === 'object') {
+            // Restore AppSettings
+            if (parsed.settings) {
+              didHydrateState = true;
+              rawLoadedSettingsRef.current = { ...parsed.settings };
+              setSettings((prev) => ({
+                ...prev,
+                previousTargetKey: parsed.settings.previousTargetKey ?? prev.previousTargetKey,
+                mode: 'gather',
+                minimapZoomInKey: parsed.settings.minimapZoomInKey ?? prev.minimapZoomInKey,
+                minimapZoomOutKey: parsed.settings.minimapZoomOutKey ?? prev.minimapZoomOutKey,
+                startStopKey: parsed.settings.startStopKey ?? prev.startStopKey,
+                interactKey: parsed.settings.interactKey ?? prev.interactKey,
+                clearTargetKey: parsed.settings.clearTargetKey ?? prev.clearTargetKey,
+                pauseKey: parsed.settings.pauseKey ?? prev.pauseKey,
+                herbSearchKey: parsed.settings.herbSearchKey ?? prev.herbSearchKey,
+                oreSearchKey: parsed.settings.oreSearchKey ?? prev.oreSearchKey,
+                autoRouteMinutes: parsed.settings.autoRouteMinutes != null ? Number(parsed.settings.autoRouteMinutes) : (prev.autoRouteMinutes ?? 30),
+                auctionHouseId: parsed.settings.auctionHouseId !== undefined ? (parsed.settings.auctionHouseId != null ? Number(parsed.settings.auctionHouseId) : null) : (prev.auctionHouseId ?? null),
+                lootMinValue: parsed.settings.lootMinValue !== undefined ? (parsed.settings.lootMinValue != null ? Number(parsed.settings.lootMinValue) : null) : (prev.lootMinValue ?? null),
+                mountKey: parsed.settings.mountKey !== undefined ? String(parsed.settings.mountKey || '') : (prev.mountKey ?? ''),
+              }));
             }
 
-            if (parsed && typeof parsed === 'object') {
-              // Restore AppSettings
-              if (parsed.settings) {
-                rawLoadedSettingsRef.current = { ...parsed.settings };
-                setSettings((prev) => ({
-                  ...prev,
-                  previousTargetKey: parsed.settings.previousTargetKey ?? prev.previousTargetKey,
-                  mode: 'gather',
-                  minimapZoomInKey: parsed.settings.minimapZoomInKey ?? prev.minimapZoomInKey,
-                  minimapZoomOutKey: parsed.settings.minimapZoomOutKey ?? prev.minimapZoomOutKey,
-                  startStopKey: parsed.settings.startStopKey ?? prev.startStopKey,
-                  interactKey: parsed.settings.interactKey ?? prev.interactKey,
-                  clearTargetKey: parsed.settings.clearTargetKey ?? prev.clearTargetKey,
-                  pauseKey: parsed.settings.pauseKey ?? prev.pauseKey,
-                  herbSearchKey: parsed.settings.herbSearchKey ?? prev.herbSearchKey,
-                  oreSearchKey: parsed.settings.oreSearchKey ?? prev.oreSearchKey,
-                  autoRouteMinutes: parsed.settings.autoRouteMinutes != null ? Number(parsed.settings.autoRouteMinutes) : (prev.autoRouteMinutes ?? 30),
-                  auctionHouseId: parsed.settings.auctionHouseId !== undefined ? (parsed.settings.auctionHouseId != null ? Number(parsed.settings.auctionHouseId) : null) : (prev.auctionHouseId ?? null),
-                  lootMinValue: parsed.settings.lootMinValue !== undefined ? (parsed.settings.lootMinValue != null ? Number(parsed.settings.lootMinValue) : null) : (prev.lootMinValue ?? null),
-                }));
-              }
-
-              // Restore ComboChains
-              if (Array.isArray(parsed.chains) && parsed.chains.length > 0) {
-                setChains((prev) =>
-                  parsed.chains.map((chain: any, cIdx: number) => {
-                    const existingChain = prev[cIdx] || DEFAULT_COMBO_CHAINS[0];
-                    return {
-                      ...existingChain,
-                      id: chain.id || existingChain.id || `chain_${cIdx + 1}`,
-                      name: chain.name || existingChain.name || (cIdx === 0 ? 'Основная ротация' : `Цепочка ${cIdx + 1}`),
-                      steps: (chain.steps || []).map((step: any, sIdx: number) => ({
-                        id: step.id || `step_${sIdx + 1}`,
-                        key: step.key || '',
-                        castTimeSeconds: step.castTimeSeconds ?? 1.5,
-                        skillCooldownSeconds: step.skillCooldownSeconds != null ? Number(step.skillCooldownSeconds) : 0,
-                        repeatCount: step.repeatCount ?? 1,
-                        independent: Boolean(step.independent),
-                        hpBelowPercent: step.hpBelowPercent != null ? Number(step.hpBelowPercent) : null,
-                        stepType: step.stepType === 'water' ? 'water' : 'skill',
-                        mpBelowPercent: step.mpBelowPercent != null ? Number(step.mpBelowPercent) : null,
-                        actionType: 'press' as const,
-                      })),
-                    };
-                  })
-                );
-              }
-
-              // Restore ScheduleSettings
-              if (parsed.schedule && typeof parsed.schedule === 'object') {
-                setScheduleSettings(normalizeScheduleSettings(parsed.schedule));
-              }
+            // Restore ComboChains
+            if (Array.isArray(parsed.chains) && parsed.chains.length > 0) {
+              didHydrateState = true;
+              setChains((prev) =>
+                parsed.chains.map((chain: any, cIdx: number) => {
+                  const existingChain = prev[cIdx] || DEFAULT_COMBO_CHAINS[0];
+                  return {
+                    ...existingChain,
+                    id: chain.id || existingChain.id || `chain_${cIdx + 1}`,
+                    name: chain.name || existingChain.name || (cIdx === 0 ? 'Основная ротация' : `Цепочка ${cIdx + 1}`),
+                    steps: (chain.steps || []).map((step: any, sIdx: number) => ({
+                      id: step.id || `step_${sIdx + 1}`,
+                      key: step.key || '',
+                      castTimeSeconds: step.castTimeSeconds ?? 1.5,
+                      skillCooldownSeconds: step.skillCooldownSeconds != null ? Number(step.skillCooldownSeconds) : 0,
+                      repeatCount: step.repeatCount ?? 1,
+                      independent: Boolean(step.independent),
+                      hpBelowPercent: step.hpBelowPercent != null ? Number(step.hpBelowPercent) : null,
+                      stepType: step.stepType === 'water' ? 'water' : 'skill',
+                      mpBelowPercent: step.mpBelowPercent != null ? Number(step.mpBelowPercent) : null,
+                      actionType: 'press' as const,
+                    })),
+                  };
+                })
+              );
             }
-          } else if (res && !res.ok) {
-            console.warn('load_config error:', res.error);
+
+            // Restore ScheduleSettings
+            if (parsed.schedule && typeof parsed.schedule === 'object') {
+              didHydrateState = true;
+              setScheduleSettings(normalizeScheduleSettings(parsed.schedule));
+            }
           }
         }
-      } catch (err) {
-        console.warn('load_config error:', err);
-      } finally {
+
+        if (didHydrateState) {
+          skipNextAutosaveRef.current = true;
+        }
         isConfigLoadedRef.current = true;
+        return true;
+      } else if (res && !res.ok) {
+        console.warn('load_config error:', res.error);
+      }
+    } catch (err) {
+      console.warn('load_config error:', err);
+    } finally {
+      isConfigLoadingRef.current = false;
+    }
+
+    return false;
+  }, []);
+
+  // 2) Startup bootstrap: load config and routes immediately if api exists,
+  // via getPywebviewApi(), and on 'pywebviewready'
+  useEffect(() => {
+    let cancelled = false;
+    let ranWithApi = false;
+
+    const runWithApi = () => {
+      if (cancelled || ranWithApi) return;
+      ranWithApi = true;
+      loadConfigFromBackend();
+      fetchRoutes();
+    };
+
+    if (typeof window !== 'undefined' && window.pywebview?.api) {
+      runWithApi();
+    } else {
+      getPywebviewApi().then((api) => {
+        if (cancelled) return;
+        if (api) {
+          runWithApi();
+        } else if (typeof window !== 'undefined' && !window.pywebview) {
+          fetchRoutes();
+        }
+      });
+    }
+
+    const onPywebviewReady = () => {
+      if (cancelled) return;
+      if (typeof window !== 'undefined' && window.pywebview?.api) {
+        runWithApi();
+      } else {
+        loadConfigFromBackend();
+        fetchRoutes();
       }
     };
 
-    initConfig();
-    fetchRoutes();
-
+    window.addEventListener('pywebviewready', onPywebviewReady);
     return () => {
       cancelled = true;
+      window.removeEventListener('pywebviewready', onPywebviewReady);
     };
-  }, [fetchRoutes]);
+  }, [loadConfigFromBackend, fetchRoutes]);
 
   const activateRunningBotUI = useCallback(
     (paused: boolean) => {
@@ -1679,6 +1740,12 @@ export const App: React.FC = () => {
                   onChainsChange={(newChains) => {
                     setChains(newChains);
                     saveCurrentConfigToBackend(newChains, settings, scheduleSettings);
+                  }}
+                  mountKey={settings.mountKey || ''}
+                  onMountKeyChange={(key) => {
+                    const updated = { ...settings, mountKey: key };
+                    setSettings(updated);
+                    saveCurrentConfigToBackend(chains, updated, scheduleSettings);
                   }}
                   activeCasting={activeCasting}
                   isBotRunning={isBotRunning}

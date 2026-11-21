@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ComboChain, ChainStep } from '../data/skillsLibrary';
-import { Plus, Clock, RotateCcw, X, Check, Zap, Heart, Droplet, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Plus, Clock, RotateCcw, X, Check, Zap, Heart, Droplet, ArrowLeft, ArrowRight, PawPrint } from 'lucide-react';
 import { Language, Theme } from '../utils/i18n';
 import { soundFx } from '../utils/audio';
 
 interface Props {
   chains: ComboChain[];
   onChainsChange: (chains: ComboChain[]) => void;
+  mountKey?: string;
+  onMountKeyChange?: (key: string) => void;
   activeCasting?: { chainId: string; stepId: string } | null;
   isBotRunning?: boolean;
   onToast?: (message: string) => void;
@@ -61,6 +63,8 @@ const getPhysicalKeyFromEvent = (e: React.KeyboardEvent): string | null => {
 export const ComboSequence: React.FC<Props> = ({
   chains,
   onChainsChange,
+  mountKey = '',
+  onMountKeyChange,
   activeCasting = null,
   language = 'ru',
 }) => {
@@ -76,18 +80,20 @@ export const ComboSequence: React.FC<Props> = ({
     steps: [],
   };
 
-  const hasWaterStep = currentChain.steps.some((s) => s.stepType === 'water');
+  const regularSteps = currentChain.steps.filter((s) => s.stepType !== 'water');
+  const waterStep = currentChain.steps.find((s) => s.stepType === 'water') || null;
 
   // Active step being configured in bottom docked editor (Open by default on slot 1)
   const [editingStep, setEditingStep] = useState<{ chainId: string; stepId: string } | null>(() => {
-    if (currentChain && currentChain.steps.length > 0) {
-      return { chainId: currentChain.id, stepId: currentChain.steps[0].id };
+    const firstStep = regularSteps[0] || currentChain.steps[0];
+    if (currentChain && firstStep) {
+      return { chainId: currentChain.id, stepId: firstStep.id };
     }
     return null;
   });
 
   // Active key listening on '+' morph button
-  const [isAddingNewStep, setIsAddingNewStep] = useState<'regular' | 'water' | null>(null);
+  const [isAddingNewStep, setIsAddingNewStep] = useState<'regular' | 'water' | 'mount' | null>(null);
   const addingBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // Active key listening in bottom editor panel
@@ -127,7 +133,8 @@ export const ComboSequence: React.FC<Props> = ({
   // Keep a step selected by default whenever steps exist, unless adding a new step
   useEffect(() => {
     if (!editingStep && !isAddingNewStep && currentChain.steps.length > 0) {
-      setEditingStep({ chainId: currentChain.id, stepId: currentChain.steps[0].id });
+      const firstRegular = currentChain.steps.find((s) => s.stepType !== 'water') || currentChain.steps[0];
+      setEditingStep({ chainId: currentChain.id, stepId: firstRegular.id });
     }
   }, [currentChain.steps, editingStep, currentChain.id, isAddingNewStep]);
 
@@ -292,7 +299,16 @@ export const ComboSequence: React.FC<Props> = ({
   const editingStepData = editingStep
     ? currentChain.steps.find((s) => s.id === editingStep.stepId)
     : null;
-  const editingStepIdx = editingStepData
+  const editingRegularIdx = editingStepData && editingStepData.stepType !== 'water'
+    ? regularSteps.findIndex((s) => s.id === editingStepData.id)
+    : -1;
+  const prevRegularChainIdx = editingRegularIdx > 0
+    ? currentChain.steps.findIndex((s) => s.id === regularSteps[editingRegularIdx - 1].id)
+    : -1;
+  const nextRegularChainIdx = editingRegularIdx >= 0 && editingRegularIdx < regularSteps.length - 1
+    ? currentChain.steps.findIndex((s) => s.id === regularSteps[editingRegularIdx + 1].id)
+    : -1;
+  const editingStepChainIdx = editingStepData
     ? currentChain.steps.findIndex((s) => s.id === editingStepData.id)
     : -1;
 
@@ -305,7 +321,7 @@ export const ComboSequence: React.FC<Props> = ({
             {isRu ? 'ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАКЛИНАНИЙ' : 'SPELL ROTATION SEQUENCE'}
           </span>
           <span className="text-[10px] font-mono text-zinc-500">
-            ({currentChain.steps.length} {isRu ? 'слотов' : 'slots'})
+            ({regularSteps.length} {isRu ? 'слотов' : 'slots'})
           </span>
         </div>
 
@@ -322,38 +338,38 @@ export const ComboSequence: React.FC<Props> = ({
 
       {/* 2. SPELL SLOTS ROW (Ghost Action Bar) */}
       <div data-tour="rotation-sequence" className="p-3 rounded-xl bg-transparent border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] flex flex-wrap items-center gap-2.5 min-h-[64px] transition-all duration-200">
-        {currentChain.steps.map((step, idx) => {
+        {regularSteps.map((step, idx) => {
+          const chainIdx = currentChain.steps.findIndex((s) => s.id === step.id);
           const isCasting = activeCasting?.chainId === currentChain.id && activeCasting?.stepId === step.id;
           const isCurrentlyEditing = editingStep?.stepId === step.id;
-          const isDragged = draggedIdx === idx;
-          const isDragOver = dragOverIdx === idx && draggedIdx !== idx;
+          const isDragged = draggedIdx === chainIdx;
+          const isDragOver = dragOverIdx === chainIdx && draggedIdx !== chainIdx;
 
           return (
             <div
               key={step.id}
-              data-tour={step.stepType === 'water' ? 'rotation-water' : undefined}
               draggable={true}
               onDragStart={(e) => {
-                setDraggedIdx(idx);
+                setDraggedIdx(chainIdx);
                 e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', String(idx));
+                e.dataTransfer.setData('text/plain', String(chainIdx));
               }}
               onDragOver={(e) => {
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
-                if (dragOverIdx !== idx) {
-                  setDragOverIdx(idx);
+                if (dragOverIdx !== chainIdx) {
+                  setDragOverIdx(chainIdx);
                 }
               }}
               onDragLeave={() => {
-                if (dragOverIdx === idx) {
+                if (dragOverIdx === chainIdx) {
                   setDragOverIdx(null);
                 }
               }}
               onDrop={(e) => {
                 e.preventDefault();
-                if (draggedIdx !== null && draggedIdx !== idx) {
-                  handleReorderSteps(draggedIdx, idx);
+                if (draggedIdx !== null && draggedIdx !== chainIdx) {
+                  handleReorderSteps(draggedIdx, chainIdx);
                 }
                 setDraggedIdx(null);
                 setDragOverIdx(null);
@@ -371,24 +387,18 @@ export const ComboSequence: React.FC<Props> = ({
                   : isCasting
                   ? 'border border-zinc-950 dark:border-white text-zinc-950 dark:text-white scale-105 z-20'
                   : isCurrentlyEditing
-                  ? step.stepType === 'water'
-                    ? 'border-2 border-blue-400 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.35)] bg-blue-500/15 z-20'
-                    : 'border border-zinc-950 dark:border-white text-zinc-950 dark:text-white z-20'
-                  : step.stepType === 'water'
-                  ? 'border border-blue-500/40 text-blue-400 hover:border-blue-400 bg-blue-500/5'
+                  ? 'border border-zinc-950 dark:border-white text-zinc-950 dark:text-white z-20'
                   : 'border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent'
               }`}
               title={isRu ? 'Зажмите и перетащите, чтобы переместить слот вперёд или назад' : 'Drag to reorder slot forward or backward'}
             >
               {/* Slot Index */}
-              <span className={`absolute top-1 left-1.5 text-[8px] font-mono font-medium pointer-events-none ${
-                step.stepType === 'water' ? 'text-blue-400/80' : 'text-zinc-400 dark:text-zinc-600'
-              }`}>
+              <span className="absolute top-1 left-1.5 text-[8px] font-mono font-medium pointer-events-none text-zinc-400 dark:text-zinc-600">
                 {idx + 1}
               </span>
 
               {/* Remove Step '✕' on hover */}
-              {currentChain.steps.length > 1 && (
+              {regularSteps.length > 1 && (
                 <button
                   type="button"
                   onClick={(e) => handleDeleteStep(currentChain.id, step.id, e)}
@@ -399,12 +409,10 @@ export const ComboSequence: React.FC<Props> = ({
                 </button>
               )}
 
-              {/* Keycap Label */}
+              {/* Center Keycap Label */}
               <div
                 className={`w-full text-center font-mono font-bold text-xs tracking-wide transition-colors pointer-events-none select-none ${
-                  step.stepType === 'water'
-                    ? 'text-blue-400'
-                    : step.key
+                  step.key
                     ? 'text-zinc-950 dark:text-white'
                     : 'text-zinc-400 dark:text-zinc-600'
                 }`}
@@ -412,17 +420,10 @@ export const ComboSequence: React.FC<Props> = ({
                 {step.key || '—'}
               </div>
 
-              {/* Condition Indicator (HP for normal skills, MP for water) */}
-              {step.stepType === 'water' ? (
-                <span className="absolute top-1 right-1 text-[7px] font-mono font-medium text-blue-400 bg-blue-500/15 border border-blue-500/30 rounded px-0.5 flex items-center gap-0.5">
-                  {step.mpBelowPercent != null ? `${step.mpBelowPercent}%` : 'MP'}
+              {step.hpBelowPercent != null && (
+                <span className="absolute top-1 right-1 text-[7px] font-mono font-medium text-zinc-700 dark:text-zinc-300 bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/20 rounded px-0.5">
+                  &lt;{step.hpBelowPercent}%
                 </span>
-              ) : (
-                step.hpBelowPercent != null && (
-                  <span className="absolute top-1 right-1 text-[7px] font-mono font-medium text-zinc-700 dark:text-zinc-300 bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/20 rounded px-0.5">
-                    &lt;{step.hpBelowPercent}%
-                  </span>
-                )
               )}
             </div>
           );
@@ -467,9 +468,8 @@ export const ComboSequence: React.FC<Props> = ({
           </button>
         )}
 
-        {/* Special Blue Dashed '+' Button for Water / Mana regen - only if no water slot exists yet */}
-        {!hasWaterStep && (
-          <div data-tour="rotation-water" className="inline-flex shrink-0">
+        {/* Blue Water / Mana Droplet Button/Slot (directly to the right of '+', next to Mount Paw) */}
+        <div data-tour="rotation-water" className="inline-flex shrink-0 relative group">
           {isAddingNewStep === 'water' ? (
             <button
               ref={addingBtnRef}
@@ -494,6 +494,40 @@ export const ComboSequence: React.FC<Props> = ({
             >
               {isRu ? 'ЖМИ' : 'PRESS'}
             </button>
+          ) : waterStep ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setEditingStep({ chainId: currentChain.id, stepId: waterStep.id })}
+                title={isRu ? 'Слот для воды (манареген) — кликните для настройки' : 'Water slot (mana regen) — click to configure'}
+                className={`w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg p-1 relative flex flex-col items-center justify-center cursor-pointer transition-all duration-150 select-none ${
+                  activeCasting?.chainId === currentChain.id && activeCasting?.stepId === waterStep.id
+                    ? 'border-2 border-blue-300 text-blue-200 scale-105 bg-blue-500/20 z-20'
+                    : editingStep?.stepId === waterStep.id
+                    ? 'border-2 border-blue-400 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.35)] bg-blue-500/15 z-20'
+                    : 'border border-blue-500/45 bg-blue-500/10 hover:border-blue-400 hover:bg-blue-500/15 text-blue-400'
+                }`}
+              >
+                <Droplet className="w-5 h-5 stroke-[1.75] text-blue-400 fill-blue-400/25 mt-1 pointer-events-none transition-transform group-hover:scale-105" />
+                <span className="absolute top-1 right-1 text-[9px] font-mono font-bold leading-none text-blue-600 dark:text-blue-300 bg-blue-500/15 border border-blue-500/30 rounded px-1 py-[1px] max-w-[26px] truncate pointer-events-none select-none">
+                  {waterStep.key || '—'}
+                </span>
+                {waterStep.mpBelowPercent != null && (
+                  <span className="absolute bottom-0.5 right-1 text-[7px] font-mono font-medium leading-none text-blue-400/80 pointer-events-none select-none">
+                    &lt;{waterStep.mpBelowPercent}%
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => handleDeleteStep(currentChain.id, waterStep.id, e)}
+                title={isRu ? 'Удалить слот воды' : 'Delete water slot'}
+                className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-zinc-200 dark:bg-zinc-900 border border-black/20 dark:border-white/30 text-zinc-700 dark:text-zinc-300 text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-zinc-950 hover:text-white dark:hover:bg-white dark:hover:text-black cursor-pointer z-30"
+              >
+                ✕
+              </button>
+            </>
           ) : (
             <button
               type="button"
@@ -502,13 +536,89 @@ export const ComboSequence: React.FC<Props> = ({
                 setIsAddingNewStep('water');
               }}
               title={isRu ? 'Добавить слот для воды (манареген)' : 'Add water/mana slot'}
-              className="w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg border border-dashed border-blue-500/60 hover:border-blue-400 hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 transition-all flex items-center justify-center cursor-pointer shrink-0 relative group"
+              className="w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg border border-dashed border-blue-500/60 hover:border-blue-400 hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 transition-all flex items-center justify-center cursor-pointer shrink-0 relative"
             >
-              <Plus className="w-4 h-4 stroke-[1.5] text-blue-400 group-hover:scale-110 transition-transform" />
+              <Droplet className="w-5 h-5 stroke-[1.75] text-blue-400 group-hover:scale-110 transition-transform" />
             </button>
           )}
-          </div>
-        )}
+        </div>
+
+        {/* Orange Mount Paw Keybind Button (to the right of blue '+') - pure keybind, no extra settings */}
+        <div className="inline-flex shrink-0 relative group">
+          {isAddingNewStep === 'mount' ? (
+            <button
+              ref={addingBtnRef}
+              type="button"
+              tabIndex={0}
+              autoFocus
+              onBlur={() => setIsAddingNewStep(null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setIsAddingNewStep(null);
+                  return;
+                }
+                const captured = getPhysicalKeyFromEvent(e);
+                if (captured !== null) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  soundFx.playClick();
+                  onMountKeyChange?.(captured.toUpperCase());
+                  setIsAddingNewStep(null);
+                }
+              }}
+              className="w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg border-2 border-orange-400 bg-orange-500/20 text-orange-300 shadow-[0_0_14px_rgba(249,115,22,0.5)] scale-105 animate-pulse font-mono font-bold text-[11px] sm:text-xs flex items-center justify-center cursor-pointer shrink-0 transition-all outline-none"
+              title={isRu ? 'Нажмите клавишу маунта (Esc для отмены)' : 'Press key for mount (Esc to cancel)'}
+            >
+              {isRu ? 'ЖМИ' : 'PRESS'}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  soundFx.playClick();
+                  setIsAddingNewStep('mount');
+                }}
+                title={
+                  mountKey
+                    ? (isRu ? `Маунт [${mountKey}] — нажмите, чтобы изменить клавишу` : `Mount [${mountKey}] — click to rebind`)
+                    : (isRu ? 'Назначить клавишу маунта' : 'Assign mount keybind')
+                }
+                className={`w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg p-1 transition-all flex items-center justify-center cursor-pointer shrink-0 relative ${
+                  mountKey
+                    ? 'border border-orange-500/45 bg-orange-500/10 hover:border-orange-400 hover:bg-orange-500/15 text-orange-600 dark:text-orange-300'
+                    : 'border border-dashed border-orange-500/60 hover:border-orange-400 hover:bg-orange-500/10 text-orange-400 hover:text-orange-300'
+                }`}
+              >
+                {mountKey ? (
+                  <>
+                    <PawPrint className="w-5 h-5 stroke-[1.75] text-orange-400 fill-orange-400/15 mt-1 pointer-events-none transition-transform group-hover:scale-105" />
+                    <span className="absolute top-1 right-1 text-[9px] font-mono font-bold leading-none text-orange-600 dark:text-orange-300 bg-orange-500/15 border border-orange-500/30 rounded px-1 py-[1px] max-w-[26px] truncate pointer-events-none select-none">
+                      {mountKey}
+                    </span>
+                  </>
+                ) : (
+                  <PawPrint className="w-5 h-5 stroke-[1.75] text-orange-400 group-hover:scale-110 transition-transform" />
+                )}
+              </button>
+
+              {mountKey && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    soundFx.playClick();
+                    onMountKeyChange?.('');
+                  }}
+                  title={isRu ? 'Очистить клавишу маунта' : 'Clear mount key'}
+                  className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-zinc-200 dark:bg-zinc-900 border border-black/20 dark:border-white/30 text-zinc-700 dark:text-zinc-300 text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-zinc-950 hover:text-white dark:hover:bg-white dark:hover:text-black cursor-pointer z-30"
+                >
+                  ✕
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* 3. DOCKED BOTTOM EDITING PANEL (Ghost Mode) */}
@@ -519,13 +629,15 @@ export const ComboSequence: React.FC<Props> = ({
             <div className="flex items-center justify-between pb-2.5 border-b border-transparent">
               <div className="flex items-center gap-2">
                 <span className="text-xs sm:text-sm font-mono font-medium tracking-wide text-zinc-950 dark:text-white flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded font-mono font-bold ${
-                    editingStepData.stepType === 'water'
-                      ? 'text-blue-400 bg-blue-500/10 border border-blue-500/20'
-                      : 'text-zinc-950 dark:text-white'
-                  }`}>
-                    #{editingStepIdx + 1}
-                  </span>
+                  {editingStepData.stepType === 'water' ? (
+                    <span className="px-2 py-0.5 rounded font-mono font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 inline-flex items-center">
+                      <Droplet className="w-3.5 h-3.5 text-blue-400 fill-blue-400/25" />
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded font-mono font-bold text-zinc-950 dark:text-white">
+                      #{editingRegularIdx + 1}
+                    </span>
+                  )}
                   <span>
                     {editingStepData.stepType === 'water'
                       ? isRu
@@ -536,26 +648,28 @@ export const ComboSequence: React.FC<Props> = ({
                       : 'Edit spell slot'}
                   </span>
                 </span>
-                <div className="flex items-center gap-0.5 ml-1">
-                  <button
-                    type="button"
-                    disabled={editingStepIdx <= 0}
-                    onClick={() => handleReorderSteps(editingStepIdx, editingStepIdx - 1)}
-                    className="p-1 rounded text-zinc-400 hover:text-zinc-950 dark:hover:text-white disabled:opacity-20 disabled:pointer-events-none cursor-pointer transition-colors"
-                    title={isRu ? 'Переместить назад (влево)' : 'Move left'}
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    disabled={editingStepIdx >= currentChain.steps.length - 1}
-                    onClick={() => handleReorderSteps(editingStepIdx, editingStepIdx + 1)}
-                    className="p-1 rounded text-zinc-400 hover:text-zinc-950 dark:hover:text-white disabled:opacity-20 disabled:pointer-events-none cursor-pointer transition-colors"
-                    title={isRu ? 'Переместить вперёд (вправо)' : 'Move right'}
-                  >
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                {editingStepData.stepType !== 'water' && (
+                  <div className="flex items-center gap-0.5 ml-1">
+                    <button
+                      type="button"
+                      disabled={prevRegularChainIdx < 0 || editingStepChainIdx < 0}
+                      onClick={() => handleReorderSteps(editingStepChainIdx, prevRegularChainIdx)}
+                      className="p-1 rounded text-zinc-400 hover:text-zinc-950 dark:hover:text-white disabled:opacity-20 disabled:pointer-events-none cursor-pointer transition-colors"
+                      title={isRu ? 'Переместить назад (влево)' : 'Move left'}
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={nextRegularChainIdx < 0 || editingStepChainIdx < 0}
+                      onClick={() => handleReorderSteps(editingStepChainIdx, nextRegularChainIdx)}
+                      className="p-1 rounded text-zinc-400 hover:text-zinc-950 dark:hover:text-white disabled:opacity-20 disabled:pointer-events-none cursor-pointer transition-colors"
+                      title={isRu ? 'Переместить вперёд (вправо)' : 'Move right'}
+                    >
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
                 <span className={`text-xs font-mono ${editingStepData.stepType === 'water' ? 'text-blue-400' : 'text-zinc-500'}`}>
                   {draftStep.key ? `[${draftStep.key}]` : isRu ? '(клавиша не привязана)' : '(no key)'}
                 </span>
@@ -925,13 +1039,13 @@ export const ComboSequence: React.FC<Props> = ({
                 ? 'Кликните по любому слоту умения выше, чтобы настроить клавишу, тайминги и условия'
                 : 'Click any spell slot above to configure keybind, timings, and trigger conditions'}
             </p>
-            {currentChain.steps.length > 0 && (
+            {(regularSteps[0] || currentChain.steps[0]) && (
               <button
                 type="button"
                 onClick={() =>
                   setEditingStep({
                     chainId: currentChain.id,
-                    stepId: currentChain.steps[0].id,
+                    stepId: (regularSteps[0] || currentChain.steps[0]).id,
                   })
                 }
                 className="mt-1 px-3 py-1 text-[11px] font-mono rounded border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white cursor-pointer transition-colors"

@@ -31,6 +31,7 @@ export interface AppSettings {
   autoRouteMinutes?: number;
   auctionHouseId?: number | null;
   lootMinValue?: number | null;
+  mountKey?: string;
 }
 
 export interface LootRow {
