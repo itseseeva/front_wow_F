@@ -671,6 +671,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
             cursor={cursorPos}
             containerWidth={canvasSize.w}
             containerHeight={canvasSize.h}
+            language={language}
           />
         )}
 
@@ -695,6 +696,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
           <HeatmapTimelineBar
             timeline={timeline}
             marks={marks}
+            layers={layers}
             currentT={currentT}
             isPlaying={isPlaying}
             onTogglePlay={togglePlay}

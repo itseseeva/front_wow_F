@@ -256,14 +256,19 @@ export interface HeatmapSavings {
 }
 
 export interface HeatmapMark {
-  kind: 'ok' | 'fight' | 'stuck' | 'skip' | 'camp' | 'mob' | 'detour' | 'start' | 'finish';
+  kind: 'ok' | 'fight' | 'stuck' | 'skip' | 'camp' | 'mob' | 'detour' | 'start' | 'finish'
+      | 'death' | 'death_detour';
   x: number;      // доля ширины картинки 0..1 (центр точки)
   y: number;      // доля высоты картинки 0..1
   text: string;   // готовый текст подсказки на русском
-  time?: string;  // «18:05:12» — есть у ok, fight, start, finish и т.д.
-  r?: number;     // только у camp: радиус круга в долях ширины картинки
+  time?: string;  // «18:05:12»
+  r?: number;     // у camp и death: радиус круга в долях ширины картинки
   t?: number;     // секунды от начала сессии
   gain_s?: number; // только у detour: выигрыш в секундах
+  until?: number | null;        // только у death: до какого времени бот обходит место (Unix, секунды); null — навсегда
+  extra_s?: number;             // только у death_detour: на сколько секунд бега обход длиннее
+  center?: [number, number] | null; // только у death_detour: центр места смерти, которое обошли (доли картинки)
+  skip?: [number, number][];    // только у death_detour: ломаная «как шёл бы маршрут сквозь круг» (доли картинки)
 }
 
 export interface SessionHeatmapResponse {

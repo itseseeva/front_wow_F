@@ -386,6 +386,7 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
                 cursor={cursorPos}
                 containerWidth={previewSize.w}
                 containerHeight={previewSize.h}
+                language={language}
               />
             )}
 
@@ -401,6 +402,7 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
             <HeatmapTimelineBar
               timeline={heatmap.timeline}
               marks={heatmap.marks}
+              layers={layers}
               currentT={currentT}
               isPlaying={isPlaying}
               onTogglePlay={togglePlay}

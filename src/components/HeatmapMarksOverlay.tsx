@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useLayoutEffect, useRef, useMemo } from 'react';
-import { Play, Pause, Route } from 'lucide-react';
+import { Play, Pause, Route, Skull, ShieldCheck } from 'lucide-react';
 import { HeatmapMark, HeatmapSavings, HeatmapTimeline } from '../types';
 import { soundFx } from '../utils/audio';
 
-export type HeatmapLayerKey = 'ok' | 'fight' | 'camp' | 'detour';
+export type HeatmapLayerKey = 'ok' | 'fight' | 'camp' | 'detour' | 'death';
 export type HeatmapLayersState = Record<HeatmapLayerKey, boolean>;
 
 const LAYERS_STORAGE_KEY = 'wowbot_heatmap_layers_v3';
@@ -14,6 +14,7 @@ export const DEFAULT_HEATMAP_LAYERS: HeatmapLayersState = {
   fight: true,
   camp: true,
   detour: true,
+  death: true,
 };
 
 function readStoredLayers(): HeatmapLayersState {
@@ -27,6 +28,7 @@ function readStoredLayers(): HeatmapLayersState {
       fight: typeof parsed.fight === 'boolean' ? parsed.fight : DEFAULT_HEATMAP_LAYERS.fight,
       camp: typeof parsed.camp === 'boolean' ? parsed.camp : DEFAULT_HEATMAP_LAYERS.camp,
       detour: typeof parsed.detour === 'boolean' ? parsed.detour : DEFAULT_HEATMAP_LAYERS.detour,
+      death: typeof parsed.death === 'boolean' ? parsed.death : DEFAULT_HEATMAP_LAYERS.death,
     };
   } catch {
     return { ...DEFAULT_HEATMAP_LAYERS };
@@ -64,7 +66,7 @@ export function useHeatmapLayers(): [HeatmapLayersState, (key: HeatmapLayerKey) 
   return [layers, toggleLayer];
 }
 
-// ---------- Clock, Path Color & Timeline Interpolation Utilities ----------
+// ---------- Clock, Remaining Time, Path Color & Timeline Interpolation Utilities ----------
 
 export function formatClockTime(startStr: string, offsetSeconds: number): string {
   const parts = startStr.trim().split(':').map((p) => parseInt(p, 10));
@@ -77,6 +79,28 @@ export function formatClockTime(startStr: string, offsetSeconds: number): string
   const outM = Math.floor((totalSec % 3600) / 60);
   const outS = totalSec % 60;
   return `${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}:${String(outS).padStart(2, '0')}`;
+}
+
+export function formatDeathUntil(until: number | null | undefined, isRu: boolean): string | null {
+  if (until === undefined) return null;
+  if (until === null) {
+    return isRu ? 'навсегда' : 'permanently';
+  }
+  const nowSec = Date.now() / 1000;
+  const diffS = until - nowSec;
+  if (diffS <= 0) {
+    return isRu ? 'срок истёк' : 'expired';
+  }
+  if (diffS < 3600) {
+    const mins = Math.max(1, Math.round(diffS / 60));
+    return isRu ? `ещё ${mins} мин.` : `${mins} min left`;
+  }
+  if (diffS < 86400) {
+    const hrs = Math.max(1, Math.round(diffS / 3600));
+    return isRu ? `ещё ${hrs} ч.` : `${hrs} h left`;
+  }
+  const days = Math.max(1, Math.round(diffS / 86400));
+  return isRu ? `ещё ${days} дн.` : `${days} d left`;
 }
 
 // Smooth modern time-progression ramp (Strava / Apple Fitness / Linear inspired):
@@ -117,7 +141,6 @@ export function interpolateTimelinePoint(
     return { x: pts[n - 1][0], y: pts[n - 1][1] };
   }
 
-  // Binary search for largest index lo where pts[lo][2] <= targetT
   let lo = 0;
   let hi = n - 1;
   while (lo + 1 < hi) {
@@ -139,6 +162,37 @@ export function interpolateTimelinePoint(
   };
 }
 
+function buildTimelineSubPath(
+  pts: [number, number, number][],
+  tStart: number,
+  tEnd: number,
+  width: number,
+  height: number
+): string {
+  if (pts.length < 2 || tEnd <= tStart || width <= 0 || height <= 0) return '';
+  const startNorm = interpolateTimelinePoint(pts, tStart);
+  const endNorm = interpolateTimelinePoint(pts, tEnd);
+  if (!startNorm || !endNorm) return '';
+
+  const segPts: Array<{ x: number; y: number }> = [
+    { x: startNorm.x * width, y: startNorm.y * height },
+  ];
+
+  for (let i = 0; i < pts.length; i++) {
+    const [nx, ny, nt] = pts[i];
+    if (nt > tStart && nt < tEnd) {
+      segPts.push({ x: nx * width, y: ny * height });
+    }
+  }
+
+  segPts.push({ x: endNorm.x * width, y: endNorm.y * height });
+  if (segPts.length < 2) return '';
+
+  return segPts
+    .map((p, idx) => `${idx === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+    .join(' ');
+}
+
 // Shared playback hook: plays the whole session in ~20 seconds via requestAnimationFrame.
 const REPLAY_DURATION_SECONDS = 20;
 
@@ -150,7 +204,6 @@ export function useHeatmapPlayback(timeline?: HeatmapTimeline | null) {
   const rafRef = useRef<number | null>(null);
   const lastFrameRef = useRef<number>(0);
 
-  // Reset scrubber to end (full route visible) whenever timeline changes
   useEffect(() => {
     setIsPlaying(false);
     setCurrentT(endS);
@@ -231,6 +284,9 @@ export interface HeatmapMarkCounts {
   mob: number;
   campsButton: number;
   detour: number;
+  death: number;
+  deathDetour: number;
+  deathsButton: number;
 }
 
 export function getHeatmapMarkCounts(marks: HeatmapMark[]): HeatmapMarkCounts {
@@ -239,6 +295,8 @@ export function getHeatmapMarkCounts(marks: HeatmapMark[]): HeatmapMarkCounts {
   let camp = 0;
   let mob = 0;
   let detour = 0;
+  let death = 0;
+  let deathDetour = 0;
 
   for (const m of marks) {
     switch (m.kind) {
@@ -257,6 +315,12 @@ export function getHeatmapMarkCounts(marks: HeatmapMark[]): HeatmapMarkCounts {
       case 'detour':
         detour += 1;
         break;
+      case 'death':
+        death += 1;
+        break;
+      case 'death_detour':
+        deathDetour += 1;
+        break;
       default:
         break;
     }
@@ -269,10 +333,13 @@ export function getHeatmapMarkCounts(marks: HeatmapMark[]): HeatmapMarkCounts {
     mob,
     campsButton: camp > 0 ? camp : mob,
     detour,
+    death,
+    deathDetour,
+    deathsButton: death > 0 ? death : deathDetour,
   };
 }
 
-// Bottom-to-top rendering order for marks (stuck/skip & camp rings are not rendered)
+// Bottom-to-top rendering order for point marks (stuck/skip & camp rings are not rendered)
 const MARK_Z_ORDER: Record<HeatmapMark['kind'], number> = {
   camp: 0,
   mob: 1,
@@ -281,8 +348,10 @@ const MARK_Z_ORDER: Record<HeatmapMark['kind'], number> = {
   fight: 4,
   skip: 5,
   stuck: 6,
-  start: 7,
-  finish: 8,
+  death: 7,
+  death_detour: 8,
+  start: 9,
+  finish: 10,
 };
 
 function isMarkVisible(mark: HeatmapMark, layers: HeatmapLayersState): boolean {
@@ -302,9 +371,21 @@ function isMarkVisible(mark: HeatmapMark, layers: HeatmapLayersState): boolean {
       return layers.camp;
     case 'detour':
       return layers.detour;
+    case 'death':
+    case 'death_detour':
+      return layers.death;
     default:
       return true;
   }
+}
+
+function isSamePoint(
+  ax: number,
+  ay: number,
+  center: [number, number] | null | undefined
+): boolean {
+  if (!center || center.length < 2) return false;
+  return Math.hypot(ax - center[0], ay - center[1]) < 0.0025;
 }
 
 // ---------- Path Geometry Builder (Bucketed Time-Gradient Polyline) ----------
@@ -359,10 +440,7 @@ function buildPathData(
 
   if (botPos) {
     const last = passedPts[passedPts.length - 1];
-    if (
-      !last ||
-      Math.hypot(last.x - botPos.x, last.y - botPos.y) > 0.25
-    ) {
+    if (!last || Math.hypot(last.x - botPos.x, last.y - botPos.y) > 0.25) {
       passedPts.push({ x: botPos.x, y: botPos.y, t: clampedT });
     }
   }
@@ -371,14 +449,12 @@ function buildPathData(
     return { fullPathD, passedPathD: '', passedBuckets: [], botPos };
   }
 
-  // Passed full casing path
   const passedParts: string[] = [];
   for (let i = 0; i < passedPts.length; i++) {
     passedParts.push(`${i === 0 ? 'M' : 'L'}${passedPts[i].x.toFixed(1)},${passedPts[i].y.toFixed(1)}`);
   }
   const passedPathD = passedParts.join(' ');
 
-  // Bucket segments into smooth time-colored chunks (max ~72 SVG paths even for thousands of points)
   const NUM_BUCKETS = 72;
   const bucketSegments: Map<number, string[]> = new Map();
 
@@ -409,7 +485,7 @@ function buildPathData(
   return { fullPathD, passedPathD, passedBuckets, botPos };
 }
 
-// ---------- Main SVG Layer (Time-Gradient Path + Interactive Marks + Live Bot Beacon) ----------
+// ---------- Main SVG Layer (Time-Gradient Path + Death Zones + Bypass Comparison + Interactive Marks) ----------
 
 interface HeatmapMarksSvgProps {
   marks?: HeatmapMark[] | null;
@@ -445,9 +521,12 @@ export const HeatmapMarksSvg: React.FC<HeatmapMarksSvgProps> = ({
   const invScale = 1 / safeScale;
 
   const hasTimeline = Boolean(timeline && timeline.pts && timeline.pts.length > 0);
-  const effectiveT = hasTimeline && timeline
-    ? (typeof currentT === 'number' ? currentT : timeline.end_s)
-    : Infinity;
+  const effectiveT =
+    hasTimeline && timeline
+      ? typeof currentT === 'number'
+        ? currentT
+        : timeline.end_s
+      : Infinity;
 
   const pathData = useMemo(() => {
     if (!hasTimeline || !timeline) return null;
@@ -461,6 +540,64 @@ export const HeatmapMarksSvg: React.FC<HeatmapMarksSvgProps> = ({
       .filter(({ mark }) => isMarkVisible(mark, layers))
       .sort((a, b) => MARK_Z_ORDER[a.mark.kind] - MARK_Z_ORDER[b.mark.kind]);
   }, [marks, layers]);
+
+  // Identify hovered death_detour's linked death circle center (if any)
+  const linkedDeathCenter = useMemo(() => {
+    if (!hoveredKey) return null;
+    const found = sortedMarks.find((item) => item.key === hoveredKey);
+    if (found && found.mark.kind === 'death_detour' && found.mark.center) {
+      return found.mark.center;
+    }
+    return null;
+  }, [hoveredKey, sortedMarks]);
+
+  const deathZoneMarks = useMemo(
+    () => sortedMarks.filter(({ mark }) => mark.kind === 'death'),
+    [sortedMarks]
+  );
+
+  const deathDetourMarks = useMemo(
+    () => sortedMarks.filter(({ mark }) => mark.kind === 'death_detour'),
+    [sortedMarks]
+  );
+
+  // Compute bright emerald bypass path segments along timeline for visible death_detours (t - 15 ... t + 25 s)
+  const deathBypassSegments = useMemo(() => {
+    if (!hasTimeline || !timeline || deathDetourMarks.length === 0 || width <= 0 || height <= 0) {
+      return [];
+    }
+    const segs: Array<{ key: string; d: string; isFuture: boolean }> = [];
+    for (const { mark, key } of deathDetourMarks) {
+      if (typeof mark.t !== 'number') continue;
+      const winStart = Math.max(0, mark.t - 15);
+      const winEndFull = Math.min(timeline.end_s, mark.t + 25);
+      if (effectiveT < winStart) continue;
+      const winEnd = Math.min(effectiveT, winEndFull);
+      if (winEnd <= winStart) continue;
+      const d = buildTimelineSubPath(timeline.pts, winStart, winEnd, width, height);
+      if (d) {
+        segs.push({ key, d, isFuture: false });
+      }
+    }
+    return segs;
+  }, [hasTimeline, timeline, deathDetourMarks, effectiveT, width, height]);
+
+  const enrichMarkForHover = useCallback(
+    (mark: HeatmapMark): HeatmapMark => {
+      let derivedTime = mark.time;
+      if (!derivedTime && hasTimeline && timeline) {
+        if (typeof mark.t === 'number') {
+          derivedTime = formatClockTime(timeline.start, mark.t);
+        } else if (mark.kind === 'start') {
+          derivedTime = formatClockTime(timeline.start, 0);
+        } else if (mark.kind === 'finish') {
+          derivedTime = formatClockTime(timeline.start, timeline.end_s);
+        }
+      }
+      return derivedTime && derivedTime !== mark.time ? { ...mark, time: derivedTime } : mark;
+    },
+    [hasTimeline, timeline]
+  );
 
   if (width <= 0 || height <= 0 || (!pathData && sortedMarks.length === 0)) {
     return null;
@@ -538,34 +675,135 @@ export const HeatmapMarksSvg: React.FC<HeatmapMarksSvgProps> = ({
         </g>
       )}
 
-      {/* 2. Interactive Marks Layer */}
+      {/* 2. Death Avoidance Zones (translucent rose-500 circle + thin dashed outline; radius scales with map) */}
+      {deathZoneMarks.map(({ mark, key }) => {
+        const cx = mark.x * width;
+        const cy = mark.y * height;
+        const radius = Math.max(10 * invScale, (mark.r ?? 0.022) * width);
+        const isLinkedHighlight = isSamePoint(mark.x, mark.y, linkedDeathCenter);
+        const isHighlighted = hoveredKey === key || isLinkedHighlight;
+        const hoverMark = enrichMarkForHover(mark);
+
+        return (
+          <g
+            key={`zone-${key}`}
+            className="pointer-events-auto cursor-pointer"
+            onMouseEnter={(e) => onHoverMark(hoverMark, key, e)}
+            onMouseMove={onMoveMark}
+            onMouseLeave={() => onHoverMark(null, null)}
+          >
+            <circle
+              cx={cx}
+              cy={cy}
+              r={radius}
+              fill="#f43f5e"
+              fillOpacity={isHighlighted ? 0.24 : 0.13}
+              stroke="#f43f5e"
+              strokeOpacity={isHighlighted ? 0.95 : 0.68}
+              strokeWidth={(isHighlighted ? 2 : 1.35) * invScale}
+              strokeDasharray={`${5 * invScale} ${3.5 * invScale}`}
+            />
+          </g>
+        );
+      })}
+
+      {/* 3. Death Detour "Skip" Lines (gray dashed zinc-400 path showing the unsafe route through the death circle) */}
+      {deathDetourMarks.map(({ mark, key }) => {
+        if (!mark.skip || mark.skip.length < 2) return null;
+        const isTimelineGated = hasTimeline && typeof mark.t === 'number';
+        const isFutureMark = isTimelineGated && (mark.t as number) > effectiveT + 0.05;
+        const isHovered = hoveredKey === key;
+        const hoverMark = enrichMarkForHover(mark);
+
+        const skipD = mark.skip
+          .map(([sx, sy], idx) => `${idx === 0 ? 'M' : 'L'}${(sx * width).toFixed(1)},${(sy * height).toFixed(1)}`)
+          .join(' ');
+
+        return (
+          <g
+            key={`skip-${key}`}
+            opacity={isFutureMark ? 0.14 : 1}
+            className="pointer-events-auto cursor-pointer transition-opacity duration-150"
+            onMouseEnter={(e) => onHoverMark(hoverMark, key, e)}
+            onMouseMove={onMoveMark}
+            onMouseLeave={() => onHoverMark(null, null)}
+          >
+            {/* Generous transparent hit target along the dashed line */}
+            <path
+              d={skipD}
+              fill="none"
+              stroke="transparent"
+              strokeWidth={11 * invScale}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d={skipD}
+              fill="none"
+              stroke="#a1a1aa"
+              strokeOpacity={isHovered ? 0.95 : 0.62}
+              strokeWidth={(isHovered ? 2.4 : 1.7) * invScale}
+              strokeDasharray={`${5 * invScale} ${4 * invScale}`}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </g>
+        );
+      })}
+
+      {/* 4. Highlighted Emerald/Cyan Actual Bypass Segments along timeline (t - 15 ... t + 25 s) */}
+      {deathBypassSegments.map((seg) => {
+        const isHovered = hoveredKey === seg.key;
+        return (
+          <g key={`bypass-${seg.key}`} className="pointer-events-none">
+            <path
+              d={seg.d}
+              fill="none"
+              stroke="#10b981"
+              strokeOpacity={isHovered ? 0.45 : 0.28}
+              strokeWidth={(isHovered ? 11.5 : 9.5) * invScale}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d={seg.d}
+              fill="none"
+              stroke="#09090b"
+              strokeOpacity={0.6}
+              strokeWidth={(isHovered ? 6 : 5.2) * invScale}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d={seg.d}
+              fill="none"
+              stroke={isHovered ? '#22d3ee' : '#34d399'}
+              strokeOpacity={1}
+              strokeWidth={(isHovered ? 4.4 : 3.6) * invScale}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </g>
+        );
+      })}
+
+      {/* 5. Interactive Point Marks Layer */}
       {sortedMarks.map(({ mark, key }) => {
         const cx = mark.x * width;
         const cy = mark.y * height;
         const isHovered = hoveredKey === key;
 
-        // Progressive timeline reveal for ok / fight / detour
+        // Progressive timeline reveal for ok / fight / detour / death_detour (death stays always visible)
         const isTimelineGated =
           hasTimeline &&
-          (mark.kind === 'ok' || mark.kind === 'fight' || mark.kind === 'detour') &&
+          (mark.kind === 'ok' ||
+            mark.kind === 'fight' ||
+            mark.kind === 'detour' ||
+            mark.kind === 'death_detour') &&
           typeof mark.t === 'number';
         const isFutureMark = isTimelineGated && (mark.t as number) > effectiveT + 0.05;
 
-        // Enrich tooltip clock time from timeline if mark.time isn't explicitly set
-        let derivedTime = mark.time;
-        if (!derivedTime && hasTimeline && timeline) {
-          if (typeof mark.t === 'number') {
-            derivedTime = formatClockTime(timeline.start, mark.t);
-          } else if (mark.kind === 'start') {
-            derivedTime = formatClockTime(timeline.start, 0);
-          } else if (mark.kind === 'finish') {
-            derivedTime = formatClockTime(timeline.start, timeline.end_s);
-          }
-        }
-        const markForHover: HeatmapMark =
-          derivedTime && derivedTime !== mark.time
-            ? { ...mark, time: derivedTime }
-            : mark;
+        const markForHover = enrichMarkForHover(mark);
 
         const handleMouseEnter = (e: React.MouseEvent) => {
           onHoverMark(markForHover, key, e);
@@ -692,6 +930,99 @@ export const HeatmapMarksSvg: React.FC<HeatmapMarksSvgProps> = ({
               );
             })()}
 
+            {/* death: small skull emblem in the center of the rose avoidance circle */}
+            {mark.kind === 'death' && (() => {
+              const isLinkedHighlight = isSamePoint(mark.x, mark.y, linkedDeathCenter);
+              const isHighlighted = isHovered || isLinkedHighlight;
+              return (
+                <>
+                  <circle r={11} fill="transparent" />
+                  {isHighlighted && (
+                    <circle
+                      r={11.5}
+                      fill="#f43f5e"
+                      fillOpacity={0.2}
+                      stroke="#fda4af"
+                      strokeWidth={1.3}
+                      strokeOpacity={0.9}
+                    />
+                  )}
+                  <circle
+                    r={8.5}
+                    fill="#1f0b12"
+                    stroke={isHighlighted ? '#fda4af' : '#f43f5e'}
+                    strokeWidth={1.5}
+                  />
+                  <Skull
+                    x={-5.5}
+                    y={-5.5}
+                    width={11}
+                    height={11}
+                    color={isHighlighted ? '#ffe4e6' : '#fda4af'}
+                    strokeWidth={2.1}
+                  />
+                </>
+              );
+            })()}
+
+            {/* death_detour: emerald anchor + "обход +{extra_s} с" badge with ShieldCheck */}
+            {mark.kind === 'death_detour' && (() => {
+              const hasExtra = typeof mark.extra_s === 'number';
+              const badgeText = hasExtra
+                ? (isRu ? `обход +${Math.round(mark.extra_s as number)} с` : `bypass +${Math.round(mark.extra_s as number)}s`)
+                : (isRu ? 'обход' : 'bypass');
+              const badgeW = Math.max(58, 20 + badgeText.length * 6.0 + 8);
+
+              return (
+                <>
+                  <circle r={9} fill="transparent" />
+                  {isHovered && (
+                    <circle r={7.5} fill="none" stroke="#34d399" strokeWidth={1.5} strokeOpacity={0.95} />
+                  )}
+                  <circle
+                    r={4}
+                    fill="#10b981"
+                    stroke="#ecfdf5"
+                    strokeWidth={1.5}
+                  />
+                  {!isFutureMark && (
+                    <g transform="translate(8, -9.5)">
+                      <rect
+                        x={0}
+                        y={0}
+                        width={badgeW}
+                        height={19}
+                        rx={5}
+                        fill="#064e3b"
+                        fillOpacity={0.95}
+                        stroke={isHovered ? '#6ee7b7' : '#34d399'}
+                        strokeWidth={isHovered ? 1.5 : 1.15}
+                      />
+                      <ShieldCheck
+                        x={5}
+                        y={4}
+                        width={11}
+                        height={11}
+                        color="#6ee7b7"
+                        strokeWidth={2.2}
+                      />
+                      <text
+                        x={20}
+                        y={13}
+                        textAnchor="start"
+                        fill="#ecfdf5"
+                        fontSize={10}
+                        fontWeight={600}
+                        fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                      >
+                        {badgeText}
+                      </text>
+                    </g>
+                  )}
+                </>
+              );
+            })()}
+
             {/* start: green badge below dot */}
             {mark.kind === 'start' && (
               <>
@@ -761,19 +1092,17 @@ export const HeatmapMarksSvg: React.FC<HeatmapMarksSvgProps> = ({
         );
       })}
 
-      {/* 3. Current Bot Position Beacon on Path */}
+      {/* 6. Current Bot Position Beacon on Path */}
       {pathData?.botPos && (
         <g
           transform={`translate(${pathData.botPos.x}, ${pathData.botPos.y}) scale(${invScale})`}
           className="pointer-events-none"
         >
-          {/* Outer halo */}
           <circle
             r={isPlaying ? 12 : 9.5}
             fill={botProgressColor}
             fillOpacity={isPlaying ? 0.28 : 0.2}
           />
-          {/* Crisp dark outer ring + white ring + progress-colored core */}
           <circle r={6.2} fill="#09090b" fillOpacity={0.85} />
           <circle r={4.8} fill="#ffffff" />
           <circle r={2.4} fill={botProgressColor} />
@@ -790,6 +1119,7 @@ interface HeatmapMarkTooltipProps {
   cursor: { x: number; y: number } | null;
   containerWidth: number;
   containerHeight: number;
+  language?: 'ru' | 'en';
 }
 
 export const HeatmapMarkTooltip: React.FC<HeatmapMarkTooltipProps> = ({
@@ -797,7 +1127,9 @@ export const HeatmapMarkTooltip: React.FC<HeatmapMarkTooltipProps> = ({
   cursor,
   containerWidth,
   containerHeight,
+  language = 'ru',
 }) => {
+  const isRu = language === 'ru';
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
 
@@ -830,7 +1162,8 @@ export const HeatmapMarkTooltip: React.FC<HeatmapMarkTooltipProps> = ({
 
   if (!mark || !cursor) return null;
 
-  const label = mark.time ? `${mark.time} — ${mark.text}` : mark.text;
+  const deathUntilLabel =
+    mark.kind === 'death' ? formatDeathUntil(mark.until, isRu) : null;
 
   return (
     <div
@@ -840,7 +1173,7 @@ export const HeatmapMarkTooltip: React.FC<HeatmapMarkTooltipProps> = ({
         top: pos ? `${pos.top}px` : `${cursor.y + 14}px`,
         visibility: pos ? 'visible' : 'hidden',
       }}
-      className="absolute z-40 pointer-events-none max-w-[min(320px,calc(100%-16px))] px-2.5 py-1.5 rounded-lg bg-[#09090b]/95 border border-white/15 shadow-xl backdrop-blur-sm text-xs font-mono leading-snug text-zinc-100"
+      className="absolute z-40 pointer-events-none max-w-[min(320px,calc(100%-16px))] px-2.5 py-1.5 rounded-lg bg-[#09090b]/95 border border-white/15 shadow-xl backdrop-blur-sm text-xs font-mono leading-snug text-zinc-100 flex flex-col gap-0.5"
     >
       {mark.time ? (
         <span>
@@ -849,7 +1182,12 @@ export const HeatmapMarkTooltip: React.FC<HeatmapMarkTooltipProps> = ({
           <span>{mark.text}</span>
         </span>
       ) : (
-        <span>{label}</span>
+        <span>{mark.text}</span>
+      )}
+      {deathUntilLabel && (
+        <span className="text-[10px] text-rose-300/85 tabular-nums">
+          {deathUntilLabel}
+        </span>
       )}
     </div>
   );
@@ -888,7 +1226,7 @@ export const HeatmapSavingsBanner: React.FC<HeatmapSavingsBannerProps> = ({
 
   return (
     <div
-      className={`w-full flex items-center justify-center ${isDarkOnly ? '' : ''}`}
+      className="w-full flex items-center justify-center"
       onMouseDown={(e) => e.stopPropagation()}
     >
       <div
@@ -954,6 +1292,7 @@ export const HeatmapSavingsBanner: React.FC<HeatmapSavingsBannerProps> = ({
 interface HeatmapTimelineBarProps {
   timeline: HeatmapTimeline;
   marks?: HeatmapMark[] | null;
+  layers?: HeatmapLayersState;
   currentT: number;
   isPlaying: boolean;
   onTogglePlay: () => void;
@@ -966,6 +1305,7 @@ interface HeatmapTimelineBarProps {
 export const HeatmapTimelineBar: React.FC<HeatmapTimelineBarProps> = ({
   timeline,
   marks,
+  layers,
   currentT,
   isPlaying,
   onTogglePlay,
@@ -987,19 +1327,36 @@ export const HeatmapTimelineBar: React.FC<HeatmapTimelineBarProps> = ({
   const currentClock = formatClockTime(timeline.start, currentT);
   const endClock = formatClockTime(timeline.start, timeline.end_s);
 
-  // Extract event ticks (ok yellow, fight red, detour purple) with valid mark.t
+  // Extract event ticks (ok yellow, fight red, detour purple, death_detour emerald) with valid mark.t
   const eventTicks = useMemo(() => {
     if (!marks || marks.length === 0) return [];
-    const list: Array<{ t: number; pct: number; color: string; title: string; kind: HeatmapMark['kind']; key: string }> = [];
+    const list: Array<{
+      t: number;
+      pct: number;
+      color: string;
+      title: string;
+      kind: HeatmapMark['kind'];
+      key: string;
+    }> = [];
     marks.forEach((m, idx) => {
       if (typeof m.t !== 'number') return;
-      if (m.kind !== 'ok' && m.kind !== 'fight' && m.kind !== 'detour') return;
+      if (
+        m.kind !== 'ok' &&
+        m.kind !== 'fight' &&
+        m.kind !== 'detour' &&
+        m.kind !== 'death_detour'
+      ) {
+        return;
+      }
+      if (layers && !isMarkVisible(m, layers)) return;
       const pct = Math.max(0, Math.min(100, (m.t / endS) * 100));
       const color =
         m.kind === 'ok'
           ? '#FFD100'
           : m.kind === 'fight'
           ? '#E24B4A'
+          : m.kind === 'death_detour'
+          ? '#34d399'
           : '#7F77DD';
       const clock = m.time || formatClockTime(timeline.start, m.t);
       list.push({
@@ -1012,7 +1369,7 @@ export const HeatmapTimelineBar: React.FC<HeatmapTimelineBarProps> = ({
       });
     });
     return list;
-  }, [marks, endS, timeline.start]);
+  }, [marks, layers, endS, timeline.start]);
 
   const seekFromClientX = useCallback(
     (clientX: number) => {
@@ -1116,7 +1473,6 @@ export const HeatmapTimelineBar: React.FC<HeatmapTimelineBarProps> = ({
             isDarkOnly ? 'bg-white/[0.1]' : 'bg-black/[0.1] dark:bg-white/[0.1]'
           }`}
         >
-          {/* Full gradient bar clipped to current progress */}
           <div
             className="absolute inset-y-0 left-0 rounded-full"
             style={{
@@ -1151,7 +1507,9 @@ export const HeatmapTimelineBar: React.FC<HeatmapTimelineBarProps> = ({
                   opacity: reached ? 1 : 0.45,
                 }}
                 className={`block rounded-full transition-transform duration-150 group-hover/tick:scale-150 ${
-                  tick.kind === 'fight' ? 'w-1.5 h-2.5' : 'w-1.5 h-1.5'
+                  tick.kind === 'fight' || tick.kind === 'death_detour'
+                    ? 'w-1.5 h-2.5'
+                    : 'w-1.5 h-1.5'
                 } ring-1 ring-black/60`}
               />
             </button>
@@ -1182,7 +1540,7 @@ export const HeatmapTimelineBar: React.FC<HeatmapTimelineBarProps> = ({
   );
 };
 
-// ---------- Layer Toggle Buttons & Summary Stats ----------
+// ---------- Layer Toggle Buttons, Conditional Death Legend & Summary Stats ----------
 
 interface LayerButtonSpec {
   key: HeatmapLayerKey;
@@ -1228,6 +1586,13 @@ const LayerMiniSymbol: React.FC<{ layerKey: HeatmapLayerKey }> = ({ layerKey }) 
           <circle r="4.2" fill="#7F77DD" stroke="#ffffff" strokeWidth="1.4" />
         </svg>
       );
+    case 'death':
+      return (
+        <svg width="14" height="14" viewBox="-8 -8 16 16" className="shrink-0" aria-hidden="true">
+          <circle r="6.8" fill="#f43f5e" fillOpacity="0.2" stroke="#f43f5e" strokeWidth="1.2" strokeDasharray="2.5 1.8" />
+          <Skull x={-4.2} y={-4.2} width={8.4} height={8.4} color="#fda4af" strokeWidth={2.2} />
+        </svg>
+      );
   }
 };
 
@@ -1256,10 +1621,12 @@ export const HeatmapLayerControlsAndStats: React.FC<HeatmapLayerControlsAndStats
     { key: 'fight', labelRu: 'Бои', labelEn: 'Fights', count: counts.fight },
     { key: 'camp', labelRu: 'Лагеря', labelEn: 'Camps', count: counts.campsButton },
     { key: 'detour', labelRu: 'Обходы', labelEn: 'Detours', count: counts.detour },
+    { key: 'death', labelRu: 'Смерти', labelEn: 'Deaths', count: counts.deathsButton },
   ];
   const buttons = allButtons.filter((btn) => btn.count > 0);
 
   const isDarkOnly = variant === 'dark';
+  const showDeathLegend = counts.death > 0 || counts.deathDetour > 0;
 
   const stats = [
     {
@@ -1323,6 +1690,66 @@ export const HeatmapLayerControlsAndStats: React.FC<HeatmapLayerControlsAndStats
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* Conditional Legend for Death Spots & Death Detour Comparison */}
+      {showDeathLegend && (
+        <div
+          className={`flex flex-wrap items-center ${
+            isDarkOnly ? 'justify-center' : 'justify-start'
+          } gap-x-4 gap-y-1 text-[11px] ${
+            isDarkOnly ? 'text-zinc-400' : 'text-zinc-600 dark:text-zinc-400'
+          }`}
+        >
+          {counts.death > 0 && (
+            <div className="inline-flex items-center gap-1.5">
+              <svg width="16" height="16" viewBox="-8 -8 16 16" className="shrink-0" aria-hidden="true">
+                <circle
+                  r="6.8"
+                  fill="#f43f5e"
+                  fillOpacity="0.16"
+                  stroke="#f43f5e"
+                  strokeWidth="1.2"
+                  strokeDasharray="2.5 1.8"
+                />
+                <Skull x={-4.2} y={-4.2} width={8.4} height={8.4} color="#fda4af" strokeWidth={2.2} />
+              </svg>
+              <span>
+                {isRu ? 'Место смерти — бот обходит' : 'Death spot — bot avoids'}
+              </span>
+            </div>
+          )}
+
+          {counts.deathDetour > 0 && (
+            <div className="inline-flex items-center gap-1.5">
+              <svg width="24" height="14" viewBox="0 0 24 14" className="shrink-0" aria-hidden="true">
+                <line
+                  x1="1"
+                  y1="10"
+                  x2="23"
+                  y2="10"
+                  stroke="#a1a1aa"
+                  strokeOpacity="0.7"
+                  strokeWidth="1.5"
+                  strokeDasharray="3 2.5"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M 1 10 Q 12 1 23 10"
+                  fill="none"
+                  stroke="#34d399"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span>
+                {isRu
+                  ? 'Как обошёл: пунктир — путь сквозь, яркая линия — обход'
+                  : 'How bypassed: dashed — path through, bright line — bypass'}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
