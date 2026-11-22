@@ -253,6 +253,7 @@ export interface SessionHeatmapResponse {
   height?: number;
   route_name?: string;   // например «Маршрут 3»
   error?: string;        // при error — понятный текст для пользователя
+  focus?: { x: number; y: number; w: number; h: number } | null;
 }
 
 export interface SessionSummaryData {

@@ -271,6 +271,7 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
             routeName={heatmap.route_name}
             width={heatmap.width}
             height={heatmap.height}
+            focus={heatmap.focus}
             onClose={() => setIsViewerOpen(false)}
             language={language}
           />

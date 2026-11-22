@@ -4,11 +4,21 @@ import { X, ZoomIn, ZoomOut, RotateCcw, MapPin, Loader2 } from 'lucide-react';
 import { PassInfo } from '../types';
 import { soundFx } from '../utils/audio';
 
+export interface HeatmapFocusRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const MAX_ZOOM = 12;
+
 interface HeatmapViewerProps {
   image?: string;
   routeName?: string;
   width?: number;
   height?: number;
+  focus?: HeatmapFocusRect | null;
   onClose: () => void;
   language?: 'ru' | 'en';
   passes?: number;
@@ -35,6 +45,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
   routeName,
   width,
   height,
+  focus = null,
   onClose,
   language = 'ru',
   passes = 0,
@@ -46,6 +57,8 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
 }) => {
   const isRu = language === 'ru';
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
 
   const [scale, setScale] = useState<number>(1);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -56,19 +69,136 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
   scaleRef.current = scale;
   const panRef = useRef<{ x: number; y: number }>(pan);
   panRef.current = pan;
+  const focusRef = useRef<HeatmapFocusRect | null>(focus);
+  focusRef.current = focus;
 
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const isDraggingRef = useRef<boolean>(false);
 
-  // Backend generated images place a legend on the right ~22.5% of the canvas.
-  // When detected, we cleanly crop out the right panel so only the pure map is visible.
-  const hasBackendPanel = Boolean(image && !image.includes('EZF') && (width ? width > 1300 : true));
+  // Compute and apply scale & pan so that `focus` rect fills ~85% of the canvas area centered
+  const applyFocus = useCallback((targetFocus: HeatmapFocusRect | null) => {
+    if (!targetFocus || targetFocus.w <= 0 || targetFocus.h <= 0) {
+      setScale(1);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img) return;
+
+    const canvasRect = canvas.getBoundingClientRect();
+    const containerW = canvasRect.width;
+    const containerH = canvasRect.height;
+    if (containerW <= 0 || containerH <= 0) return;
+
+    // Untransformed (scale=1) rendered image size & position inside canvas
+    let dispW: number;
+    let dispH: number;
+    let imgLeft: number;
+    let imgTop: number;
+
+    if (scaleRef.current === 1 && panRef.current.x === 0 && panRef.current.y === 0) {
+      const imgRect = img.getBoundingClientRect();
+      dispW = imgRect.width;
+      dispH = imgRect.height;
+      imgLeft = imgRect.left - canvasRect.left;
+      imgTop = imgRect.top - canvasRect.top;
+    } else {
+      dispW = img.offsetWidth;
+      dispH = img.offsetHeight;
+      imgLeft = img.offsetLeft;
+      imgTop = img.offsetTop;
+    }
+
+    if (dispW <= 0 || dispH <= 0) return;
+
+    const focusW = targetFocus.w * dispW;
+    const focusH = targetFocus.h * dispH;
+    if (focusW <= 0 || focusH <= 0) return;
+
+    const nextScale = Math.min(
+      MAX_ZOOM,
+      Math.max(1, 0.85 * Math.min(containerW / focusW, containerH / focusH))
+    );
+
+    if (nextScale <= 1.001) {
+      setScale(1);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+
+    // Center of focus rect inside canvas at scale=1
+    const cx = imgLeft + (targetFocus.x + targetFocus.w / 2) * dispW;
+    const cy = imgTop + (targetFocus.y + targetFocus.h / 2) * dispH;
+
+    // With transformOrigin '0 0' on the full-size canvas wrapper:
+    // screenPos = pan + scale * localPos => pan = containerCenter - scale * focusCenter
+    const nextPanX = containerW / 2 - nextScale * cx;
+    const nextPanY = containerH / 2 - nextScale * cy;
+
+    setScale(nextScale);
+    setPan({ x: nextPanX, y: nextPanY });
+  }, []);
+
+  // Re-apply focus whenever focus or image changes (e.g., switching pass or session)
+  const focusX = focus?.x;
+  const focusY = focus?.y;
+  const focusW = focus?.w;
+  const focusH = focus?.h;
+
+  useEffect(() => {
+    if (!image) {
+      setScale(1);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+    if (!focus) {
+      setScale(1);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+    const img = imgRef.current;
+    if (img && img.complete && img.naturalWidth > 0) {
+      const rafId = requestAnimationFrame(() => applyFocus(focusRef.current));
+      return () => cancelAnimationFrame(rafId);
+    }
+  }, [image, focusX, focusY, focusW, focusH, passes, applyFocus]);
 
   // Reset to original 1x scale and centered pan
   const handleReset = useCallback(() => {
     soundFx.playClick();
     setScale(1);
     setPan({ x: 0, y: 0 });
+  }, []);
+
+  // Zoom around canvas center for +/- buttons
+  const zoomAroundCenter = useCallback((factor: number) => {
+    const currentScale = scaleRef.current;
+    const currentPan = panRef.current;
+    const nextScale = Math.min(MAX_ZOOM, Math.max(1, currentScale * factor));
+    if (nextScale === currentScale) return;
+
+    if (nextScale <= 1.001) {
+      setScale(1);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      const ratio = nextScale / currentScale;
+      setScale(nextScale);
+      setPan({
+        x: cx - (cx - currentPan.x) * ratio,
+        y: cy - (cy - currentPan.y) * ratio,
+      });
+    } else {
+      setScale(nextScale);
+    }
   }, []);
 
   // Keyboard navigation: Esc to close, R to reset
@@ -93,7 +223,8 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
 
-      const rect = container.getBoundingClientRect();
+      const canvas = canvasRef.current || container;
+      const rect = canvas.getBoundingClientRect();
       const cursorX = e.clientX - rect.left;
       const cursorY = e.clientY - rect.top;
 
@@ -102,7 +233,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
 
       // Smooth zoom factor
       const zoomFactor = e.deltaY < 0 ? 1.18 : 0.85;
-      const nextScale = Math.min(6, Math.max(1, currentScale * zoomFactor));
+      const nextScale = Math.min(MAX_ZOOM, Math.max(1, currentScale * zoomFactor));
 
       if (nextScale === currentScale) return;
 
@@ -192,8 +323,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
               type="button"
               onClick={() => {
                 soundFx.playClick();
-                setScale((prev) => Math.max(1, prev * 0.8));
-                if (scale <= 1.25) setPan({ x: 0, y: 0 });
+                zoomAroundCenter(0.8);
               }}
               disabled={scale <= 1}
               className="p-1.5 rounded-lg border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-25 disabled:pointer-events-none cursor-pointer transition-colors"
@@ -210,9 +340,9 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
               type="button"
               onClick={() => {
                 soundFx.playClick();
-                setScale((prev) => Math.min(6, prev * 1.25));
+                zoomAroundCenter(1.25);
               }}
-              disabled={scale >= 6}
+              disabled={scale >= MAX_ZOOM}
               className="p-1.5 rounded-lg border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-25 disabled:pointer-events-none cursor-pointer transition-colors"
               title={isRu ? 'Приблизить' : 'Zoom in'}
             >
@@ -324,6 +454,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
 
       {/* Main Interactive Canvas Area */}
       <div
+        ref={canvasRef}
         className={`flex-1 relative flex items-center justify-center overflow-hidden bg-[#09090b] ${
           !image ? 'cursor-default' : isDragging ? 'cursor-grabbing' : scale > 1 ? 'cursor-grab' : 'cursor-default'
         }`}
@@ -336,39 +467,18 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
               transformOrigin: '0 0',
               transition: isDragging ? 'none' : 'transform 0.05s ease-out',
             }}
-            className={`relative max-w-full max-h-full flex items-center justify-center pointer-events-none transition-opacity duration-200 ${
+            className={`relative w-full h-full flex items-center justify-center pointer-events-none transition-opacity duration-200 ${
               isLoading ? 'opacity-40 grayscale' : 'opacity-100'
             }`}
           >
-            {hasBackendPanel ? (
-              /* Clean map portion: right 22.5% info panel is completely cut out */
-              <div
-                className="relative overflow-hidden rounded-lg flex items-center justify-start bg-transparent"
-                style={{
-                  height: passes > 0 ? '77vh' : '82vh',
-                  aspectRatio: '0.78',
-                  maxWidth: '92vw',
-                }}
-              >
-                <img
-                  src={image}
-                  alt={routeName || 'Session Heatmap'}
-                  draggable={false}
-                  className="h-full max-w-none object-cover object-left select-none"
-                  style={{
-                    width: '128.5%', // 100 / 0.778 ≈ 128.5%
-                  }}
-                />
-              </div>
-            ) : (
-              /* Standalone map without panel (seamless, no container border) */
-              <img
-                src={image}
-                alt={routeName || 'Session Heatmap'}
-                draggable={false}
-                className={`max-w-[92vw] ${passes > 0 ? 'max-h-[77vh]' : 'max-h-[82vh]'} w-auto h-auto object-contain select-none`}
-              />
-            )}
+            <img
+              ref={imgRef}
+              src={image}
+              alt={routeName || 'Session Heatmap'}
+              draggable={false}
+              onLoad={() => applyFocus(focusRef.current)}
+              className={`max-w-[92vw] ${passes > 0 ? 'max-h-[77vh]' : 'max-h-[82vh]'} w-auto h-auto object-contain select-none`}
+            />
           </div>
         ) : !isLoading ? (
           <div className="flex flex-col items-center justify-center gap-3 text-center px-6 font-mono">
@@ -399,8 +509,8 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
         <p className="text-[11px] font-mono text-zinc-500">
           {image
             ? (isRu
-                ? 'Колёсико — масштаб (1×–6×) • Перетаскивание мышью — сдвиг • 2× клик — сброс • Esc — закрыть'
-                : 'Mouse wheel — zoom (1×–6×) • Mouse drag — pan • Double-click — reset • Esc — close')
+                ? 'Колёсико — масштаб (1×–12×) • Перетаскивание мышью — сдвиг • 2× клик — сброс • Esc — закрыть'
+                : 'Mouse wheel — zoom (1×–12×) • Mouse drag — pan • Double-click — reset • Esc — close')
             : (isRu ? 'Esc — закрыть' : 'Esc — close')}
         </p>
       </div>
