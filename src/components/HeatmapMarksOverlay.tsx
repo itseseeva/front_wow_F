@@ -224,29 +224,9 @@ export const HeatmapMarksSvg: React.FC<HeatmapMarksSvgProps> = ({
           onHoverMark(null, null);
         };
 
-        // Camp circles: hollow outline only (no visible fill), radius grows with zoom.
-        // fill="transparent" keeps both stroke and interior hoverable, while marks rendered after camp stay on top.
+        // Do not render red outline circles for camps; individual mob dots represent camp mobs cleanly.
         if (mark.kind === 'camp') {
-          const radius = Math.max(4 * invScale, (mark.r ?? 0.04) * width);
-          return (
-            <g
-              key={key}
-              className="pointer-events-auto cursor-pointer"
-              onMouseEnter={handleMouseEnter}
-              onMouseMove={handleMouseMove}
-              onMouseLeave={handleMouseLeave}
-            >
-              <circle
-                cx={cx}
-                cy={cy}
-                r={radius}
-                fill="transparent"
-                stroke="#E24B4A"
-                strokeOpacity={isHovered ? 0.95 : 0.62}
-                strokeWidth={(isHovered ? 2 : 1.5) * invScale}
-              />
-            </g>
-          );
+          return null;
         }
 
         // Point marks stay constant size on screen regardless of zoom (divide by scale)
@@ -523,9 +503,9 @@ const LayerMiniSymbol: React.FC<{ layerKey: HeatmapLayerKey }> = ({ layerKey }) 
     case 'camp':
       return (
         <svg width="14" height="14" viewBox="-7 -7 14 14" className="shrink-0" aria-hidden="true">
-          <circle r="5.3" fill="none" stroke="#E24B4A" strokeOpacity="0.85" strokeWidth="1.4" />
-          <circle cx="-1.5" cy="-0.8" r="1.4" fill="#E24B4A" />
-          <circle cx="1.8" cy="1.2" r="1.4" fill="#E24B4A" />
+          <circle cx="-2.4" cy="-1.6" r="2.2" fill="#E24B4A" stroke="#18181b" strokeWidth="1" />
+          <circle cx="2.6" cy="-0.4" r="2.2" fill="#E24B4A" stroke="#18181b" strokeWidth="1" />
+          <circle cx="0" cy="2.6" r="2.2" fill="#E24B4A" stroke="#18181b" strokeWidth="1" />
         </svg>
       );
     case 'detour':
