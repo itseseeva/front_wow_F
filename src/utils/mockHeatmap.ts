@@ -1,4 +1,4 @@
-import { SessionHeatmapResponse, SessionSummaryData } from '../types';
+import { HeatmapMark, SessionHeatmapResponse, SessionSummaryData } from '../types';
 
 /**
  * Generates an SVG heatmap image tailored in the sleek dark Stealth HUD style of the app
@@ -74,58 +74,17 @@ export function generateMockHeatmapImage(): string {
             fill="none" stroke="#e4e4e7" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
 
   <!-- Actual bot traveled path (Neon Cyan path) -->
-  <polyline points="460,190 490,205 635,225 670,260 755,325 730,420 710,455 670,490 605,535 540,570 480,600 420,590 355,555 320,500 315,435 335,360 365,295 410,240 460,190"
+  <polyline points="460,190 490,205 635,225 670,260 755,325 730,420 710,455 670,490 605,535 540,570 480,600 420,590 355,555 320,500 315,435 335,360 365,295 410,240"
             fill="none" stroke="#06b6d4" stroke-width="2.5" stroke-dasharray="6,4" stroke-linecap="round" filter="url(#neonGlow)" opacity="0.95"/>
 
-  <!-- Waypoints & Labels -->
-  <!-- t.0 START -->
-  <circle cx="460" cy="190" r="8" fill="#22c55e" stroke="#ffffff" stroke-width="2.5"/>
-  <g transform="translate(425, 135)">
-    <rect x="0" y="0" width="70" height="28" rx="6" fill="#052e16" stroke="#22c55e" stroke-width="1.5"/>
-    <text x="35" y="19" fill="#4ade80" font-size="12" font-weight="bold" text-anchor="middle" letter-spacing="1">СТАРТ</text>
-  </g>
-  <text x="478" y="196" fill="#86efac" font-size="13" font-weight="bold">т.0</text>
-
-  <!-- t.5 -->
-  <circle cx="640" cy="220" r="5" fill="#f4f4f5"/>
-  <text x="655" y="225" fill="#a1a1aa" font-size="12">т.5</text>
-
-  <!-- t.10 -->
-  <circle cx="760" cy="330" r="5" fill="#f4f4f5"/>
-  <text x="775" y="335" fill="#a1a1aa" font-size="12">т.10</text>
-
-  <!-- t.15 -->
-  <circle cx="720" cy="450" r="5" fill="#f4f4f5"/>
-  <text x="735" y="455" fill="#a1a1aa" font-size="12">т.15</text>
-
-  <!-- t.20 -->
-  <circle cx="610" cy="540" r="5" fill="#f4f4f5"/>
-  <text x="625" y="545" fill="#a1a1aa" font-size="12">т.20</text>
-
-  <!-- t.25 -->
-  <circle cx="480" cy="600" r="5" fill="#f4f4f5"/>
-  <text x="495" y="605" fill="#a1a1aa" font-size="12">т.25</text>
-
-  <!-- t.30 -->
-  <circle cx="350" cy="550" r="5" fill="#f4f4f5"/>
-  <text x="365" y="555" fill="#a1a1aa" font-size="12">т.30</text>
-
-  <!-- t.35 -->
-  <circle cx="310" cy="430" r="5" fill="#f4f4f5"/>
-  <text x="325" y="435" fill="#a1a1aa" font-size="12">т.35</text>
-
-  <!-- Gather nodes (Emerald dots with white core) -->
-  <circle cx="635" cy="225" r="7" fill="#10b981" stroke="#064e3b" stroke-width="1.5"/>
-  <circle cx="755" cy="325" r="7" fill="#10b981" stroke="#064e3b" stroke-width="1.5"/>
-  <circle cx="605" cy="535" r="7" fill="#10b981" stroke="#064e3b" stroke-width="1.5"/>
-  <circle cx="355" cy="555" r="7" fill="#10b981" stroke="#064e3b" stroke-width="1.5"/>
-
-  <!-- Combat markers (Amber diamonds) -->
-  <polygon points="710,443 718,451 710,459 702,451" fill="#f59e0b" stroke="#ffffff" stroke-width="1.5"/>
-  <polygon points="480,592 488,600 480,608 472,600" fill="#f59e0b" stroke="#ffffff" stroke-width="1.5"/>
-
-  <!-- Active harvest target (Yellow target ring) -->
-  <circle cx="320" cy="440" r="13" fill="none" stroke="#facc15" stroke-width="3" stroke-dasharray="4,2"/>
+  <!-- Subtle waypoint ticks -->
+  <circle cx="640" cy="220" r="3" fill="#a1a1aa" opacity="0.6"/>
+  <circle cx="760" cy="330" r="3" fill="#a1a1aa" opacity="0.6"/>
+  <circle cx="720" cy="450" r="3" fill="#a1a1aa" opacity="0.6"/>
+  <circle cx="610" cy="540" r="3" fill="#a1a1aa" opacity="0.6"/>
+  <circle cx="480" cy="600" r="3" fill="#a1a1aa" opacity="0.6"/>
+  <circle cx="350" cy="550" r="3" fill="#a1a1aa" opacity="0.6"/>
+  <circle cx="310" cy="430" r="3" fill="#a1a1aa" opacity="0.6"/>
 
   <!-- HUD Corner Brackets & Scale Watermarks -->
   <path d="M 24,40 L 24,24 L 40,24" fill="none" stroke="#52525b" stroke-width="2"/>
@@ -141,6 +100,90 @@ export function generateMockHeatmapImage(): string {
 </svg>`;
 
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+/**
+ * Mock interactive marks aligned with the 1200x800 mock heatmap route:
+ * 3 ok, 2 fight, 1 stuck, 2 camp, 1 detour, start and finish.
+ */
+export function getMockHeatmapMarks(): HeatmapMark[] {
+  return [
+    {
+      kind: 'start',
+      x: 0.383,
+      y: 0.238,
+      text: 'Старт маршрута',
+    },
+    {
+      kind: 'ok',
+      x: 0.529,
+      y: 0.281,
+      time: '18:05:12',
+      text: 'Собрано',
+    },
+    {
+      kind: 'ok',
+      x: 0.629,
+      y: 0.406,
+      time: '18:09:44',
+      text: 'Собрано',
+    },
+    {
+      kind: 'fight',
+      x: 0.592,
+      y: 0.569,
+      time: '18:14:08',
+      text: 'Бой',
+    },
+    {
+      kind: 'ok',
+      x: 0.504,
+      y: 0.669,
+      time: '18:19:31',
+      text: 'Собрано',
+    },
+    {
+      kind: 'fight',
+      x: 0.400,
+      y: 0.750,
+      time: '18:24:55',
+      text: 'Бой',
+    },
+    {
+      kind: 'stuck',
+      x: 0.296,
+      y: 0.694,
+      time: '18:31:17',
+      text: 'Застревание — объехал за 4 с',
+    },
+    {
+      kind: 'detour',
+      x: 0.263,
+      y: 0.544,
+      time: '18:36:40',
+      text: 'Обход +4 с бега вместо драки ~60 с (2 моб.) — выигрыш ~56 с',
+    },
+    {
+      kind: 'camp',
+      x: 0.305,
+      y: 0.505,
+      r: 0.055,
+      text: 'Лагерь мобов — бот обходит',
+    },
+    {
+      kind: 'camp',
+      x: 0.650,
+      y: 0.535,
+      r: 0.048,
+      text: 'Лагерь мобов — бот обходит',
+    },
+    {
+      kind: 'finish',
+      x: 0.342,
+      y: 0.300,
+      text: 'Финиш сессии',
+    },
+  ];
 }
 
 /**
@@ -169,6 +212,7 @@ export function getMockSessionSummary(): SessionSummaryData {
       width: 1200,
       height: 800,
       route_name: 'Маршрут 3 (Награнд)',
+      marks: getMockHeatmapMarks(),
     },
   };
 }

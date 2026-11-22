@@ -7,7 +7,7 @@ import {
   PassInfo,
   SessionSummaryData,
 } from '../types';
-import { generateMockHeatmapImage } from '../utils/mockHeatmap';
+import { generateMockHeatmapImage, getMockHeatmapMarks } from '../utils/mockHeatmap';
 import { MOCK_LOOT_ROWS } from './mockPrices';
 
 // Palette of 6 route colors requested by contract
@@ -217,5 +217,6 @@ export function getMockSessionHeatmapById(
     width: 1200,
     height: 800,
     route_name: routeName,
+    marks: getMockHeatmapMarks(),
   };
 }

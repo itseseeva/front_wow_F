@@ -243,17 +243,27 @@ export interface RoutePreview {
   paths: RoutePath[]; // 3 примера, как бот пройдёт маршрут (каждый раз по-разному)
 }
 
+export interface HeatmapMark {
+  kind: 'ok' | 'fight' | 'stuck' | 'skip' | 'camp' | 'detour' | 'start' | 'finish';
+  x: number;      // доля ширины картинки 0..1 (центр точки)
+  y: number;      // доля высоты картинки 0..1
+  text: string;   // готовый текст подсказки на русском
+  time?: string;  // «18:05:12» — есть у ok, fight, stuck, skip
+  r?: number;     // только у camp: радиус круга в долях ширины картинки
+}
+
 export interface SessionHeatmapResponse {
   ok: boolean;
   status: 'none' | 'building' | 'ready' | 'error';
   // none — карты нет (сессия короче 10 с, без маршрута или без позиции); building — рисуется;
   // ready — готова; error — не получилось (текст в error)
   image?: string;        // data:image/png;base64,... — только при ready
-  width?: number;        // размер картинки в пикселях (порядка 1600×1900, бывает и шире, и уже)
+  width?: number;        // размер картинки в пикселях (не шире 1280 px)
   height?: number;
   route_name?: string;   // например «Маршрут 3»
   error?: string;        // при error — понятный текст для пользователя
   focus?: { x: number; y: number; w: number; h: number } | null;
+  marks?: HeatmapMark[] | null;   // null или нет поля — старая картинка, точки уже нарисованы на ней: показать как раньше
 }
 
 export interface SessionSummaryData {

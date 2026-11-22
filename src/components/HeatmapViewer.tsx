@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ZoomIn, ZoomOut, RotateCcw, MapPin, Loader2 } from 'lucide-react';
-import { PassInfo } from '../types';
+import { HeatmapMark, PassInfo } from '../types';
 import { soundFx } from '../utils/audio';
+import {
+  HeatmapMarksSvg,
+  HeatmapMarkTooltip,
+  HeatmapLayerControlsAndStats,
+  useHeatmapLayers,
+} from './HeatmapMarksOverlay';
 
 export interface HeatmapFocusRect {
   x: number;
@@ -19,6 +25,7 @@ interface HeatmapViewerProps {
   width?: number;
   height?: number;
   focus?: HeatmapFocusRect | null;
+  marks?: HeatmapMark[] | null;
   onClose: () => void;
   language?: 'ru' | 'en';
   passes?: number;
@@ -46,6 +53,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
   width,
   height,
   focus = null,
+  marks = null,
   onClose,
   language = 'ru',
   passes = 0,
@@ -56,13 +64,28 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
   emptyMessage,
 }) => {
   const isRu = language === 'ru';
+  const hasMarks = Array.isArray(marks);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
   const [scale, setScale] = useState<number>(1);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
+
+  // Canvas & image intrinsic size tracking for exact pixel-locked SVG overlay
+  const [canvasSize, setCanvasSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number }>({
+    w: width && width > 0 ? width : 0,
+    h: height && height > 0 ? height : 0,
+  });
+
+  // Interactive layer toggles & hover tooltip
+  const [layers, toggleLayer] = useHeatmapLayers();
+  const [hoveredMark, setHoveredMark] = useState<HeatmapMark | null>(null);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
 
   // References to keep event handlers fresh without re-subscribing
   const scaleRef = useRef<number>(scale);
@@ -75,7 +98,54 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const isDraggingRef = useRef<boolean>(false);
 
-  // Compute and apply scale & pan so that `focus` rect fills ~85% of the canvas area centered
+  // Observe canvas container dimensions
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      setCanvasSize((prev) =>
+        Math.abs(prev.w - rect.width) < 0.5 && Math.abs(prev.h - rect.height) < 0.5
+          ? prev
+          : { w: rect.width, h: rect.height }
+      );
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasMarks, passes]);
+
+  // Keep naturalSize aligned with props if image changes
+  useEffect(() => {
+    setHoveredMark(null);
+    setHoveredKey(null);
+    setCursorPos(null);
+    if (width && width > 0 && height && height > 0) {
+      setNaturalSize({ w: width, h: height });
+    }
+  }, [image, width, height]);
+
+  // Compute exact fitted image box at scale = 1 inside canvasRef
+  let dispW = 0;
+  let dispH = 0;
+  if (canvasSize.w > 0 && canvasSize.h > 0 && naturalSize.w > 0 && naturalSize.h > 0) {
+    const padX = Math.min(24, canvasSize.w * 0.04);
+    const padY = Math.min(18, canvasSize.h * 0.04);
+    const availW = Math.max(1, canvasSize.w - padX * 2);
+    const availH = Math.max(1, canvasSize.h - padY * 2);
+    const fit = Math.min(2, availW / naturalSize.w, availH / naturalSize.h);
+    dispW = Math.max(1, naturalSize.w * fit);
+    dispH = Math.max(1, naturalSize.h * fit);
+  }
+
+  const dispSizeRef = useRef<{ w: number; h: number }>({ w: dispW, h: dispH });
+  dispSizeRef.current = { w: dispW, h: dispH };
+
+  // Compute and apply scale & pan so that `focus` rect fills ~85% of the canvas area centered.
+  // When focus is null/absent, displays the full map cleanly at scale 1.
   const applyFocus = useCallback((targetFocus: HeatmapFocusRect | null) => {
     if (!targetFocus || targetFocus.w <= 0 || targetFocus.h <= 0) {
       setScale(1);
@@ -93,28 +163,32 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
     if (containerW <= 0 || containerH <= 0) return;
 
     // Untransformed (scale=1) rendered image size & position inside canvas
-    let dispW: number;
-    let dispH: number;
+    let w = dispSizeRef.current.w;
+    let h = dispSizeRef.current.h;
     let imgLeft: number;
     let imgTop: number;
 
-    if (scaleRef.current === 1 && panRef.current.x === 0 && panRef.current.y === 0) {
+    if (w > 0 && h > 0) {
+      imgLeft = (containerW - w) / 2;
+      imgTop = (containerH - h) / 2;
+    } else if (scaleRef.current === 1 && panRef.current.x === 0 && panRef.current.y === 0) {
       const imgRect = img.getBoundingClientRect();
-      dispW = imgRect.width;
-      dispH = imgRect.height;
+      w = imgRect.width;
+      h = imgRect.height;
       imgLeft = imgRect.left - canvasRect.left;
       imgTop = imgRect.top - canvasRect.top;
     } else {
-      dispW = img.offsetWidth;
-      dispH = img.offsetHeight;
-      imgLeft = img.offsetLeft;
-      imgTop = img.offsetTop;
+      const stage = stageRef.current;
+      w = img.offsetWidth;
+      h = img.offsetHeight;
+      imgLeft = (stage ? stage.offsetLeft : 0) + img.offsetLeft;
+      imgTop = (stage ? stage.offsetTop : 0) + img.offsetTop;
     }
 
-    if (dispW <= 0 || dispH <= 0) return;
+    if (w <= 0 || h <= 0) return;
 
-    const focusW = targetFocus.w * dispW;
-    const focusH = targetFocus.h * dispH;
+    const focusW = targetFocus.w * w;
+    const focusH = targetFocus.h * h;
     if (focusW <= 0 || focusH <= 0) return;
 
     const nextScale = Math.min(
@@ -129,8 +203,8 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
     }
 
     // Center of focus rect inside canvas at scale=1
-    const cx = imgLeft + (targetFocus.x + targetFocus.w / 2) * dispW;
-    const cy = imgTop + (targetFocus.y + targetFocus.h / 2) * dispH;
+    const cx = imgLeft + (targetFocus.x + targetFocus.w / 2) * w;
+    const cy = imgTop + (targetFocus.y + targetFocus.h / 2) * h;
 
     // With transformOrigin '0 0' on the full-size canvas wrapper:
     // screenPos = pan + scale * localPos => pan = containerCenter - scale * focusCenter
@@ -163,7 +237,22 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
       const rafId = requestAnimationFrame(() => applyFocus(focusRef.current));
       return () => cancelAnimationFrame(rafId);
     }
-  }, [image, focusX, focusY, focusW, focusH, passes, applyFocus]);
+  }, [image, focusX, focusY, focusW, focusH, passes, dispW, dispH, applyFocus]);
+
+  const handleImgLoad = useCallback(
+    (e: React.SyntheticEvent<HTMLImageElement>) => {
+      const el = e.currentTarget;
+      if (el.naturalWidth > 0 && el.naturalHeight > 0) {
+        setNaturalSize((prev) =>
+          prev.w === el.naturalWidth && prev.h === el.naturalHeight
+            ? prev
+            : { w: el.naturalWidth, h: el.naturalHeight }
+        );
+      }
+      requestAnimationFrame(() => applyFocus(focusRef.current));
+    },
+    [applyFocus]
+  );
 
   // Reset to original 1x scale and centered pan
   const handleReset = useCallback(() => {
@@ -201,7 +290,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
     }
   }, []);
 
-  // Keyboard navigation: Esc to close, R to reset
+  // Keyboard navigation: Esc to close, R/0 to reset
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -231,7 +320,6 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
       const currentScale = scaleRef.current;
       const currentPan = panRef.current;
 
-      // Smooth zoom factor
       const zoomFactor = e.deltaY < 0 ? 1.18 : 0.85;
       const nextScale = Math.min(MAX_ZOOM, Math.max(1, currentScale * zoomFactor));
 
@@ -260,7 +348,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
 
   // Mouse drag handlers
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return; // Only primary mouse button
+    if (e.button !== 0) return;
     isDraggingRef.current = true;
     setIsDragging(true);
     dragStartRef.current = {
@@ -286,6 +374,38 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
     handleReset();
   };
 
+  const updateCursorFromEvent = useCallback((e: React.MouseEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    setCursorPos({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+  }, []);
+
+  const handleHoverMark = useCallback(
+    (mark: HeatmapMark | null, key: string | null, e?: React.MouseEvent) => {
+      setHoveredMark(mark);
+      setHoveredKey(key);
+      if (mark && e) {
+        updateCursorFromEvent(e);
+      } else if (!mark) {
+        setCursorPos(null);
+      }
+    },
+    [updateCursorFromEvent]
+  );
+
+  const handleMoveMark = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isDraggingRef.current) {
+        updateCursorFromEvent(e);
+      }
+    },
+    [updateCursorFromEvent]
+  );
+
   const viewerContent = (
     <div
       ref={containerRef}
@@ -295,7 +415,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      {/* Top Header Bar: 100% Solid Opaque Zinc-950, cleanly partitioned into Left, Center, and Right */}
+      {/* Top Header Bar: 100% Solid Opaque Zinc-950 */}
       <div
         className="w-full h-14 px-4 sm:px-6 flex items-center justify-between z-20 border-b border-white/[0.08] bg-[#09090b] shrink-0 relative"
         onMouseDown={(e) => e.stopPropagation()}
@@ -316,7 +436,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
           )}
         </div>
 
-        {/* Center Slot: Zoom Controls (strictly centered, far away from corners) */}
+        {/* Center Slot: Zoom Controls */}
         {image && (
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 font-mono text-xs z-10">
             <button
@@ -362,7 +482,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
           </div>
         )}
 
-        {/* Right Slot: Standalone Isolated Close Button - strictly on its own */}
+        {/* Right Slot: Close Button */}
         <div className="flex items-center">
           <button
             type="button"
@@ -455,30 +575,59 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
       {/* Main Interactive Canvas Area */}
       <div
         ref={canvasRef}
-        className={`flex-1 relative flex items-center justify-center overflow-hidden bg-[#09090b] ${
+        className={`flex-1 min-h-0 relative flex items-center justify-center overflow-hidden bg-[#09090b] ${
           !image ? 'cursor-default' : isDragging ? 'cursor-grabbing' : scale > 1 ? 'cursor-grab' : 'cursor-default'
         }`}
         onDoubleClick={handleDoubleClick}
+        onMouseLeave={() => {
+          setHoveredMark(null);
+          setHoveredKey(null);
+          setCursorPos(null);
+        }}
       >
         {image ? (
           <div
             style={{
               transform: `translate3d(${pan.x}px, ${pan.y}px, 0px) scale(${scale})`,
               transformOrigin: '0 0',
-              transition: isDragging ? 'none' : 'transform 0.05s ease-out',
+              transition: 'none',
             }}
             className={`relative w-full h-full flex items-center justify-center pointer-events-none transition-opacity duration-200 ${
               isLoading ? 'opacity-40 grayscale' : 'opacity-100'
             }`}
           >
-            <img
-              ref={imgRef}
-              src={image}
-              alt={routeName || 'Session Heatmap'}
-              draggable={false}
-              onLoad={() => applyFocus(focusRef.current)}
-              className={`max-w-[92vw] ${passes > 0 ? 'max-h-[77vh]' : 'max-h-[82vh]'} w-auto h-auto object-contain select-none`}
-            />
+            <div
+              ref={stageRef}
+              style={dispW > 0 && dispH > 0 ? { width: `${dispW}px`, height: `${dispH}px` } : undefined}
+              className="relative shrink-0 flex items-center justify-center"
+            >
+              <img
+                ref={imgRef}
+                src={image}
+                alt={routeName || 'Session Heatmap'}
+                draggable={false}
+                onLoad={handleImgLoad}
+                className={
+                  dispW > 0 && dispH > 0
+                    ? 'w-full h-full block object-contain select-none'
+                    : 'max-w-[92vw] max-h-[75vh] w-auto h-auto object-contain block select-none'
+                }
+              />
+
+              {hasMarks && dispW > 0 && dispH > 0 && (
+                <HeatmapMarksSvg
+                  marks={marks}
+                  layers={layers}
+                  width={dispW}
+                  height={dispH}
+                  scale={scale}
+                  language={language}
+                  hoveredKey={isDragging ? null : hoveredKey}
+                  onHoverMark={handleHoverMark}
+                  onMoveMark={handleMoveMark}
+                />
+              )}
+            </div>
           </div>
         ) : !isLoading ? (
           <div className="flex flex-col items-center justify-center gap-3 text-center px-6 font-mono">
@@ -488,6 +637,16 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
             </p>
           </div>
         ) : null}
+
+        {/* Hover tooltip clamped inside canvas bounds */}
+        {hasMarks && !isDragging && (
+          <HeatmapMarkTooltip
+            mark={hoveredMark}
+            cursor={cursorPos}
+            containerWidth={canvasSize.w}
+            containerHeight={canvasSize.h}
+          />
+        )}
 
         {isLoading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none font-mono">
@@ -501,12 +660,22 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
         )}
       </div>
 
-      {/* Bottom Hint Banner: 100% Solid Opaque Zinc-950 */}
+      {/* Bottom Controls & Hint Banner */}
       <div
-        className="w-full py-2.5 border-t border-white/[0.08] bg-[#09090b] text-center z-20 shrink-0"
+        className="w-full px-4 sm:px-6 py-2.5 border-t border-white/[0.08] bg-[#09090b] flex flex-col items-center gap-2.5 z-20 shrink-0"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <p className="text-[11px] font-mono text-zinc-500">
+        {image && hasMarks && (
+          <HeatmapLayerControlsAndStats
+            marks={marks}
+            layers={layers}
+            onToggleLayer={toggleLayer}
+            language={language}
+            variant="dark"
+          />
+        )}
+
+        <p className="text-[11px] font-mono text-zinc-500 text-center">
           {image
             ? (isRu
                 ? 'Колёсико — масштаб (1×–12×) • Перетаскивание мышью — сдвиг • 2× клик — сброс • Esc — закрыть'
