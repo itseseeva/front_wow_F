@@ -1090,6 +1090,8 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
           height={heatmap?.height}
           focus={heatmap?.focus}
           marks={!isLiveSelected && hasSessions ? heatmap?.marks : undefined}
+          timeline={!isLiveSelected && hasSessions ? heatmap?.timeline : undefined}
+          savings={!isLiveSelected && hasSessions ? heatmap?.savings : undefined}
           onClose={() => setIsViewerOpen(false)}
           language={language}
           passes={!isLiveSelected && hasSessions ? (activeSession?.passes || 0) : 0}

@@ -6,7 +6,10 @@ import {
   HeatmapMarksSvg,
   HeatmapMarkTooltip,
   HeatmapLayerControlsAndStats,
+  HeatmapSavingsBanner,
+  HeatmapTimelineBar,
   useHeatmapLayers,
+  useHeatmapPlayback,
 } from './HeatmapMarksOverlay';
 import { translations, Language, Theme } from '../utils/i18n';
 import { Map, Maximize2, Loader2, AlertCircle } from 'lucide-react';
@@ -35,6 +38,7 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
   const [previewSize, setPreviewSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const [layers, toggleLayer] = useHeatmapLayers();
+  const { currentT, isPlaying, togglePlay, seekTo } = useHeatmapPlayback(heatmap?.timeline);
   const [hoveredMark, setHoveredMark] = useState<HeatmapMark | null>(null);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
@@ -260,9 +264,15 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
     );
   }
 
-  // 3. Ready State - Full uncropped map + interactive marks + layer toggles + 4 stat tiles
+  // 3. Ready State - Full uncropped map + time-gradient path + interactive marks + timeline + layer toggles + stat tiles
   if (heatmap.status === 'ready' && heatmap.image) {
     const hasMarks = Array.isArray(heatmap.marks);
+    const hasTimeline = Boolean(
+      heatmap.timeline && heatmap.timeline.pts && heatmap.timeline.pts.length > 0 && heatmap.timeline.end_s > 0
+    );
+    const hasSavings = Boolean(
+      heatmap.savings && (heatmap.savings.total_s > 0 || heatmap.savings.detours > 0)
+    );
 
     let dispW = 0;
     let dispH = 0;
@@ -302,7 +312,16 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
             </button>
           </div>
 
-          {/* Full uncropped map preview with interactive marks overlay */}
+          {/* Savings Banner Above Map */}
+          {hasSavings && (
+            <HeatmapSavingsBanner
+              savings={heatmap.savings}
+              language={language}
+              variant="adaptive"
+            />
+          )}
+
+          {/* Full uncropped map preview with interactive path & marks overlay */}
           <div
             ref={previewRef}
             onClick={() => {
@@ -342,9 +361,12 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
                 loading="lazy"
               />
 
-              {hasMarks && heatmap.marks && dispW > 0 && dispH > 0 && (
+              {(hasMarks || hasTimeline) && dispW > 0 && dispH > 0 && (
                 <HeatmapMarksSvg
                   marks={heatmap.marks}
+                  timeline={heatmap.timeline}
+                  currentT={currentT}
+                  isPlaying={isPlaying}
                   layers={layers}
                   width={dispW}
                   height={dispH}
@@ -374,7 +396,22 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
             </div>
           </div>
 
-          {/* Layer toggle buttons + 4 stat tiles below map */}
+          {/* Interactive Timeline Scrubber below map */}
+          {hasTimeline && heatmap.timeline && (
+            <HeatmapTimelineBar
+              timeline={heatmap.timeline}
+              marks={heatmap.marks}
+              currentT={currentT}
+              isPlaying={isPlaying}
+              onTogglePlay={togglePlay}
+              onSeek={seekTo}
+              language={language}
+              variant="adaptive"
+              compact
+            />
+          )}
+
+          {/* Layer toggle buttons + stat tiles below map */}
           {hasMarks && heatmap.marks && (
             <HeatmapLayerControlsAndStats
               marks={heatmap.marks}
@@ -396,6 +433,8 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
             height={heatmap.height}
             focus={heatmap.focus}
             marks={heatmap.marks}
+            timeline={heatmap.timeline}
+            savings={heatmap.savings}
             onClose={() => setIsViewerOpen(false)}
             language={language}
           />

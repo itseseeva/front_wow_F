@@ -243,13 +243,27 @@ export interface RoutePreview {
   paths: RoutePath[]; // 3 примера, как бот пройдёт маршрут (каждый раз по-разному)
 }
 
+export interface HeatmapTimeline {
+  start: string;                       // «18:04:50» — время начала сессии
+  end_s: number;                       // длительность, секунд
+  pts: [number, number, number][];     // [x, y, t]: x,y — доли картинки 0..1 (как у marks), t — секунды от начала, по возрастанию
+}
+
+export interface HeatmapSavings {
+  total_s: number;
+  detours: number;
+  mobs: number;
+}
+
 export interface HeatmapMark {
   kind: 'ok' | 'fight' | 'stuck' | 'skip' | 'camp' | 'mob' | 'detour' | 'start' | 'finish';
   x: number;      // доля ширины картинки 0..1 (центр точки)
   y: number;      // доля высоты картинки 0..1
   text: string;   // готовый текст подсказки на русском
-  time?: string;  // «18:05:12» — есть у ok, fight, stuck, skip
+  time?: string;  // «18:05:12» — есть у ok, fight, start, finish и т.д.
   r?: number;     // только у camp: радиус круга в долях ширины картинки
+  t?: number;     // секунды от начала сессии
+  gain_s?: number; // только у detour: выигрыш в секундах
 }
 
 export interface SessionHeatmapResponse {
@@ -264,6 +278,8 @@ export interface SessionHeatmapResponse {
   error?: string;        // при error — понятный текст для пользователя
   focus?: { x: number; y: number; w: number; h: number } | null;
   marks?: HeatmapMark[] | null;   // null или нет поля — старая картинка, точки уже нарисованы на ней: показать как раньше
+  timeline?: HeatmapTimeline | null; // null или нет поля — старая картинка: путь уже нарисован на ней
+  savings?: HeatmapSavings | null;
 }
 
 export interface SessionSummaryData {

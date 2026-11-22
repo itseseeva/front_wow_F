@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ZoomIn, ZoomOut, RotateCcw, MapPin, Loader2 } from 'lucide-react';
-import { HeatmapMark, PassInfo } from '../types';
+import { HeatmapMark, HeatmapSavings, HeatmapTimeline, PassInfo } from '../types';
 import { soundFx } from '../utils/audio';
 import {
   HeatmapMarksSvg,
   HeatmapMarkTooltip,
   HeatmapLayerControlsAndStats,
+  HeatmapSavingsBanner,
+  HeatmapTimelineBar,
   useHeatmapLayers,
+  useHeatmapPlayback,
 } from './HeatmapMarksOverlay';
 
 export interface HeatmapFocusRect {
@@ -26,6 +29,8 @@ interface HeatmapViewerProps {
   height?: number;
   focus?: HeatmapFocusRect | null;
   marks?: HeatmapMark[] | null;
+  timeline?: HeatmapTimeline | null;
+  savings?: HeatmapSavings | null;
   onClose: () => void;
   language?: 'ru' | 'en';
   passes?: number;
@@ -54,6 +59,8 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
   height,
   focus = null,
   marks = null,
+  timeline = null,
+  savings = null,
   onClose,
   language = 'ru',
   passes = 0,
@@ -65,6 +72,8 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
 }) => {
   const isRu = language === 'ru';
   const hasMarks = Array.isArray(marks);
+  const hasTimeline = Boolean(timeline && timeline.pts && timeline.pts.length > 0 && timeline.end_s > 0);
+  const hasSavings = Boolean(savings && (savings.total_s > 0 || savings.detours > 0));
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -81,8 +90,9 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
     h: height && height > 0 ? height : 0,
   });
 
-  // Interactive layer toggles & hover tooltip
+  // Interactive layer toggles, timeline playback & hover tooltip
   const [layers, toggleLayer] = useHeatmapLayers();
+  const { currentT, isPlaying, togglePlay, seekTo } = useHeatmapPlayback(timeline);
   const [hoveredMark, setHoveredMark] = useState<HeatmapMark | null>(null);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
@@ -116,7 +126,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [hasMarks, passes]);
+  }, [hasMarks, hasTimeline, hasSavings, passes]);
 
   // Keep naturalSize aligned with props if image changes
   useEffect(() => {
@@ -290,7 +300,7 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
     }
   }, []);
 
-  // Keyboard navigation: Esc to close, R/0 to reset
+  // Keyboard navigation: Esc to close, R/0 to reset, Space to play/pause replay
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -298,11 +308,14 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
         onClose();
       } else if (e.key === 'r' || e.key === 'R' || e.key === '0') {
         handleReset();
+      } else if (e.key === ' ' && hasTimeline) {
+        e.preventDefault();
+        togglePlay();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, handleReset]);
+  }, [onClose, handleReset, hasTimeline, togglePlay]);
 
   // Prevent background scroll and attach non-passive wheel listener
   useEffect(() => {
@@ -572,6 +585,16 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
         </div>
       )}
 
+      {/* Savings Banner Above Map */}
+      {image && hasSavings && (
+        <div
+          className="w-full px-4 sm:px-6 pt-2.5 pb-1 bg-[#09090b] z-20 shrink-0"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <HeatmapSavingsBanner savings={savings} language={language} variant="dark" />
+        </div>
+      )}
+
       {/* Main Interactive Canvas Area */}
       <div
         ref={canvasRef}
@@ -614,9 +637,12 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
                 }
               />
 
-              {hasMarks && dispW > 0 && dispH > 0 && (
+              {(hasMarks || hasTimeline) && dispW > 0 && dispH > 0 && (
                 <HeatmapMarksSvg
                   marks={marks}
+                  timeline={timeline}
+                  currentT={currentT}
+                  isPlaying={isPlaying}
                   layers={layers}
                   width={dispW}
                   height={dispH}
@@ -665,7 +691,20 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
         className="w-full px-4 sm:px-6 py-2.5 border-t border-white/[0.08] bg-[#09090b] flex flex-col items-center gap-2.5 z-20 shrink-0"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        {image && hasMarks && (
+        {image && hasTimeline && timeline && (
+          <HeatmapTimelineBar
+            timeline={timeline}
+            marks={marks}
+            currentT={currentT}
+            isPlaying={isPlaying}
+            onTogglePlay={togglePlay}
+            onSeek={seekTo}
+            language={language}
+            variant="dark"
+          />
+        )}
+
+        {image && hasMarks && marks && (
           <HeatmapLayerControlsAndStats
             marks={marks}
             layers={layers}
