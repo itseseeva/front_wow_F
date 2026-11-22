@@ -5,14 +5,14 @@ import { soundFx } from '../utils/audio';
 export type HeatmapLayerKey = 'ok' | 'fight' | 'problems' | 'camp' | 'detour';
 export type HeatmapLayersState = Record<HeatmapLayerKey, boolean>;
 
-const LAYERS_STORAGE_KEY = 'wowbot_heatmap_layers';
+const LAYERS_STORAGE_KEY = 'wowbot_heatmap_layers_v2';
 const LAYERS_SYNC_EVENT = 'wowbot:heatmap-layers-changed';
 
 export const DEFAULT_HEATMAP_LAYERS: HeatmapLayersState = {
   ok: true,
   fight: true,
   problems: true,
-  camp: false,
+  camp: true,
   detour: true,
 };
 
@@ -72,6 +72,8 @@ export interface HeatmapMarkCounts {
   skip: number;
   problems: number;
   camp: number;
+  mob: number;
+  campsButton: number;
   detour: number;
 }
 
@@ -81,6 +83,7 @@ export function getHeatmapMarkCounts(marks: HeatmapMark[]): HeatmapMarkCounts {
   let stuck = 0;
   let skip = 0;
   let camp = 0;
+  let mob = 0;
   let detour = 0;
 
   for (const m of marks) {
@@ -100,6 +103,9 @@ export function getHeatmapMarkCounts(marks: HeatmapMark[]): HeatmapMarkCounts {
       case 'camp':
         camp += 1;
         break;
+      case 'mob':
+        mob += 1;
+        break;
       case 'detour':
         detour += 1;
         break;
@@ -108,19 +114,31 @@ export function getHeatmapMarkCounts(marks: HeatmapMark[]): HeatmapMarkCounts {
     }
   }
 
-  return { ok, fight, stuck, skip, problems: stuck + skip, camp, detour };
+  return {
+    ok,
+    fight,
+    stuck,
+    skip,
+    problems: stuck + skip,
+    camp,
+    mob,
+    campsButton: camp > 0 ? camp : mob,
+    detour,
+  };
 }
 
-// Bottom-to-top rendering order: camp, detour, ok, fight, skip, stuck, start/finish
+// Bottom-to-top rendering order: camp (bottom, so mob and other marks remain hoverable on top),
+// then mob, detour, ok, fight, skip, stuck, start, finish.
 const MARK_Z_ORDER: Record<HeatmapMark['kind'], number> = {
   camp: 0,
-  detour: 1,
-  ok: 2,
-  fight: 3,
-  skip: 4,
-  stuck: 5,
-  start: 6,
-  finish: 7,
+  mob: 1,
+  detour: 2,
+  ok: 3,
+  fight: 4,
+  skip: 5,
+  stuck: 6,
+  start: 7,
+  finish: 8,
 };
 
 function isMarkVisible(mark: HeatmapMark, layers: HeatmapLayersState): boolean {
@@ -136,6 +154,7 @@ function isMarkVisible(mark: HeatmapMark, layers: HeatmapLayersState): boolean {
     case 'skip':
       return layers.problems;
     case 'camp':
+    case 'mob':
       return layers.camp;
     case 'detour':
       return layers.detour;
@@ -205,7 +224,8 @@ export const HeatmapMarksSvg: React.FC<HeatmapMarksSvgProps> = ({
           onHoverMark(null, null);
         };
 
-        // Camp circles scale WITH the image (radius = r * image width)
+        // Camp circles: hollow outline only (no visible fill), radius grows with zoom.
+        // fill="transparent" keeps both stroke and interior hoverable, while marks rendered after camp stay on top.
         if (mark.kind === 'camp') {
           const radius = Math.max(4 * invScale, (mark.r ?? 0.04) * width);
           return (
@@ -220,12 +240,10 @@ export const HeatmapMarksSvg: React.FC<HeatmapMarksSvgProps> = ({
                 cx={cx}
                 cy={cy}
                 r={radius}
-                fill="#E24B4A"
-                fillOpacity={isHovered ? 0.22 : 0.12}
+                fill="transparent"
                 stroke="#E24B4A"
-                strokeOpacity={isHovered ? 1 : 0.78}
+                strokeOpacity={isHovered ? 0.95 : 0.62}
                 strokeWidth={(isHovered ? 2 : 1.5) * invScale}
-                strokeDasharray={`${5 * invScale} ${3.5 * invScale}`}
               />
             </g>
           );
@@ -241,90 +259,87 @@ export const HeatmapMarksSvg: React.FC<HeatmapMarksSvgProps> = ({
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
           >
+            {/* ok: WoW gather node — yellow #FFD100, dark outline #3A2A00, 8 px */}
             {mark.kind === 'ok' && (
               <>
                 <circle r={9} fill="transparent" />
                 {isHovered && (
-                  <circle r={7} fill="none" stroke="#1D9E75" strokeWidth={1.5} strokeOpacity={0.75} />
+                  <circle r={7} fill="none" stroke="#FFD100" strokeWidth={1.5} strokeOpacity={0.8} />
                 )}
-                <circle r={4} fill="#1D9E75" stroke="#ffffff" strokeWidth={1.5} />
+                <circle r={4} fill="#FFD100" stroke="#3A2A00" strokeWidth={1.6} />
               </>
             )}
 
+            {/* mob: small red dot #E24B4A, 5 px, dark outline */}
+            {mark.kind === 'mob' && (
+              <>
+                <circle r={7} fill="transparent" />
+                {isHovered && (
+                  <circle r={5.5} fill="none" stroke="#E24B4A" strokeWidth={1.3} strokeOpacity={0.85} />
+                )}
+                <circle r={2.5} fill="#E24B4A" stroke="#18181b" strokeWidth={1.2} />
+              </>
+            )}
+
+            {/* fight: red sword #E24B4A, ~16 px, dark backing outline for contrast */}
             {mark.kind === 'fight' && (
               <>
-                <circle r={10} fill="transparent" />
+                <circle r={11} fill="transparent" />
                 {isHovered && (
-                  <polygon
-                    points="0,-8.5 8.5,0 0,8.5 -8.5,0"
-                    fill="none"
-                    stroke="#BA7517"
-                    strokeWidth={1.5}
-                    strokeOpacity={0.8}
-                  />
+                  <circle r={10.5} fill="#E24B4A" fillOpacity={0.18} stroke="#E24B4A" strokeWidth={1.3} strokeOpacity={0.85} />
                 )}
-                <polygon
-                  points="0,-5.5 5.5,0 0,5.5 -5.5,0"
-                  fill="#BA7517"
-                  stroke="#ffffff"
-                  strokeWidth={1.5}
-                  strokeLinejoin="round"
-                />
+                {/* Dark outline / shadow pass */}
+                <g stroke="#18181b" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" fill="#18181b">
+                  <polygon points="7,-7 3.2,-6.2 -1.8,-1.2 1.2,1.8 6.2,-3.2" />
+                  <line x1={-4.2} y1={-1.2} x2={1.2} y2={4.2} />
+                  <line x1={-1.6} y1={1.6} x2={-5.6} y2={5.6} />
+                  <circle cx={-6} cy={6} r={1.6} />
+                </g>
+                {/* Red sword foreground pass */}
+                <g fill="#E24B4A" stroke="#E24B4A" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="7,-7 3.2,-6.2 -1.8,-1.2 1.2,1.8 6.2,-3.2" strokeWidth={0.6} />
+                  <line x1={-4.2} y1={-1.2} x2={1.2} y2={4.2} strokeWidth={2.1} />
+                  <line x1={-1.6} y1={1.6} x2={-5.6} y2={5.6} strokeWidth={1.9} />
+                  <circle cx={-6} cy={6} r={1.5} strokeWidth={0.5} />
+                </g>
+                {/* Subtle blade ridge highlight */}
+                <line x1={5.2} y1={-5.2} x2={0.2} y2={-0.2} stroke="#fecaca" strokeWidth={0.8} strokeLinecap="round" strokeOpacity={0.65} />
               </>
             )}
 
-            {mark.kind === 'stuck' && (
+            {/* stuck & skip: red circle #E24B4A with white exclamation mark "!", ~16 px */}
+            {(mark.kind === 'stuck' || mark.kind === 'skip') && (
               <>
-                <circle r={10} fill="transparent" />
+                <circle r={11} fill="transparent" />
                 {isHovered && (
-                  <polygon
-                    points="0,-9 8.5,6.5 -8.5,6.5"
-                    fill="none"
-                    stroke="#E24B4A"
-                    strokeWidth={1.5}
-                    strokeOpacity={0.8}
-                    strokeLinejoin="round"
-                  />
+                  <circle r={10.5} fill="none" stroke="#E24B4A" strokeWidth={1.5} strokeOpacity={0.85} />
                 )}
-                <polygon
-                  points="0,-6 5.5,4.5 -5.5,4.5"
-                  fill="#E24B4A"
-                  stroke="#ffffff"
-                  strokeWidth={1.2}
-                  strokeLinejoin="round"
-                />
-              </>
-            )}
-
-            {mark.kind === 'skip' && (
-              <>
-                <circle r={9} fill="transparent" />
-                {isHovered && (
-                  <circle r={7.5} fill="none" stroke="#888780" strokeWidth={1.5} strokeOpacity={0.8} />
-                )}
-                <circle r={4.5} fill="#888780" stroke="#ffffff" strokeWidth={1.3} />
+                <circle r={8} fill="#E24B4A" stroke="#18181b" strokeWidth={1.3} />
                 <line
-                  x1={-3}
-                  y1={3}
-                  x2={3}
-                  y2={-3}
+                  x1={0}
+                  y1={-4.3}
+                  x2={0}
+                  y2={1.1}
                   stroke="#ffffff"
-                  strokeWidth={1.4}
+                  strokeWidth={2.2}
                   strokeLinecap="round"
                 />
+                <circle cx={0} cy={4.1} r={1.25} fill="#ffffff" />
               </>
             )}
 
+            {/* detour: purple dot #7F77DD */}
             {mark.kind === 'detour' && (
               <>
                 <circle r={9} fill="transparent" />
                 {isHovered && (
-                  <circle r={7} fill="none" stroke="#FACC15" strokeWidth={1.5} strokeOpacity={0.8} />
+                  <circle r={7} fill="none" stroke="#7F77DD" strokeWidth={1.5} strokeOpacity={0.85} />
                 )}
-                <circle r={4} fill="#FACC15" stroke="#18181b" strokeWidth={1.6} />
+                <circle r={4} fill="#7F77DD" stroke="#ffffff" strokeWidth={1.5} />
               </>
             )}
 
+            {/* start: green badge below dot */}
             {mark.kind === 'start' && (
               <>
                 <circle r={9} fill="transparent" />
@@ -357,6 +372,7 @@ export const HeatmapMarksSvg: React.FC<HeatmapMarksSvgProps> = ({
               </>
             )}
 
+            {/* finish: burgundy badge below dot */}
             {mark.kind === 'finish' && (
               <>
                 <circle r={9} fill="transparent" />
@@ -477,39 +493,45 @@ const LayerMiniSymbol: React.FC<{ layerKey: HeatmapLayerKey }> = ({ layerKey }) 
   switch (layerKey) {
     case 'ok':
       return (
-        <svg width="12" height="12" viewBox="-6 -6 12 12" className="shrink-0" aria-hidden="true">
-          <circle r="4" fill="#1D9E75" stroke="#ffffff" strokeWidth="1.4" />
+        <svg width="13" height="13" viewBox="-7 -7 14 14" className="shrink-0" aria-hidden="true">
+          <circle r="4.2" fill="#FFD100" stroke="#3A2A00" strokeWidth="1.6" />
         </svg>
       );
     case 'fight':
       return (
-        <svg width="12" height="12" viewBox="-6 -6 12 12" className="shrink-0" aria-hidden="true">
-          <polygon points="0,-5 5,0 0,5 -5,0" fill="#BA7517" stroke="#ffffff" strokeWidth="1.2" strokeLinejoin="round" />
+        <svg width="14" height="14" viewBox="-8 -8 16 16" className="shrink-0" aria-hidden="true">
+          <g stroke="#18181b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="#18181b">
+            <polygon points="6.2,-6.2 2.8,-5.5 -1.6,-1.1 1.1,1.6 5.5,-2.8" />
+            <line x1="-3.6" y1="-1" x2="1" y2="3.6" />
+            <line x1="-1.4" y1="1.4" x2="-5" y2="5" />
+          </g>
+          <g fill="#E24B4A" stroke="#E24B4A" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="6.2,-6.2 2.8,-5.5 -1.6,-1.1 1.1,1.6 5.5,-2.8" strokeWidth="0.5" />
+            <line x1="-3.6" y1="-1" x2="1" y2="3.6" strokeWidth="1.8" />
+            <line x1="-1.4" y1="1.4" x2="-5" y2="5" strokeWidth="1.7" />
+          </g>
         </svg>
       );
     case 'problems':
       return (
-        <svg width="12" height="12" viewBox="-6 -6 12 12" className="shrink-0" aria-hidden="true">
-          <polygon points="0,-5 5,4 -5,4" fill="#E24B4A" stroke="#ffffff" strokeWidth="1.1" strokeLinejoin="round" />
+        <svg width="14" height="14" viewBox="-8 -8 16 16" className="shrink-0" aria-hidden="true">
+          <circle r="6.5" fill="#E24B4A" stroke="#18181b" strokeWidth="1" />
+          <line x1="0" y1="-3.5" x2="0" y2="0.9" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" />
+          <circle cx="0" cy="3.4" r="1.05" fill="#ffffff" />
         </svg>
       );
     case 'camp':
       return (
-        <svg width="12" height="12" viewBox="-6 -6 12 12" className="shrink-0" aria-hidden="true">
-          <circle
-            r="4.5"
-            fill="#E24B4A"
-            fillOpacity="0.22"
-            stroke="#E24B4A"
-            strokeWidth="1.4"
-            strokeDasharray="2.5 1.8"
-          />
+        <svg width="14" height="14" viewBox="-7 -7 14 14" className="shrink-0" aria-hidden="true">
+          <circle r="5.3" fill="none" stroke="#E24B4A" strokeOpacity="0.85" strokeWidth="1.4" />
+          <circle cx="-1.5" cy="-0.8" r="1.4" fill="#E24B4A" />
+          <circle cx="1.8" cy="1.2" r="1.4" fill="#E24B4A" />
         </svg>
       );
     case 'detour':
       return (
-        <svg width="12" height="12" viewBox="-6 -6 12 12" className="shrink-0" aria-hidden="true">
-          <circle r="4" fill="#FACC15" stroke="#18181b" strokeWidth="1.5" />
+        <svg width="13" height="13" viewBox="-7 -7 14 14" className="shrink-0" aria-hidden="true">
+          <circle r="4.2" fill="#7F77DD" stroke="#ffffff" strokeWidth="1.4" />
         </svg>
       );
   }
@@ -539,7 +561,7 @@ export const HeatmapLayerControlsAndStats: React.FC<HeatmapLayerControlsAndStats
     { key: 'ok', labelRu: 'Сбор', labelEn: 'Gather', count: counts.ok },
     { key: 'fight', labelRu: 'Бои', labelEn: 'Fights', count: counts.fight },
     { key: 'problems', labelRu: 'Проблемы', labelEn: 'Problems', count: counts.problems },
-    { key: 'camp', labelRu: 'Лагеря', labelEn: 'Camps', count: counts.camp },
+    { key: 'camp', labelRu: 'Лагеря', labelEn: 'Camps', count: counts.campsButton },
     { key: 'detour', labelRu: 'Обходы', labelEn: 'Detours', count: counts.detour },
   ];
   const buttons = allButtons.filter((btn) => btn.count > 0);
@@ -551,13 +573,13 @@ export const HeatmapLayerControlsAndStats: React.FC<HeatmapLayerControlsAndStats
       key: 'ok',
       label: isRu ? 'собрано' : 'gathered',
       value: counts.ok,
-      accent: '#1D9E75',
+      accent: '#FFD100',
     },
     {
       key: 'fight',
       label: isRu ? 'боёв' : 'fights',
       value: counts.fight,
-      accent: '#BA7517',
+      accent: '#E24B4A',
     },
     {
       key: 'stuck',
@@ -569,7 +591,7 @@ export const HeatmapLayerControlsAndStats: React.FC<HeatmapLayerControlsAndStats
       key: 'detour',
       label: isRu ? 'обходов' : 'detours',
       value: counts.detour,
-      accent: '#FACC15',
+      accent: '#7F77DD',
     },
   ];
 

@@ -244,7 +244,7 @@ export interface RoutePreview {
 }
 
 export interface HeatmapMark {
-  kind: 'ok' | 'fight' | 'stuck' | 'skip' | 'camp' | 'detour' | 'start' | 'finish';
+  kind: 'ok' | 'fight' | 'stuck' | 'skip' | 'camp' | 'mob' | 'detour' | 'start' | 'finish';
   x: number;      // доля ширины картинки 0..1 (центр точки)
   y: number;      // доля высоты картинки 0..1
   text: string;   // готовый текст подсказки на русском
