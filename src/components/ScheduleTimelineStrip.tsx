@@ -23,7 +23,7 @@ interface ScheduleTimelineStripProps {
   className?: string;
 }
 
-type VisibleKind = 'farm' | 'short_break' | 'long_break' | 'stopped' | 'paused';
+type VisibleKind = 'farm' | 'short_break' | 'long_break' | 'wait_window' | 'stopped' | 'paused';
 
 interface TimelineRange {
   startMs: number;
@@ -41,7 +41,6 @@ interface NormalizedSegment {
   minutes: number;
   timeRange: string;
   label: string;
-  shortLabel: string;
   leftPct: number;
   widthPct: number;
   anchorPct: number;
@@ -56,19 +55,23 @@ interface AxisTick {
 
 interface PlacedBubble {
   segment: NormalizedSegment;
+  row: 'top' | 'bottom';
   anchorPct: number;
   bubblePct: number;
   pointerOffsetPx: number;
+  widthPx: number;
 }
 
 const DEFAULT_OFF_TICKS = [0, 4, 8, 12, 16, 20, 24];
 const MIN_MS = 60 * 1000;
+const SIDE_PADDING_PX = 12;
 
 function isVisibleKind(kind: string): kind is VisibleKind {
   return (
     kind === 'farm' ||
     kind === 'short_break' ||
     kind === 'long_break' ||
+    kind === 'wait_window' ||
     kind === 'stopped' ||
     kind === 'paused'
   );
@@ -120,14 +123,6 @@ function formatBreaksCount(count: number, isRu: boolean): string {
   return `${count} перерывов`;
 }
 
-function floorToLocalMinutes(ms: number, stepMin: number): number {
-  const d = new Date(ms);
-  const totalMin = d.getHours() * 60 + d.getMinutes();
-  const flooredMin = Math.floor(totalMin / stepMin) * stepMin;
-  d.setHours(0, 0, 0, 0);
-  return d.getTime() + flooredMin * MIN_MS;
-}
-
 function ceilToLocalMinutes(ms: number, stepMin: number): number {
   const d = new Date(ms);
   const totalMin =
@@ -139,10 +134,7 @@ function ceilToLocalMinutes(ms: number, stepMin: number): number {
   return d.getTime() + ceiledMin * MIN_MS;
 }
 
-function computeTimelineRange(
-  visibleSegments: AnyTimelineSegment[],
-  nowMarkerMs: number | null
-): TimelineRange | null {
+function computeTimelineRange(visibleSegments: AnyTimelineSegment[]): TimelineRange | null {
   if (visibleSegments.length === 0) return null;
 
   let minMs = Infinity;
@@ -152,27 +144,16 @@ function computeTimelineRange(
     if (seg.end_ms > maxMs) maxMs = seg.end_ms;
   }
 
-  // Keep the "now" marker inside bounds if it sits just next to active segments
-  if (nowMarkerMs !== null && Number.isFinite(minMs) && Number.isFinite(maxMs)) {
-    if (nowMarkerMs < minMs && minMs - nowMarkerMs <= 60 * MIN_MS) {
-      minMs = nowMarkerMs;
-    }
-    if (nowMarkerMs > maxMs && nowMarkerMs - maxMs <= 60 * MIN_MS) {
-      maxMs = nowMarkerMs;
-    }
-  }
-
-  if (!Number.isFinite(minMs) || !Number.isFinite(maxMs) || maxMs <= minMs) {
+  if (!Number.isFinite(minMs) || !Number.isFinite(maxMs)) {
     return null;
   }
 
-  const rawSpanMin = (maxMs - minMs) / MIN_MS;
-  const snapStepMin = rawSpanMin <= 90 ? 5 : rawSpanMin <= 360 ? 15 : 30;
-  let startMs = floorToLocalMinutes(minMs, snapStepMin);
-  let endMs = ceilToLocalMinutes(maxMs, snapStepMin);
+  const startMs = minMs;
+  let endMs = maxMs;
 
-  if (endMs - startMs < 30 * MIN_MS) {
-    endMs = startMs + 30 * MIN_MS;
+  // Guard against zero/near-zero range without rounding edges or forcing a 30-min minimum
+  if (endMs - startMs < 2 * MIN_MS) {
+    endMs = startMs + 2 * MIN_MS;
   }
 
   return {
@@ -183,20 +164,23 @@ function computeTimelineRange(
 }
 
 function buildAxisTicks(range: TimelineRange, containerWidth: number): AxisTick[] {
-  const safeWidth = Math.max(containerWidth, 280);
+  const safeWidth = Math.max(containerWidth, 240);
   const spanMin = range.spanMs / MIN_MS;
 
-  const candidateSteps = [15, 30, 60, 120, 180, 240];
-  let stepMin = 60;
+  // Pick a round step (5 / 15 / 30 / 60 / 120 / 180 / 240 min) based on range and width
+  const maxInteriorCount = Math.max(2, Math.floor(safeWidth / 95));
+  const candidateSteps = [5, 15, 30, 60, 120, 180, 240];
+  let stepMin = candidateSteps[candidateSteps.length - 1];
   for (const step of candidateSteps) {
-    if (spanMin / step <= 6.5) {
+    if (spanMin / step <= maxInteriorCount + 1) {
       stepMin = step;
       break;
     }
-    stepMin = step;
   }
 
-  const minGapPx = 56;
+  const minEdgeGapPx = 42;
+  const minBetweenGapPx = 48;
+
   const ticks: AxisTick[] = [
     { ms: range.startMs, pct: 0, label: formatClock(range.startMs), edge: 'start' },
   ];
@@ -207,7 +191,8 @@ function buildAxisTicks(range: TimelineRange, containerWidth: number): AxisTick[
   while (cursorMs < range.endMs) {
     const pct = ((cursorMs - range.startMs) / range.spanMs) * 100;
     const px = (pct / 100) * safeWidth;
-    if (px - lastPx >= minGapPx && safeWidth - px >= minGapPx) {
+    const requiredFromPrev = lastPx === 0 ? minEdgeGapPx : minBetweenGapPx;
+    if (px - lastPx >= requiredFromPrev && safeWidth - px >= minEdgeGapPx) {
       ticks.push({
         ms: cursorMs,
         pct,
@@ -242,32 +227,29 @@ function normalizeSegments(
       return;
     }
 
-    const rawDuration = Math.round((seg.end_ms - seg.start_ms) / MIN_MS);
-    const durMin = Math.max(1, seg.minutes || rawDuration);
+    const rawDurationMin = Math.max(0, (seg.end_ms - seg.start_ms) / MIN_MS);
+    const durMin = typeof seg.minutes === 'number' ? seg.minutes : Math.round(rawDurationMin);
     const clampedStart = Math.max(range.startMs, Math.min(range.endMs, seg.start_ms));
     const clampedEnd = Math.max(clampedStart, Math.min(range.endMs, seg.end_ms));
 
     const leftPct = ((clampedStart - range.startMs) / range.spanMs) * 100;
-    const widthPct = Math.max(0.4, ((clampedEnd - clampedStart) / range.spanMs) * 100);
+    const widthPct = Math.max(0.35, ((clampedEnd - clampedStart) / range.spanMs) * 100);
     const anchorPct = Math.min(100, leftPct + widthPct / 2);
 
     const actual = 'actual' in seg && typeof seg.actual === 'boolean' ? seg.actual : true;
     const isBreak = seg.kind === 'short_break' || seg.kind === 'long_break';
 
     let label = isRu ? 'Сессия' : 'Session';
-    let shortLabel = isRu ? 'Сессия' : 'Session';
     if (seg.kind === 'long_break') {
       label = isRu ? 'Длинный перерыв' : 'Long break';
-      shortLabel = isRu ? 'Перерыв' : 'Break';
     } else if (seg.kind === 'short_break') {
-      label = isRu ? 'Перерыв' : 'Short break';
-      shortLabel = isRu ? 'Перерыв' : 'Break';
+      label = isRu ? 'Перерыв' : 'Break';
+    } else if (seg.kind === 'wait_window') {
+      label = isRu ? 'Ожидание' : 'Waiting';
     } else if (seg.kind === 'stopped') {
       label = isRu ? 'Остановлено' : 'Stopped';
-      shortLabel = isRu ? 'Остановлено' : 'Stopped';
     } else if (seg.kind === 'paused') {
       label = isRu ? 'Пауза' : 'Paused';
-      shortLabel = isRu ? 'Пауза' : 'Paused';
     }
 
     result.push({
@@ -280,7 +262,6 @@ function normalizeSegments(
       minutes: durMin,
       timeRange: `${formatClock(seg.start_ms)}–${formatClock(seg.end_ms)}`,
       label,
-      shortLabel,
       leftPct,
       widthPct,
       anchorPct,
@@ -290,185 +271,250 @@ function normalizeSegments(
   return result;
 }
 
+function estimateBubbleWidthPx(seg: NormalizedSegment, isRu: boolean): number {
+  const planSuffix = !seg.actual ? (isRu ? ' · план' : ' · plan') : '';
+  const titleLen = seg.label.length + planSuffix.length;
+  const timeLen = seg.timeRange.length;
+  const maxChars = Math.max(titleLen, timeLen);
+  return Math.max(88, Math.min(172, Math.round(maxChars * 6.4 + 24)));
+}
+
 function clampBubblePosition(
   anchorPct: number,
   containerWidth: number,
   bubbleWidthPx: number
 ): { bubblePct: number; pointerOffsetPx: number } {
-  const safeWidth = Math.max(containerWidth, 280);
-  const halfBubblePct = ((bubbleWidthPx / 2 + 4) / safeWidth) * 100;
-  const minPct = Math.min(48, halfBubblePct);
-  const maxPct = Math.max(52, 100 - halfBubblePct);
-  const bubblePct = Math.max(minPct, Math.min(maxPct, anchorPct));
-  const rawOffsetPx = ((anchorPct - bubblePct) / 100) * safeWidth;
-  const maxPointerOffset = Math.max(8, bubbleWidthPx / 2 - 14);
+  const safeWidth = Math.max(containerWidth, 240);
+  // Allow bubbles to use the container's 12px side padding without clipping outside the outer box
+  const minCenterPx = Math.max(0, bubbleWidthPx / 2 - SIDE_PADDING_PX + 2);
+  const maxCenterPx = Math.min(safeWidth, safeWidth - bubbleWidthPx / 2 + SIDE_PADDING_PX - 2);
+  const rawAnchorPx = (anchorPct / 100) * safeWidth;
+  const clampedCenterPx =
+    minCenterPx <= maxCenterPx
+      ? Math.max(minCenterPx, Math.min(maxCenterPx, rawAnchorPx))
+      : safeWidth / 2;
+
+  const bubblePct = (clampedCenterPx / safeWidth) * 100;
+  const rawOffsetPx = rawAnchorPx - clampedCenterPx;
+  const maxPointerOffset = Math.max(8, bubbleWidthPx / 2 - 12);
   const pointerOffsetPx = Math.max(-maxPointerOffset, Math.min(maxPointerOffset, rawOffsetPx));
   return { bubblePct, pointerOffsetPx };
 }
 
+function tryPlaceInRow(
+  seg: NormalizedSegment,
+  row: 'top' | 'bottom',
+  rowPlaced: PlacedBubble[],
+  safeWidth: number,
+  widthPx: number
+): PlacedBubble | null {
+  const gapPx = 8;
+  const maxNudgePx = 22;
+  const minCenterPx = Math.max(0, widthPx / 2 - SIDE_PADDING_PX + 2);
+  const maxCenterPx = Math.min(safeWidth, safeWidth - widthPx / 2 + SIDE_PADDING_PX - 2);
+  const rawAnchorPx = (seg.anchorPct / 100) * safeWidth;
+  const baseCenterPx =
+    minCenterPx <= maxCenterPx
+      ? Math.max(minCenterPx, Math.min(maxCenterPx, rawAnchorPx))
+      : safeWidth / 2;
+
+  const overlapsAt = (centerPx: number) =>
+    rowPlaced.filter((other) => {
+      const otherCenterPx = (other.bubblePct / 100) * safeWidth;
+      const requiredDist = (widthPx + other.widthPx) / 2 + gapPx;
+      return Math.abs(centerPx - otherCenterPx) < requiredDist;
+    });
+
+  let finalCenterPx = baseCenterPx;
+  const conflicts = overlapsAt(baseCenterPx);
+
+  if (conflicts.length === 1) {
+    const other = conflicts[0];
+    const otherCenterPx = (other.bubblePct / 100) * safeWidth;
+    const requiredDist = (widthPx + other.widthPx) / 2 + gapPx;
+    const dir = baseCenterPx >= otherCenterPx ? 1 : -1;
+    const nudgedPx = Math.max(minCenterPx, Math.min(maxCenterPx, otherCenterPx + dir * requiredDist));
+
+    if (Math.abs(nudgedPx - baseCenterPx) <= maxNudgePx && overlapsAt(nudgedPx).length === 0) {
+      finalCenterPx = nudgedPx;
+    } else {
+      return null;
+    }
+  } else if (conflicts.length > 1) {
+    return null;
+  }
+
+  const bubblePct = (finalCenterPx / safeWidth) * 100;
+  const rawOffsetPx = rawAnchorPx - finalCenterPx;
+  const maxPointerOffset = Math.max(8, widthPx / 2 - 12);
+  const pointerOffsetPx = Math.max(-maxPointerOffset, Math.min(maxPointerOffset, rawOffsetPx));
+
+  return {
+    segment: seg,
+    row,
+    anchorPct: seg.anchorPct,
+    bubblePct,
+    pointerOffsetPx,
+    widthPx,
+  };
+}
+
 function selectStaticBubbles(
   segments: NormalizedSegment[],
-  containerWidth: number
-): PlacedBubble[] {
-  if (segments.length === 0) return [];
+  containerWidth: number,
+  isRu: boolean
+): { top: PlacedBubble[]; bottom: PlacedBubble[] } {
+  if (segments.length === 0) return { top: [], bottom: [] };
 
-  const safeWidth = Math.max(containerWidth, 300);
-  const hasPlannedOrSpecial = segments.some(
-    (s) => !s.actual || s.kind === 'stopped' || s.kind === 'paused'
-  );
-  const bubbleWidthPx = hasPlannedOrSpecial ? 116 : 104;
-  const minGapPx = hasPlannedOrSpecial ? 124 : 112;
-  const minGapPct = (minGapPx / safeWidth) * 100;
-  const maxNudgePct = (24 / safeWidth) * 100;
+  const safeWidth = Math.max(containerWidth, 240);
+  const topRow: PlacedBubble[] = [];
+  const bottomRow: PlacedBubble[] = [];
 
-  const farmSegments = segments.filter((s) => s.kind === 'farm').sort((a, b) => b.minutes - a.minutes);
-  const longBreaks = segments.filter((s) => s.kind === 'long_break').sort((a, b) => b.minutes - a.minutes);
-  const shortBreaks = segments.filter((s) => s.kind === 'short_break').sort((a, b) => b.minutes - a.minutes);
-  const stoppedSegments = segments.filter((s) => s.kind === 'stopped').sort((a, b) => b.minutes - a.minutes);
-  const pausedSegments = segments.filter((s) => s.kind === 'paused').sort((a, b) => b.minutes - a.minutes);
-
-  const orderedCandidates: NormalizedSegment[] = [];
-  if (farmSegments[0]) orderedCandidates.push(farmSegments[0]);
-  if (stoppedSegments[0]) orderedCandidates.push(stoppedSegments[0]);
-  if (pausedSegments[0]) orderedCandidates.push(pausedSegments[0]);
-  if (longBreaks[0]) {
-    orderedCandidates.push(longBreaks[0]);
-  } else if (shortBreaks[0]) {
-    orderedCandidates.push(shortBreaks[0]);
-  }
-
-  const rest = segments
-    .filter((s) => !orderedCandidates.some((c) => c.id === s.id))
-    .sort((a, b) => {
-      const bonus = (seg: NormalizedSegment) => {
-        if (seg.kind === 'stopped') return 26;
-        if (seg.kind === 'paused') return 24;
-        if (seg.kind === 'long_break') return 20;
-        if (seg.kind === 'farm') return 12;
-        return 0;
-      };
-      return b.minutes + bonus(b) - (a.minutes + bonus(a));
-    });
-  orderedCandidates.push(...rest);
-
-  const placed: PlacedBubble[] = [];
-
-  for (const seg of orderedCandidates) {
-    const basePos = clampBubblePosition(seg.anchorPct, safeWidth, bubbleWidthPx);
-    let candidatePct = basePos.bubblePct;
-
-    let fits = true;
-    const conflicting = placed.filter((p) => Math.abs(p.bubblePct - candidatePct) < minGapPct);
-
-    if (conflicting.length === 1) {
-      const other = conflicting[0];
-      const pushDir = candidatePct >= other.bubblePct ? 1 : -1;
-      const neededPct = other.bubblePct + pushDir * minGapPct;
-      const halfBubblePct = ((bubbleWidthPx / 2 + 4) / safeWidth) * 100;
-      const clampedNeeded = Math.max(halfBubblePct, Math.min(100 - halfBubblePct, neededPct));
-      const nudgeDelta = Math.abs(clampedNeeded - basePos.bubblePct);
-
-      if (
-        nudgeDelta <= maxNudgePct &&
-        placed.every((p) => Math.abs(p.bubblePct - clampedNeeded) >= minGapPct - 0.1)
-      ) {
-        candidatePct = clampedNeeded;
-      } else {
-        fits = false;
-      }
-    } else if (conflicting.length > 1) {
-      fits = false;
+  // Place chronologically: try top row first; if it doesn't fit, try bottom row; else hover/tap reveals it
+  for (const seg of segments) {
+    const widthPx = estimateBubbleWidthPx(seg, isRu);
+    const placedTop = tryPlaceInRow(seg, 'top', topRow, safeWidth, widthPx);
+    if (placedTop) {
+      topRow.push(placedTop);
+      continue;
     }
-
-    if (fits) {
-      const rawOffsetPx = ((seg.anchorPct - candidatePct) / 100) * safeWidth;
-      const maxPointerOffset = Math.max(8, bubbleWidthPx / 2 - 14);
-      const pointerOffsetPx = Math.max(-maxPointerOffset, Math.min(maxPointerOffset, rawOffsetPx));
-      placed.push({
-        segment: seg,
-        anchorPct: seg.anchorPct,
-        bubblePct: candidatePct,
-        pointerOffsetPx,
-      });
+    const placedBottom = tryPlaceInRow(seg, 'bottom', bottomRow, safeWidth, widthPx);
+    if (placedBottom) {
+      bottomRow.push(placedBottom);
     }
   }
 
-  return placed.sort((a, b) => a.bubblePct - b.bubblePct);
+  topRow.sort((a, b) => a.bubblePct - b.bubblePct);
+  bottomRow.sort((a, b) => a.bubblePct - b.bubblePct);
+
+  return { top: topRow, bottom: bottomRow };
 }
 
-function getSegmentBarClasses(seg: NormalizedSegment): string {
+function getSegmentBarClasses(seg: NormalizedSegment, isSelected: boolean): string {
+  const highlightRing = isSelected ? 'ring-1 ring-white/70' : '';
+
   if (!seg.actual) {
-    // Planned segment: same hue, dimmed (~0.45 opacity) with subtle diagonal hatching
     switch (seg.kind) {
       case 'farm':
-        return 'bg-[repeating-linear-gradient(-45deg,rgba(255,255,255,0.95)_0px,rgba(255,255,255,0.95)_3px,rgba(255,255,255,0.3)_3px,rgba(255,255,255,0.3)_6px)] opacity-45';
+        return `bg-[repeating-linear-gradient(-45deg,rgba(255,255,255,0.95)_0px,rgba(255,255,255,0.95)_3px,rgba(255,255,255,0.3)_3px,rgba(255,255,255,0.3)_6px)] ${
+          isSelected ? 'opacity-80' : 'opacity-45'
+        } ${highlightRing}`;
       case 'long_break':
       case 'short_break':
-        return 'bg-[repeating-linear-gradient(-45deg,rgba(161,161,170,0.95)_0px,rgba(161,161,170,0.95)_3px,rgba(113,113,122,0.35)_3px,rgba(113,113,122,0.35)_6px)] opacity-45 ring-1 ring-black/80';
+        return `bg-[repeating-linear-gradient(-45deg,rgba(161,161,170,0.95)_0px,rgba(161,161,170,0.95)_3px,rgba(113,113,122,0.35)_3px,rgba(113,113,122,0.35)_6px)] ${
+          isSelected ? 'opacity-80 ring-1 ring-zinc-300/70' : 'opacity-45 ring-1 ring-black/80'
+        }`;
+      case 'wait_window':
+        return `bg-[repeating-linear-gradient(-45deg,rgba(82,82,91,0.9)_0px,rgba(82,82,91,0.9)_3px,rgba(39,39,42,0.4)_3px,rgba(39,39,42,0.4)_6px)] ${
+          isSelected ? 'opacity-80 ring-1 ring-zinc-500/70' : 'opacity-45'
+        }`;
       case 'stopped':
-        return 'bg-[repeating-linear-gradient(-45deg,rgba(190,18,60,0.9)_0px,rgba(190,18,60,0.9)_3px,rgba(136,19,55,0.35)_3px,rgba(136,19,55,0.35)_6px)] opacity-45 ring-1 ring-black/80';
+        return `bg-[repeating-linear-gradient(-45deg,rgba(190,18,60,0.9)_0px,rgba(190,18,60,0.9)_3px,rgba(136,19,55,0.35)_3px,rgba(136,19,55,0.35)_6px)] ${
+          isSelected ? 'opacity-85 ring-1 ring-rose-400/70' : 'opacity-45 ring-1 ring-black/80'
+        }`;
       case 'paused':
-        return 'bg-[repeating-linear-gradient(-45deg,rgba(245,158,11,0.95)_0px,rgba(245,158,11,0.95)_3px,rgba(180,83,9,0.35)_3px,rgba(180,83,9,0.35)_6px)] opacity-45 ring-1 ring-black/80';
+        return `bg-[repeating-linear-gradient(-45deg,rgba(245,158,11,0.95)_0px,rgba(245,158,11,0.95)_3px,rgba(180,83,9,0.35)_3px,rgba(180,83,9,0.35)_6px)] ${
+          isSelected ? 'opacity-85 ring-1 ring-amber-300/70' : 'opacity-45 ring-1 ring-black/80'
+        }`;
     }
   }
 
-  // Actual (completed or currently running) solid segment
   switch (seg.kind) {
     case 'farm':
-      return 'bg-white shadow-[0_0_12px_rgba(255,255,255,0.6)]';
+      return isSelected
+        ? 'bg-white shadow-[0_0_16px_rgba(255,255,255,0.95)]'
+        : 'bg-white shadow-[0_0_12px_rgba(255,255,255,0.6)]';
     case 'long_break':
-      return 'bg-zinc-500 ring-1 ring-black/80';
+      return isSelected
+        ? 'bg-zinc-400 ring-1 ring-zinc-200/70 shadow-[0_0_10px_rgba(161,161,170,0.45)]'
+        : 'bg-zinc-500 ring-1 ring-black/80';
     case 'short_break':
-      return 'bg-zinc-600 ring-1 ring-black/80';
+      return isSelected
+        ? 'bg-zinc-400 ring-1 ring-zinc-200/70 shadow-[0_0_10px_rgba(161,161,170,0.4)]'
+        : 'bg-zinc-600 ring-1 ring-black/80';
+    case 'wait_window':
+      return isSelected
+        ? 'bg-zinc-600 ring-1 ring-zinc-400/60'
+        : 'bg-zinc-800 ring-1 ring-zinc-700/70';
     case 'stopped':
-      return 'bg-rose-800 ring-1 ring-black/80';
+      return isSelected
+        ? 'bg-rose-700 ring-1 ring-rose-400/70 shadow-[0_0_10px_rgba(225,29,72,0.4)]'
+        : 'bg-rose-800 ring-1 ring-black/80';
     case 'paused':
-      return 'bg-amber-500 ring-1 ring-black/80';
+      return isSelected
+        ? 'bg-amber-400 ring-1 ring-amber-200/80 shadow-[0_0_10px_rgba(245,158,11,0.45)]'
+        : 'bg-amber-500 ring-1 ring-black/80';
   }
 }
 
-function getBubbleTheme(seg: NormalizedSegment): {
+function getBubbleTheme(seg: NormalizedSegment, isElevated = false): {
   card: string;
   title: string;
   planTag: string;
   time: string;
-  pointer: string;
+  pointerDown: string;
+  pointerUp: string;
 } {
-  const planOpacity = seg.actual ? '' : 'opacity-75';
+  const planOpacity = seg.actual ? '' : isElevated ? 'opacity-90' : 'opacity-70';
 
   switch (seg.kind) {
     case 'farm':
       return {
-        card: `bg-white text-black shadow-[0_6px_22px_rgba(255,255,255,0.22)] ${planOpacity}`,
+        card: `bg-white text-black ${
+          isElevated
+            ? 'shadow-[0_8px_28px_rgba(255,255,255,0.34)]'
+            : 'shadow-[0_6px_22px_rgba(255,255,255,0.22)]'
+        } ${planOpacity}`,
         title: 'text-zinc-800',
         planTag: 'text-zinc-500',
         time: 'text-black',
-        pointer: 'bg-white',
+        pointerDown: 'bg-white',
+        pointerUp: 'bg-white',
       };
     case 'long_break':
     case 'short_break':
       return {
-        card: `bg-zinc-800/95 border border-zinc-600/80 text-zinc-300 shadow-[0_6px_16px_rgba(0,0,0,0.65)] ${planOpacity}`,
+        card: `bg-zinc-800/95 border ${
+          isElevated ? 'border-zinc-400' : 'border-zinc-600/80'
+        } text-zinc-300 shadow-[0_6px_18px_rgba(0,0,0,0.75)] ${planOpacity}`,
+        title: 'text-zinc-200',
+        planTag: 'text-zinc-400',
+        time: 'text-zinc-400',
+        pointerDown: `bg-zinc-800 border-r border-b ${isElevated ? 'border-zinc-400' : 'border-zinc-600/80'}`,
+        pointerUp: `bg-zinc-800 border-l border-t ${isElevated ? 'border-zinc-400' : 'border-zinc-600/80'}`,
+      };
+    case 'wait_window':
+      return {
+        card: `bg-zinc-900/95 border ${
+          isElevated ? 'border-zinc-500' : 'border-zinc-700/80'
+        } text-zinc-400 shadow-[0_6px_16px_rgba(0,0,0,0.75)] ${planOpacity}`,
         title: 'text-zinc-300',
         planTag: 'text-zinc-500',
         time: 'text-zinc-400',
-        pointer: 'bg-zinc-800 border-r border-b border-zinc-600/80',
+        pointerDown: `bg-zinc-900 border-r border-b ${isElevated ? 'border-zinc-500' : 'border-zinc-700/80'}`,
+        pointerUp: `bg-zinc-900 border-l border-t ${isElevated ? 'border-zinc-500' : 'border-zinc-700/80'}`,
       };
     case 'stopped':
       return {
-        card: `bg-rose-950/95 border border-rose-700/70 text-rose-200 shadow-[0_6px_16px_rgba(0,0,0,0.65)] ${planOpacity}`,
+        card: `bg-rose-950/95 border ${
+          isElevated ? 'border-rose-500/80' : 'border-rose-700/70'
+        } text-rose-200 shadow-[0_6px_18px_rgba(0,0,0,0.75)] ${planOpacity}`,
         title: 'text-rose-200',
-        planTag: 'text-rose-400/80',
+        planTag: 'text-rose-400/85',
         time: 'text-rose-300/85',
-        pointer: 'bg-rose-950 border-r border-b border-rose-700/70',
+        pointerDown: `bg-rose-950 border-r border-b ${isElevated ? 'border-rose-500/80' : 'border-rose-700/70'}`,
+        pointerUp: `bg-rose-950 border-l border-t ${isElevated ? 'border-rose-500/80' : 'border-rose-700/70'}`,
       };
     case 'paused':
       return {
-        card: `bg-amber-950/95 border border-amber-500/60 text-amber-200 shadow-[0_6px_16px_rgba(0,0,0,0.65)] ${planOpacity}`,
+        card: `bg-amber-950/95 border ${
+          isElevated ? 'border-amber-400/80' : 'border-amber-500/60'
+        } text-amber-200 shadow-[0_6px_18px_rgba(0,0,0,0.75)] ${planOpacity}`,
         title: 'text-amber-200',
-        planTag: 'text-amber-400/80',
+        planTag: 'text-amber-400/85',
         time: 'text-amber-300/90',
-        pointer: 'bg-amber-950 border-r border-b border-amber-500/60',
+        pointerDown: `bg-amber-950 border-r border-b ${isElevated ? 'border-amber-400/80' : 'border-amber-500/60'}`,
+        pointerUp: `bg-amber-950 border-l border-t ${isElevated ? 'border-amber-400/80' : 'border-amber-500/60'}`,
       };
   }
 }
@@ -487,6 +533,8 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
 }) => {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(720);
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [pinnedId, setPinnedId] = useState<number | null>(null);
 
   useEffect(() => {
     const el = trackRef.current;
@@ -505,6 +553,11 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
     return () => window.removeEventListener('resize', updateWidth);
   }, []);
 
+  useEffect(() => {
+    setHoveredId(null);
+    setPinnedId(null);
+  }, [preview]);
+
   const effectiveNowMs = useMemo(() => {
     if (hasNowMs(preview)) return preview.now_ms;
     return nowMs;
@@ -516,8 +569,8 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
   }, [preview]);
 
   const timelineRange = useMemo(
-    () => computeTimelineRange(rawVisibleSegments, effectiveNowMs),
-    [rawVisibleSegments, effectiveNowMs]
+    () => computeTimelineRange(rawVisibleSegments),
+    [rawVisibleSegments]
   );
 
   const segments = useMemo(
@@ -533,10 +586,25 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
     [timelineRange, containerWidth]
   );
 
-  const staticBubbles = useMemo(
-    () => selectStaticBubbles(segments, containerWidth),
-    [segments, containerWidth]
+  const { top: topBubbles, bottom: bottomBubbles } = useMemo(
+    () => selectStaticBubbles(segments, containerWidth, isRu),
+    [segments, containerWidth, isRu]
   );
+
+  const activeId = hoveredId !== null ? hoveredId : pinnedId;
+  const activeSegment = useMemo(
+    () => (activeId !== null ? segments.find((s) => s.id === activeId) || null : null),
+    [activeId, segments]
+  );
+
+  const activeBubblePlacement = useMemo(() => {
+    if (!activeSegment) return null;
+    const widthPx = estimateBubbleWidthPx(activeSegment, isRu);
+    return {
+      ...clampBubblePosition(activeSegment.anchorPct, containerWidth, widthPx),
+      widthPx,
+    };
+  }, [activeSegment, containerWidth, isRu]);
 
   // Strictly use backend-provided sessions & farm_s (pause does not split session count)
   const sessionsCount = useMemo(() => {
@@ -570,8 +638,15 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
     return ((effectiveNowMs - timelineRange.startMs) / timelineRange.spanMs) * 100;
   }, [effectiveNowMs, timelineRange]);
 
+  const hasBottomRow = !isOffState && !hasError && bottomBubbles.length > 0;
+
   return (
-    <div className={`${className} flex flex-col gap-3`}>
+    <div
+      className={`${className} flex flex-col gap-3`}
+      onClick={() => {
+        if (pinnedId !== null) setPinnedId(null);
+      }}
+    >
       {/* Top summary row + legend + shuffle/note */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono tabular-nums">
@@ -667,151 +742,272 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
         ) : null}
       </div>
 
-      {/* Active-range visual timeline */}
-      <div
-        ref={trackRef}
-        className={`relative w-full pt-[68px] pb-1 transition-opacity duration-200 ${
-          isLoading ? 'opacity-65' : 'opacity-100'
-        }`}
-      >
-        {/* Callouts layer (above the horizontal baseline) */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[62px]">
-          {!isOffState &&
-            !hasError &&
-            staticBubbles.map((item) => {
-              const { segment, bubblePct, pointerOffsetPx } = item;
-              const theme = getBubbleTheme(segment);
+      {/* Inner side padding (~12px) prevents edge bubbles from clipping without stretching axis time */}
+      <div className="px-3">
+        <div
+          ref={trackRef}
+          className={`relative w-full pt-[66px] ${hasBottomRow ? 'pb-[64px]' : 'pb-1'} transition-opacity duration-200 ${
+            isLoading ? 'opacity-65' : 'opacity-100'
+          }`}
+        >
+          {/* TOP callouts layer (above the horizontal baseline, pointer down) */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-[60px]">
+            {!isOffState &&
+              !hasError &&
+              topBubbles.map((item) => {
+                const { segment, bubblePct, pointerOffsetPx } = item;
+                if (activeId === segment.id) return null;
 
-              return (
-                <div
-                  key={`static-${segment.id}`}
-                  style={{ left: `${bubblePct}%` }}
-                  className="absolute bottom-2 -translate-x-1/2"
-                >
+                const theme = getBubbleTheme(segment, false);
+                const isCrowdedByHover =
+                  activeBubblePlacement !== null &&
+                  Math.abs(((bubblePct - activeBubblePlacement.bubblePct) / 100) * containerWidth) <
+                    (item.widthPx + activeBubblePlacement.widthPx) / 2 + 12;
+
+                return (
                   <div
-                    className={`relative rounded-xl px-2.5 py-1.5 text-center whitespace-nowrap select-none ${theme.card}`}
+                    key={`top-${segment.id}`}
+                    style={{ left: `${bubblePct}%` }}
+                    className={`absolute bottom-2 -translate-x-1/2 transition-opacity duration-150 ${
+                      isCrowdedByHover ? 'opacity-15' : 'opacity-100'
+                    }`}
                   >
-                    <div className={`text-[10px] leading-tight font-medium ${theme.title}`}>
-                      <span>{segment.shortLabel}</span>
-                      {!segment.actual && (
-                        <span className={`ml-1 font-normal ${theme.planTag}`}>
-                          · {isRu ? 'план' : 'plan'}
-                        </span>
-                      )}
-                    </div>
                     <div
-                      className={`text-[11px] leading-tight font-mono font-semibold tabular-nums mt-0.5 ${theme.time}`}
+                      className={`relative rounded-xl px-2.5 py-1.5 text-center whitespace-nowrap select-none ${theme.card}`}
                     >
-                      {segment.timeRange}
+                      <div className={`text-[10px] leading-tight font-medium ${theme.title}`}>
+                        <span>{segment.label}</span>
+                        {!segment.actual && (
+                          <span className={`ml-1 font-normal ${theme.planTag}`}>
+                            · {isRu ? 'план' : 'plan'}
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        className={`text-[11px] leading-tight font-mono font-semibold tabular-nums mt-0.5 ${theme.time}`}
+                      >
+                        {segment.timeRange}
+                      </div>
+                      <span
+                        style={{ transform: `translateX(calc(-50% + ${pointerOffsetPx}px)) rotate(45deg)` }}
+                        className={`absolute left-1/2 -bottom-[4.5px] w-2.5 h-2.5 ${theme.pointerDown}`}
+                      />
                     </div>
-                    <span
-                      style={{ transform: `translateX(calc(-50% + ${pointerOffsetPx}px)) rotate(45deg)` }}
-                      className={`absolute left-1/2 -bottom-[4.5px] w-2.5 h-2.5 ${theme.pointer}`}
-                    />
                   </div>
-                </div>
-              );
-            })}
-
-          {/* Subtle centered label for day-off state */}
-          {isOffState && (
-            <div className="absolute inset-x-0 bottom-3 flex justify-center">
-              <span className="px-3 py-1 rounded-lg bg-zinc-900/90 border border-white/10 text-[11px] font-mono text-zinc-500">
-                {!isScheduleEnabled
-                  ? isRu
-                    ? 'Бот работает без ограничений расписания'
-                    : 'Schedule is turned off'
-                  : isRu
-                  ? 'Выходной день — бот не запускается'
-                  : 'Day off — bot stays idle'}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Horizontal baseline + segments */}
-        <div className="relative h-6 flex items-center pointer-events-none">
-          <div
-            className={`w-full h-[1.5px] rounded-full ${
-              isOffState ? 'bg-white/15' : 'bg-white/40'
-            }`}
-          />
-
-          {!preview && !isOffState && (
-            <div className="absolute inset-y-0 inset-x-0 flex items-center">
-              <div className="w-1/3 h-[6px] rounded-full bg-white/15 animate-pulse ml-[33%]" />
-            </div>
-          )}
-
-          {!isOffState &&
-            !hasError &&
-            segments.map((seg) => (
-              <div
-                key={seg.id}
-                style={{
-                  left: `${seg.leftPct}%`,
-                  width: `${seg.widthPct}%`,
-                  minWidth: seg.kind === 'farm' ? '10px' : '8px',
-                }}
-                className={`absolute top-1/2 -translate-y-1/2 h-6 flex items-center justify-center ${
-                  seg.kind === 'farm' ? 'z-10' : 'z-20'
-                }`}
-              >
-                <span className={`w-full h-[6px] rounded-full ${getSegmentBarClasses(seg)}`} />
-              </div>
-            ))}
-
-          {/* Thin vertical "now" marker at now_ms */}
-          {!isOffState && !hasError && nowPct !== null && (
-            <div
-              style={{ left: `${nowPct}%` }}
-              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-30 flex flex-col items-center"
-            >
-              <span className="w-[1.5px] h-5 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.95)]" />
-            </div>
-          )}
-        </div>
-
-        {/* Dynamic clock ticks covering only the active schedule period */}
-        <div className="relative h-5 mt-1 select-none">
-          {!isOffState && !hasError && axisTicks
-            ? axisTicks.map((tick) => {
-                const alignClass =
-                  tick.edge === 'start'
-                    ? 'left-0 translate-x-0 text-left'
-                    : tick.edge === 'end'
-                    ? 'right-0 translate-x-0 text-right'
-                    : '-translate-x-1/2 text-center';
-
-                return (
-                  <span
-                    key={`${tick.edge}-${tick.ms}`}
-                    style={tick.edge === 'end' ? undefined : { left: `${tick.pct}%` }}
-                    className={`absolute top-0 ${alignClass} text-[11px] font-mono tabular-nums text-zinc-500`}
-                  >
-                    {tick.label}
-                  </span>
-                );
-              })
-            : DEFAULT_OFF_TICKS.map((hour) => {
-                const pct = (hour / 24) * 100;
-                const alignClass =
-                  hour === 0
-                    ? 'left-0 translate-x-0 text-left'
-                    : hour === 24
-                    ? 'right-0 translate-x-0 text-right'
-                    : '-translate-x-1/2 text-center';
-
-                return (
-                  <span
-                    key={hour}
-                    style={hour === 24 ? undefined : { left: `${pct}%` }}
-                    className={`absolute top-0 ${alignClass} text-[11px] font-mono tabular-nums text-zinc-600`}
-                  >
-                    {hour}:00
-                  </span>
                 );
               })}
+
+            {/* Always-on hover/tap callout above the bar for ANY segment */}
+            {!isOffState && !hasError && activeSegment && activeBubblePlacement && (
+              <div
+                key={`active-${activeSegment.id}`}
+                style={{ left: `${activeBubblePlacement.bubblePct}%` }}
+                className="absolute bottom-2 -translate-x-1/2 z-40"
+              >
+                {(() => {
+                  const theme = getBubbleTheme(activeSegment, true);
+                  return (
+                    <div
+                      className={`relative rounded-xl px-2.5 py-1.5 text-center whitespace-nowrap select-none ${theme.card}`}
+                    >
+                      <div className={`text-[10px] leading-tight font-semibold ${theme.title}`}>
+                        <span>{activeSegment.label}</span>
+                        {!activeSegment.actual && (
+                          <span className={`ml-1 font-normal ${theme.planTag}`}>
+                            · {isRu ? 'план' : 'plan'}
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        className={`text-[11px] leading-tight font-mono font-bold tabular-nums mt-0.5 ${theme.time}`}
+                      >
+                        {activeSegment.timeRange}
+                      </div>
+                      <span
+                        style={{
+                          transform: `translateX(calc(-50% + ${activeBubblePlacement.pointerOffsetPx}px)) rotate(45deg)`,
+                        }}
+                        className={`absolute left-1/2 -bottom-[4.5px] w-2.5 h-2.5 ${theme.pointerDown}`}
+                      />
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Subtle centered label for day-off state */}
+            {isOffState && (
+              <div className="absolute inset-x-0 bottom-3 flex justify-center">
+                <span className="px-3 py-1 rounded-lg bg-zinc-900/90 border border-white/10 text-[11px] font-mono text-zinc-500">
+                  {!isScheduleEnabled
+                    ? isRu
+                      ? 'Бот работает без ограничений расписания'
+                      : 'Schedule is turned off'
+                    : isRu
+                    ? 'Выходной день — бот не запускается'
+                    : 'Day off — bot stays idle'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Horizontal baseline + interactive segments */}
+          <div className="relative h-6 flex items-center">
+            <div
+              className={`w-full h-[1.5px] rounded-full pointer-events-none ${
+                isOffState ? 'bg-white/15' : 'bg-white/40'
+              }`}
+            />
+
+            {!preview && !isOffState && (
+              <div className="absolute inset-y-0 inset-x-0 flex items-center pointer-events-none">
+                <div className="w-1/3 h-[6px] rounded-full bg-white/15 animate-pulse ml-[33%]" />
+              </div>
+            )}
+
+            {!isOffState &&
+              !hasError &&
+              segments.map((seg) => {
+                const isSelected = activeId === seg.id;
+                const zClass =
+                  seg.kind === 'wait_window'
+                    ? 'z-[5]'
+                    : seg.kind === 'farm'
+                    ? 'z-10'
+                    : 'z-20';
+                const heightClass =
+                  seg.kind === 'wait_window'
+                    ? isSelected
+                      ? 'h-[5px]'
+                      : 'h-[3px]'
+                    : isSelected
+                    ? 'h-[8px]'
+                    : 'h-[6px]';
+
+                return (
+                  <button
+                    key={seg.id}
+                    type="button"
+                    aria-label={`${seg.label} ${seg.timeRange}`}
+                    style={{
+                      left: `${seg.leftPct}%`,
+                      width: `${seg.widthPct}%`,
+                      minWidth: seg.kind === 'farm' ? '10px' : '8px',
+                    }}
+                    onMouseEnter={() => setHoveredId(seg.id)}
+                    onMouseLeave={() => setHoveredId((prev) => (prev === seg.id ? null : prev))}
+                    onFocus={() => setHoveredId(seg.id)}
+                    onBlur={() => setHoveredId((prev) => (prev === seg.id ? null : prev))}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPinnedId((prev) => (prev === seg.id ? null : seg.id));
+                    }}
+                    className={`absolute top-1/2 -translate-y-1/2 h-6 flex items-center justify-center focus:outline-none cursor-pointer ${zClass}`}
+                  >
+                    <span
+                      className={`w-full rounded-full transition-all duration-100 ${heightClass} ${getSegmentBarClasses(
+                        seg,
+                        isSelected
+                      )}`}
+                    />
+                  </button>
+                );
+              })}
+
+            {/* Thin vertical "now" marker strictly inside [startMs, endMs] */}
+            {!isOffState && !hasError && nowPct !== null && (
+              <div
+                style={{ left: `${nowPct}%` }}
+                className="pointer-events-none absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-30 flex flex-col items-center"
+              >
+                <span className="w-[1.5px] h-5 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.95)]" />
+              </div>
+            )}
+          </div>
+
+          {/* Exact-edge + round-interior clock ticks */}
+          <div className="relative h-5 mt-1 select-none pointer-events-none">
+            {!isOffState && !hasError && axisTicks
+              ? axisTicks.map((tick) => {
+                  const alignClass =
+                    tick.edge === 'start'
+                      ? 'left-0 translate-x-0 text-left'
+                      : tick.edge === 'end'
+                      ? 'right-0 translate-x-0 text-right'
+                      : '-translate-x-1/2 text-center';
+
+                  return (
+                    <span
+                      key={`${tick.edge}-${tick.ms}`}
+                      style={tick.edge === 'end' ? undefined : { left: `${tick.pct}%` }}
+                      className={`absolute top-0 ${alignClass} text-[11px] font-mono tabular-nums text-zinc-500`}
+                    >
+                      {tick.label}
+                    </span>
+                  );
+                })
+              : DEFAULT_OFF_TICKS.map((hour) => {
+                  const pct = (hour / 24) * 100;
+                  const alignClass =
+                    hour === 0
+                      ? 'left-0 translate-x-0 text-left'
+                      : hour === 24
+                      ? 'right-0 translate-x-0 text-right'
+                      : '-translate-x-1/2 text-center';
+
+                  return (
+                    <span
+                      key={hour}
+                      style={hour === 24 ? undefined : { left: `${pct}%` }}
+                      className={`absolute top-0 ${alignClass} text-[11px] font-mono tabular-nums text-zinc-600`}
+                    >
+                      {hour}:00
+                    </span>
+                  );
+                })}
+          </div>
+
+          {/* BOTTOM callouts layer (second row below axis ticks, pointer up) */}
+          {hasBottomRow && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[58px]">
+              {bottomBubbles.map((item) => {
+                const { segment, bubblePct, pointerOffsetPx } = item;
+                if (activeId === segment.id) return null;
+
+                const theme = getBubbleTheme(segment, false);
+
+                return (
+                  <div
+                    key={`bottom-${segment.id}`}
+                    style={{ left: `${bubblePct}%` }}
+                    className="absolute top-2 -translate-x-1/2"
+                  >
+                    <div
+                      className={`relative rounded-xl px-2.5 py-1.5 text-center whitespace-nowrap select-none ${theme.card}`}
+                    >
+                      <span
+                        style={{ transform: `translateX(calc(-50% + ${pointerOffsetPx}px)) rotate(45deg)` }}
+                        className={`absolute left-1/2 -top-[4.5px] w-2.5 h-2.5 ${theme.pointerUp}`}
+                      />
+                      <div className={`text-[10px] leading-tight font-medium ${theme.title}`}>
+                        <span>{segment.label}</span>
+                        {!segment.actual && (
+                          <span className={`ml-1 font-normal ${theme.planTag}`}>
+                            · {isRu ? 'план' : 'plan'}
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        className={`text-[11px] leading-tight font-mono font-semibold tabular-nums mt-0.5 ${theme.time}`}
+                      >
+                        {segment.timeRange}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
