@@ -33,11 +33,11 @@ interface TimelineRange {
 
 interface NormalizedSegment {
   id: number;
+  groupId: number;
   kind: VisibleKind;
   actual: boolean;
   isCurrent: boolean;
-  progressPct: number; // 0..100 fill of fact portion inside this segment when isCurrent
-  remainingMs: number;
+  progressPct: number; // 0..100 fill of fact portion inside this piece when isCurrent
   isBreak: boolean;
   startMs: number;
   endMs: number;
@@ -46,6 +46,19 @@ interface NormalizedSegment {
   label: string;
   leftPct: number;
   widthPct: number;
+}
+
+interface BubbleGroup {
+  groupId: number;
+  kind: VisibleKind;
+  actual: boolean;
+  isCurrent: boolean;
+  remainingMs: number;
+  startMs: number;
+  endMs: number;
+  durationMs: number;
+  timeRange: string;
+  label: string;
   anchorPct: number;
 }
 
@@ -57,17 +70,17 @@ interface AxisTick {
 }
 
 interface PlacedBubble {
-  segment: NormalizedSegment;
-  row: 'top' | 'bottom';
+  group: BubbleGroup;
   anchorPct: number;
   bubblePct: number;
   pointerOffsetPx: number;
-  widthPx: number;
 }
 
 const DEFAULT_OFF_TICKS = [0, 4, 8, 12, 16, 20, 24];
 const MIN_MS = 60 * 1000;
 const SIDE_PADDING_PX = 12;
+const BUBBLE_WIDTH_PX = 132;
+const BUBBLE_GAP_PX = 8;
 
 function isVisibleKind(kind: string): kind is VisibleKind {
   return (
@@ -137,6 +150,23 @@ function formatBreaksCount(count: number, isRu: boolean): string {
   return `${count} перерывов`;
 }
 
+function getKindLabel(kind: VisibleKind, isRu: boolean): string {
+  switch (kind) {
+    case 'farm':
+      return isRu ? 'Сессия' : 'Session';
+    case 'long_break':
+      return isRu ? 'Длинный перерыв' : 'Long break';
+    case 'short_break':
+      return isRu ? 'Перерыв' : 'Break';
+    case 'wait_window':
+      return isRu ? 'Ожидание' : 'Waiting';
+    case 'stopped':
+      return isRu ? 'Остановлено' : 'Stopped';
+    case 'paused':
+      return isRu ? 'Пауза' : 'Paused';
+  }
+}
+
 function ceilToLocalMinutes(ms: number, stepMin: number): number {
   const d = new Date(ms);
   const totalMin =
@@ -165,7 +195,7 @@ function computeTimelineRange(visibleSegments: AnyTimelineSegment[]): TimelineRa
   const startMs = minMs;
   let endMs = maxMs;
 
-  // Guard against zero/near-zero range without rounding edges or forcing a 30-min minimum
+  // Guard against zero/near-zero range without rounding edges
   if (endMs - startMs < 2 * MIN_MS) {
     endMs = startMs + 2 * MIN_MS;
   }
@@ -181,7 +211,6 @@ function buildAxisTicks(range: TimelineRange, containerWidth: number): AxisTick[
   const safeWidth = Math.max(containerWidth, 240);
   const spanMin = range.spanMs / MIN_MS;
 
-  // Pick a round step (5 / 15 / 30 / 60 / 120 / 180 / 240 min) based on range and width
   const maxInteriorCount = Math.max(2, Math.floor(safeWidth / 95));
   const candidateSteps = [5, 15, 30, 60, 120, 180, 240];
   let stepMin = candidateSteps[candidateSteps.length - 1];
@@ -228,16 +257,30 @@ function buildAxisTicks(range: TimelineRange, containerWidth: number): AxisTick[
   return ticks;
 }
 
-function normalizeSegments(
-  segments: AnyTimelineSegment[],
+function normalizeSegmentsAndGroups(
+  rawSegments: AnyTimelineSegment[],
   range: TimelineRange | null,
   effectiveNowMs: number | null,
   isRu: boolean
-): NormalizedSegment[] {
-  if (!range || range.spanMs <= 0) return [];
-  const result: NormalizedSegment[] = [];
+): { segments: NormalizedSegment[]; groups: BubbleGroup[] } {
+  if (!range || range.spanMs <= 0) {
+    return { segments: [], groups: [] };
+  }
 
-  segments.forEach((seg, idx) => {
+  const segments: NormalizedSegment[] = [];
+  const groups: BubbleGroup[] = [];
+
+  // Raw group accumulators to merge contiguous same-kind pieces (end_ms === start_ms) for callouts only
+  interface RawGroup {
+    groupId: number;
+    kind: VisibleKind;
+    startMs: number;
+    endMs: number;
+    allActual: boolean;
+  }
+  const rawGroups: RawGroup[] = [];
+
+  rawSegments.forEach((seg, idx) => {
     if (!isVisibleKind(seg.kind)) {
       return;
     }
@@ -249,15 +292,12 @@ function normalizeSegments(
 
     const leftPct = ((clampedStart - range.startMs) / range.spanMs) * 100;
     const widthPct = Math.max(0.35, ((clampedEnd - clampedStart) / range.spanMs) * 100);
-    const anchorPct = Math.min(100, leftPct + widthPct / 2);
 
     const rawActual = 'actual' in seg && typeof seg.actual === 'boolean' ? seg.actual : true;
 
-    // Local per-second fact | plan boundary when live clock is active
     let actual = rawActual;
     let isCurrent = false;
     let progressPct = rawActual ? 100 : 0;
-    let remainingMs = 0;
 
     if (effectiveNowMs !== null) {
       if (seg.start_ms < effectiveNowMs && effectiveNowMs < seg.end_ms) {
@@ -265,37 +305,40 @@ function normalizeSegments(
         actual = true;
         const segSpanMs = Math.max(1, seg.end_ms - seg.start_ms);
         progressPct = Math.max(0, Math.min(100, ((effectiveNowMs - seg.start_ms) / segSpanMs) * 100));
-        remainingMs = Math.max(0, seg.end_ms - effectiveNowMs);
       } else if (!rawActual && seg.end_ms <= effectiveNowMs) {
-        // Planned segment already passed before next backend refresh -> render as fact
         actual = true;
         progressPct = 100;
       }
     }
 
-    const isBreak = seg.kind === 'short_break' || seg.kind === 'long_break';
-
-    let label = isRu ? 'Сессия' : 'Session';
-    if (seg.kind === 'long_break') {
-      label = isRu ? 'Длинный перерыв' : 'Long break';
-    } else if (seg.kind === 'short_break') {
-      label = isRu ? 'Перерыв' : 'Break';
-    } else if (seg.kind === 'wait_window') {
-      label = isRu ? 'Ожидание' : 'Waiting';
-    } else if (seg.kind === 'stopped') {
-      label = isRu ? 'Остановлено' : 'Stopped';
-    } else if (seg.kind === 'paused') {
-      label = isRu ? 'Пауза' : 'Paused';
+    // Merge contiguous same-kind pieces (end_ms == start_ms) into one BubbleGroup
+    const prevGroup = rawGroups[rawGroups.length - 1];
+    let groupId: number;
+    if (prevGroup && prevGroup.kind === seg.kind && prevGroup.endMs === seg.start_ms) {
+      prevGroup.endMs = Math.max(prevGroup.endMs, seg.end_ms);
+      prevGroup.allActual = prevGroup.allActual && actual;
+      groupId = prevGroup.groupId;
+    } else {
+      groupId = rawGroups.length;
+      rawGroups.push({
+        groupId,
+        kind: seg.kind,
+        startMs: seg.start_ms,
+        endMs: seg.end_ms,
+        allActual: actual,
+      });
     }
 
-    result.push({
+    const label = getKindLabel(seg.kind, isRu);
+
+    segments.push({
       id: idx,
+      groupId,
       kind: seg.kind,
       actual,
       isCurrent,
       progressPct,
-      remainingMs,
-      isBreak,
+      isBreak: seg.kind === 'short_break' || seg.kind === 'long_break',
       startMs: seg.start_ms,
       endMs: seg.end_ms,
       minutes: durMin,
@@ -303,39 +346,55 @@ function normalizeSegments(
       label,
       leftPct,
       widthPct,
-      anchorPct,
     });
   });
 
-  return result;
-}
+  for (const g of rawGroups) {
+    const clampedStart = Math.max(range.startMs, Math.min(range.endMs, g.startMs));
+    const clampedEnd = Math.max(clampedStart, Math.min(range.endMs, g.endMs));
+    const leftPct = ((clampedStart - range.startMs) / range.spanMs) * 100;
+    const widthPct = Math.max(0.35, ((clampedEnd - clampedStart) / range.spanMs) * 100);
+    const anchorPct = Math.min(100, leftPct + widthPct / 2);
 
-function estimateBubbleWidthPx(seg: NormalizedSegment, isRu: boolean): number {
-  const suffix = seg.isCurrent
-    ? isRu
-      ? ' · идёт'
-      : ' · live'
-    : !seg.actual
-    ? isRu
-      ? ' · план'
-      : ' · plan'
-    : '';
-  const titleLen = seg.label.length + suffix.length;
-  const timeLen = seg.timeRange.length;
-  const countdownLen = seg.isCurrent ? (isRu ? 15 : 11) : 0;
-  const maxChars = Math.max(titleLen, timeLen, countdownLen);
-  return Math.max(88, Math.min(182, Math.round(maxChars * 6.4 + 24)));
+    let isCurrent = false;
+    let actual = g.allActual;
+    let remainingMs = 0;
+
+    if (effectiveNowMs !== null) {
+      if (g.startMs < effectiveNowMs && effectiveNowMs < g.endMs) {
+        isCurrent = true;
+        actual = true;
+        remainingMs = Math.max(0, g.endMs - effectiveNowMs);
+      } else if (g.endMs <= effectiveNowMs) {
+        actual = true;
+      }
+    }
+
+    groups.push({
+      groupId: g.groupId,
+      kind: g.kind,
+      actual,
+      isCurrent,
+      remainingMs,
+      startMs: g.startMs,
+      endMs: g.endMs,
+      durationMs: Math.max(0, g.endMs - g.startMs),
+      timeRange: `${formatClock(g.startMs)}–${formatClock(g.endMs)}`,
+      label: getKindLabel(g.kind, isRu),
+      anchorPct,
+    });
+  }
+
+  return { segments, groups };
 }
 
 function clampBubblePosition(
   anchorPct: number,
-  containerWidth: number,
-  bubbleWidthPx: number
+  containerWidth: number
 ): { bubblePct: number; pointerOffsetPx: number } {
   const safeWidth = Math.max(containerWidth, 240);
-  // Allow bubbles to use the container's 12px side padding without clipping outside the outer box
-  const minCenterPx = Math.max(0, bubbleWidthPx / 2 - SIDE_PADDING_PX + 2);
-  const maxCenterPx = Math.min(safeWidth, safeWidth - bubbleWidthPx / 2 + SIDE_PADDING_PX - 2);
+  const minCenterPx = Math.max(0, BUBBLE_WIDTH_PX / 2 - SIDE_PADDING_PX + 2);
+  const maxCenterPx = Math.min(safeWidth, safeWidth - BUBBLE_WIDTH_PX / 2 + SIDE_PADDING_PX - 2);
   const rawAnchorPx = (anchorPct / 100) * safeWidth;
   const clampedCenterPx =
     minCenterPx <= maxCenterPx
@@ -344,98 +403,87 @@ function clampBubblePosition(
 
   const bubblePct = (clampedCenterPx / safeWidth) * 100;
   const rawOffsetPx = rawAnchorPx - clampedCenterPx;
-  const maxPointerOffset = Math.max(8, bubbleWidthPx / 2 - 12);
+  const maxPointerOffset = Math.max(8, BUBBLE_WIDTH_PX / 2 - 12);
   const pointerOffsetPx = Math.max(-maxPointerOffset, Math.min(maxPointerOffset, rawOffsetPx));
   return { bubblePct, pointerOffsetPx };
 }
 
-function tryPlaceInRow(
-  seg: NormalizedSegment,
-  row: 'top' | 'bottom',
-  rowPlaced: PlacedBubble[],
-  safeWidth: number,
-  widthPx: number
-): PlacedBubble | null {
-  const gapPx = 8;
-  const maxNudgePx = 22;
-  const minCenterPx = Math.max(0, widthPx / 2 - SIDE_PADDING_PX + 2);
-  const maxCenterPx = Math.min(safeWidth, safeWidth - widthPx / 2 + SIDE_PADDING_PX - 2);
-  const rawAnchorPx = (seg.anchorPct / 100) * safeWidth;
-  const baseCenterPx =
-    minCenterPx <= maxCenterPx
-      ? Math.max(minCenterPx, Math.min(maxCenterPx, rawAnchorPx))
-      : safeWidth / 2;
-
-  const overlapsAt = (centerPx: number) =>
-    rowPlaced.filter((other) => {
-      const otherCenterPx = (other.bubblePct / 100) * safeWidth;
-      const requiredDist = (widthPx + other.widthPx) / 2 + gapPx;
-      return Math.abs(centerPx - otherCenterPx) < requiredDist;
-    });
-
-  let finalCenterPx = baseCenterPx;
-  const conflicts = overlapsAt(baseCenterPx);
-
-  if (conflicts.length === 1) {
-    const other = conflicts[0];
-    const otherCenterPx = (other.bubblePct / 100) * safeWidth;
-    const requiredDist = (widthPx + other.widthPx) / 2 + gapPx;
-    const dir = baseCenterPx >= otherCenterPx ? 1 : -1;
-    const nudgedPx = Math.max(minCenterPx, Math.min(maxCenterPx, otherCenterPx + dir * requiredDist));
-
-    if (Math.abs(nudgedPx - baseCenterPx) <= maxNudgePx && overlapsAt(nudgedPx).length === 0) {
-      finalCenterPx = nudgedPx;
-    } else {
-      return null;
-    }
-  } else if (conflicts.length > 1) {
-    return null;
-  }
-
-  const bubblePct = (finalCenterPx / safeWidth) * 100;
-  const rawOffsetPx = rawAnchorPx - finalCenterPx;
-  const maxPointerOffset = Math.max(8, widthPx / 2 - 12);
-  const pointerOffsetPx = Math.max(-maxPointerOffset, Math.min(maxPointerOffset, rawOffsetPx));
-
-  return {
-    segment: seg,
-    row,
-    anchorPct: seg.anchorPct,
-    bubblePct,
-    pointerOffsetPx,
-    widthPx,
-  };
+function getGroupPriorityTier(group: BubbleGroup): number {
+  if (group.isCurrent) return 0; // 1) current ("идёт")
+  if (group.kind === 'stopped' || group.kind === 'paused') return 1; // 2) stopped & paused
+  return 2; // 3) rest by duration descending
 }
 
-function selectStaticBubbles(
-  segments: NormalizedSegment[],
-  containerWidth: number,
-  isRu: boolean
-): { top: PlacedBubble[]; bottom: PlacedBubble[] } {
-  if (segments.length === 0) return { top: [], bottom: [] };
+function selectTopBubbles(
+  groups: BubbleGroup[],
+  containerWidth: number
+): PlacedBubble[] {
+  if (groups.length === 0) return [];
 
   const safeWidth = Math.max(containerWidth, 240);
-  const topRow: PlacedBubble[] = [];
-  const bottomRow: PlacedBubble[] = [];
+  const requiredDistPx = BUBBLE_WIDTH_PX + BUBBLE_GAP_PX;
+  const maxNudgePx = 20;
+  const minCenterPx = Math.max(0, BUBBLE_WIDTH_PX / 2 - SIDE_PADDING_PX + 2);
+  const maxCenterPx = Math.min(safeWidth, safeWidth - BUBBLE_WIDTH_PX / 2 + SIDE_PADDING_PX - 2);
 
-  // Place chronologically: try top row first; if it doesn't fit, try bottom row; else hover/tap reveals it
-  for (const seg of segments) {
-    const widthPx = estimateBubbleWidthPx(seg, isRu);
-    const placedTop = tryPlaceInRow(seg, 'top', topRow, safeWidth, widthPx);
-    if (placedTop) {
-      topRow.push(placedTop);
+  // Sort strictly by priority: 1) current, 2) stopped/paused, 3) longest duration first
+  const ordered = [...groups].sort((a, b) => {
+    const tierDiff = getGroupPriorityTier(a) - getGroupPriorityTier(b);
+    if (tierDiff !== 0) return tierDiff;
+    if (b.durationMs !== a.durationMs) return b.durationMs - a.durationMs;
+    return a.startMs - b.startMs;
+  });
+
+  const placed: PlacedBubble[] = [];
+
+  const getConflicts = (centerPx: number) =>
+    placed.filter((other) => {
+      const otherCenterPx = (other.bubblePct / 100) * safeWidth;
+      return Math.abs(centerPx - otherCenterPx) < requiredDistPx;
+    });
+
+  for (const group of ordered) {
+    const rawAnchorPx = (group.anchorPct / 100) * safeWidth;
+    const baseCenterPx =
+      minCenterPx <= maxCenterPx
+        ? Math.max(minCenterPx, Math.min(maxCenterPx, rawAnchorPx))
+        : safeWidth / 2;
+
+    let finalCenterPx = baseCenterPx;
+    const conflicts = getConflicts(baseCenterPx);
+
+    if (conflicts.length === 1) {
+      const other = conflicts[0];
+      const otherCenterPx = (other.bubblePct / 100) * safeWidth;
+      const dir = baseCenterPx >= otherCenterPx ? 1 : -1;
+      const nudgedPx = Math.max(
+        minCenterPx,
+        Math.min(maxCenterPx, otherCenterPx + dir * requiredDistPx)
+      );
+
+      if (Math.abs(nudgedPx - baseCenterPx) <= maxNudgePx && getConflicts(nudgedPx).length === 0) {
+        finalCenterPx = nudgedPx;
+      } else {
+        continue;
+      }
+    } else if (conflicts.length > 1) {
       continue;
     }
-    const placedBottom = tryPlaceInRow(seg, 'bottom', bottomRow, safeWidth, widthPx);
-    if (placedBottom) {
-      bottomRow.push(placedBottom);
-    }
+
+    const bubblePct = (finalCenterPx / safeWidth) * 100;
+    const rawOffsetPx = rawAnchorPx - finalCenterPx;
+    const maxPointerOffset = Math.max(8, BUBBLE_WIDTH_PX / 2 - 12);
+    const pointerOffsetPx = Math.max(-maxPointerOffset, Math.min(maxPointerOffset, rawOffsetPx));
+
+    placed.push({
+      group,
+      anchorPct: group.anchorPct,
+      bubblePct,
+      pointerOffsetPx,
+    });
   }
 
-  topRow.sort((a, b) => a.bubblePct - b.bubblePct);
-  bottomRow.sort((a, b) => a.bubblePct - b.bubblePct);
-
-  return { top: topRow, bottom: bottomRow };
+  return placed.sort((a, b) => a.bubblePct - b.bubblePct);
 }
 
 function getSegmentBarClasses(
@@ -499,17 +547,20 @@ function getSegmentBarClasses(
   }
 }
 
-function getBubbleTheme(seg: NormalizedSegment, isElevated = false): {
+function getBubbleTheme(
+  kind: VisibleKind,
+  actual: boolean,
+  isElevated = false
+): {
   card: string;
   title: string;
-  planTag: string;
+  subtext: string;
   time: string;
   pointerDown: string;
-  pointerUp: string;
 } {
-  const planOpacity = seg.actual ? '' : isElevated ? 'opacity-90' : 'opacity-70';
+  const planOpacity = actual ? '' : isElevated ? 'opacity-90' : 'opacity-70';
 
-  switch (seg.kind) {
+  switch (kind) {
     case 'farm':
       return {
         card: `bg-white text-black ${
@@ -518,10 +569,9 @@ function getBubbleTheme(seg: NormalizedSegment, isElevated = false): {
             : 'shadow-[0_6px_22px_rgba(255,255,255,0.22)]'
         } ${planOpacity}`,
         title: 'text-zinc-800',
-        planTag: 'text-zinc-500',
+        subtext: 'text-zinc-500',
         time: 'text-black',
         pointerDown: 'bg-white',
-        pointerUp: 'bg-white',
       };
     case 'long_break':
     case 'short_break':
@@ -530,10 +580,11 @@ function getBubbleTheme(seg: NormalizedSegment, isElevated = false): {
           isElevated ? 'border-zinc-400' : 'border-zinc-600/80'
         } text-zinc-300 shadow-[0_6px_18px_rgba(0,0,0,0.75)] ${planOpacity}`,
         title: 'text-zinc-200',
-        planTag: 'text-zinc-400',
+        subtext: 'text-zinc-400',
         time: 'text-zinc-400',
-        pointerDown: `bg-zinc-800 border-r border-b ${isElevated ? 'border-zinc-400' : 'border-zinc-600/80'}`,
-        pointerUp: `bg-zinc-800 border-l border-t ${isElevated ? 'border-zinc-400' : 'border-zinc-600/80'}`,
+        pointerDown: `bg-zinc-800 border-r border-b ${
+          isElevated ? 'border-zinc-400' : 'border-zinc-600/80'
+        }`,
       };
     case 'wait_window':
       return {
@@ -541,10 +592,11 @@ function getBubbleTheme(seg: NormalizedSegment, isElevated = false): {
           isElevated ? 'border-zinc-500' : 'border-zinc-700/80'
         } text-zinc-400 shadow-[0_6px_16px_rgba(0,0,0,0.75)] ${planOpacity}`,
         title: 'text-zinc-300',
-        planTag: 'text-zinc-500',
+        subtext: 'text-zinc-500',
         time: 'text-zinc-400',
-        pointerDown: `bg-zinc-900 border-r border-b ${isElevated ? 'border-zinc-500' : 'border-zinc-700/80'}`,
-        pointerUp: `bg-zinc-900 border-l border-t ${isElevated ? 'border-zinc-500' : 'border-zinc-700/80'}`,
+        pointerDown: `bg-zinc-900 border-r border-b ${
+          isElevated ? 'border-zinc-500' : 'border-zinc-700/80'
+        }`,
       };
     case 'stopped':
       return {
@@ -552,10 +604,11 @@ function getBubbleTheme(seg: NormalizedSegment, isElevated = false): {
           isElevated ? 'border-rose-500/80' : 'border-rose-700/70'
         } text-rose-200 shadow-[0_6px_18px_rgba(0,0,0,0.75)] ${planOpacity}`,
         title: 'text-rose-200',
-        planTag: 'text-rose-400/85',
+        subtext: 'text-rose-400/85',
         time: 'text-rose-300/85',
-        pointerDown: `bg-rose-950 border-r border-b ${isElevated ? 'border-rose-500/80' : 'border-rose-700/70'}`,
-        pointerUp: `bg-rose-950 border-l border-t ${isElevated ? 'border-rose-500/80' : 'border-rose-700/70'}`,
+        pointerDown: `bg-rose-950 border-r border-b ${
+          isElevated ? 'border-rose-500/80' : 'border-rose-700/70'
+        }`,
       };
     case 'paused':
       return {
@@ -563,10 +616,11 @@ function getBubbleTheme(seg: NormalizedSegment, isElevated = false): {
           isElevated ? 'border-amber-400/80' : 'border-amber-500/60'
         } text-amber-200 shadow-[0_6px_18px_rgba(0,0,0,0.75)] ${planOpacity}`,
         title: 'text-amber-200',
-        planTag: 'text-amber-400/85',
+        subtext: 'text-amber-400/85',
         time: 'text-amber-300/90',
-        pointerDown: `bg-amber-950 border-r border-b ${isElevated ? 'border-amber-400/80' : 'border-amber-500/60'}`,
-        pointerUp: `bg-amber-950 border-l border-t ${isElevated ? 'border-amber-400/80' : 'border-amber-500/60'}`,
+        pointerDown: `bg-amber-950 border-r border-b ${
+          isElevated ? 'border-amber-400/80' : 'border-amber-500/60'
+        }`,
       };
   }
 }
@@ -585,8 +639,8 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
 }) => {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(720);
-  const [hoveredId, setHoveredId] = useState<number | null>(null);
-  const [pinnedId, setPinnedId] = useState<number | null>(null);
+  const [hoveredGroupId, setHoveredGroupId] = useState<number | null>(null);
+  const [pinnedGroupId, setPinnedGroupId] = useState<number | null>(null);
 
   useEffect(() => {
     const el = trackRef.current;
@@ -606,8 +660,8 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
   }, []);
 
   useEffect(() => {
-    setHoveredId(null);
-    setPinnedId(null);
+    setHoveredGroupId(null);
+    setPinnedGroupId(null);
   }, [preview]);
 
   // Prefer the 1-second ticking nowMs prop; fall back to preview.now_ms only when prop is omitted
@@ -627,11 +681,11 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
     [rawVisibleSegments]
   );
 
-  const segments = useMemo(
+  const { segments, groups } = useMemo(
     () =>
       preview && preview.ok && !preview.off
-        ? normalizeSegments(preview.segments || [], timelineRange, effectiveNowMs, isRu)
-        : [],
+        ? normalizeSegmentsAndGroups(preview.segments || [], timelineRange, effectiveNowMs, isRu)
+        : { segments: [], groups: [] },
     [preview, timelineRange, effectiveNowMs, isRu]
   );
 
@@ -640,31 +694,27 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
     [timelineRange, containerWidth]
   );
 
-  const { top: topBubbles, bottom: bottomBubbles } = useMemo(
-    () => selectStaticBubbles(segments, containerWidth, isRu),
-    [segments, containerWidth, isRu]
+  const topBubbles = useMemo(
+    () => selectTopBubbles(groups, containerWidth),
+    [groups, containerWidth]
   );
 
-  const activeId = hoveredId !== null ? hoveredId : pinnedId;
-  const activeSegment = useMemo(
-    () => (activeId !== null ? segments.find((s) => s.id === activeId) || null : null),
-    [activeId, segments]
+  const activeGroupId = hoveredGroupId !== null ? hoveredGroupId : pinnedGroupId;
+  const activeGroup = useMemo(
+    () => (activeGroupId !== null ? groups.find((g) => g.groupId === activeGroupId) || null : null),
+    [activeGroupId, groups]
   );
 
   const activeBubblePlacement = useMemo(() => {
-    if (!activeSegment) return null;
-    const widthPx = estimateBubbleWidthPx(activeSegment, isRu);
-    return {
-      ...clampBubblePosition(activeSegment.anchorPct, containerWidth, widthPx),
-      widthPx,
-    };
-  }, [activeSegment, containerWidth, isRu]);
+    if (!activeGroup) return null;
+    return clampBubblePosition(activeGroup.anchorPct, containerWidth);
+  }, [activeGroup, containerWidth]);
 
   // Strictly use backend-provided sessions & farm_s (pause does not split session count)
   const sessionsCount = useMemo(() => {
     if (preview && typeof preview.sessions === 'number') return preview.sessions;
-    return segments.filter((s) => s.kind === 'farm').length;
-  }, [preview, segments]);
+    return groups.filter((g) => g.kind === 'farm').length;
+  }, [preview, groups]);
 
   const totalFarmMinutes = useMemo(() => {
     if (preview && typeof preview.farm_s === 'number') {
@@ -673,7 +723,11 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
     return segments.filter((s) => s.kind === 'farm').reduce((sum, s) => sum + s.minutes, 0);
   }, [preview, segments]);
 
-  const breakCount = useMemo(() => segments.filter((s) => s.isBreak).length, [segments]);
+  const breakGroups = useMemo(
+    () => groups.filter((g) => g.kind === 'short_break' || g.kind === 'long_break'),
+    [groups]
+  );
+  const breakCount = breakGroups.length;
   const totalBreakMinutes = useMemo(
     () => segments.filter((s) => s.isBreak).reduce((sum, s) => sum + s.minutes, 0),
     [segments]
@@ -685,7 +739,6 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
     () => segments.some((s) => !s.actual || s.isCurrent),
     [segments]
   );
-  const hasCurrentSegment = useMemo(() => segments.some((s) => s.isCurrent), [segments]);
 
   const isOffState = !isScheduleEnabled || !isDayEnabled || preview?.off === true;
   const hasError = preview !== null && preview.ok === false && Boolean(preview.error);
@@ -696,13 +749,66 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
     return ((effectiveNowMs - timelineRange.startMs) / timelineRange.spanMs) * 100;
   }, [effectiveNowMs, timelineRange]);
 
-  const hasBottomRow = !isOffState && !hasError && bottomBubbles.length > 0;
+  const renderBubbleCard = (
+    group: BubbleGroup,
+    pointerOffsetPx: number,
+    isElevated: boolean
+  ) => {
+    const theme = getBubbleTheme(group.kind, group.actual, isElevated);
+    const titleSuffix = group.isCurrent
+      ? isRu
+        ? ' · идёт'
+        : ' · live'
+      : !group.actual
+      ? isRu
+        ? ' · план'
+        : ' · plan'
+      : '';
+    const fullTitle = `${group.label}${titleSuffix}`;
+
+    return (
+      <div
+        className={`relative w-[132px] rounded-xl px-2 py-1.5 text-center select-none ${theme.card}`}
+      >
+        {/* Row 1: fixed-height single-line title truncated with ellipsis */}
+        <div
+          className={`h-[14px] leading-[14px] text-[10px] truncate ${
+            isElevated ? 'font-semibold' : 'font-medium'
+          } ${theme.title}`}
+        >
+          {fullTitle}
+        </div>
+        {/* Row 2: fixed-height time range */}
+        <div
+          className={`h-[15px] leading-[15px] text-[11px] font-mono tabular-nums mt-0.5 truncate ${
+            isElevated ? 'font-bold' : 'font-semibold'
+          } ${theme.time}`}
+        >
+          {group.timeRange}
+        </div>
+        {/* Row 3: fixed-height countdown slot (empty for non-current bubbles so height never collapses) */}
+        <div
+          className={`h-[14px] leading-[14px] text-[10px] font-mono tabular-nums mt-0.5 truncate ${theme.subtext}`}
+        >
+          {group.isCurrent
+            ? `${isRu ? 'осталось' : 'left'} ${formatCountdown(group.remainingMs)}`
+            : '\u00A0'}
+        </div>
+        <span
+          style={{
+            transform: `translateX(calc(-50% + ${pointerOffsetPx}px)) rotate(45deg)`,
+          }}
+          className={`absolute left-1/2 -bottom-[4.5px] w-2.5 h-2.5 ${theme.pointerDown}`}
+        />
+      </div>
+    );
+  };
 
   return (
     <div
       className={`${className} flex flex-col gap-3`}
       onClick={() => {
-        if (pinnedId !== null) setPinnedId(null);
+        if (pinnedGroupId !== null) setPinnedGroupId(null);
       }}
     >
       {/* Top summary row + legend + shuffle/note */}
@@ -804,118 +910,44 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
       <div className="px-3">
         <div
           ref={trackRef}
-          className={`relative w-full ${hasCurrentSegment ? 'pt-[78px]' : 'pt-[66px]'} ${
-            hasBottomRow ? (hasCurrentSegment ? 'pb-[76px]' : 'pb-[64px]') : 'pb-1'
-          } transition-opacity duration-200 ${isLoading ? 'opacity-65' : 'opacity-100'}`}
+          className={`relative w-full pt-[80px] pb-1 transition-opacity duration-200 ${
+            isLoading ? 'opacity-65' : 'opacity-100'
+          }`}
         >
-          {/* TOP callouts layer (above the horizontal baseline, pointer down) */}
-          <div
-            className={`pointer-events-none absolute inset-x-0 top-0 ${
-              hasCurrentSegment ? 'h-[72px]' : 'h-[60px]'
-            }`}
-          >
+          {/* TOP-ONLY callouts layer (fixed-size 132px × 3-line bubbles above the bar) */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-[74px]">
             {!isOffState &&
               !hasError &&
               topBubbles.map((item) => {
-                const { segment, bubblePct, pointerOffsetPx } = item;
-                if (activeId === segment.id) return null;
+                const { group, bubblePct, pointerOffsetPx } = item;
+                if (activeGroupId === group.groupId) return null;
 
-                const theme = getBubbleTheme(segment, false);
                 const isCrowdedByHover =
                   activeBubblePlacement !== null &&
                   Math.abs(((bubblePct - activeBubblePlacement.bubblePct) / 100) * containerWidth) <
-                    (item.widthPx + activeBubblePlacement.widthPx) / 2 + 12;
+                    BUBBLE_WIDTH_PX + BUBBLE_GAP_PX + 4;
 
                 return (
                   <div
-                    key={`top-${segment.id}`}
+                    key={`top-${group.groupId}`}
                     style={{ left: `${bubblePct}%` }}
                     className={`absolute bottom-2 -translate-x-1/2 transition-opacity duration-150 ${
                       isCrowdedByHover ? 'opacity-15' : 'opacity-100'
                     }`}
                   >
-                    <div
-                      className={`relative rounded-xl px-2.5 py-1.5 text-center whitespace-nowrap select-none ${theme.card}`}
-                    >
-                      <div className={`text-[10px] leading-tight font-medium ${theme.title}`}>
-                        <span>{segment.label}</span>
-                        {segment.isCurrent ? (
-                          <span className={`ml-1 font-semibold ${theme.planTag}`}>
-                            · {isRu ? 'идёт' : 'live'}
-                          </span>
-                        ) : !segment.actual ? (
-                          <span className={`ml-1 font-normal ${theme.planTag}`}>
-                            · {isRu ? 'план' : 'plan'}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div
-                        className={`text-[11px] leading-tight font-mono font-semibold tabular-nums mt-0.5 ${theme.time}`}
-                      >
-                        {segment.timeRange}
-                      </div>
-                      {segment.isCurrent && (
-                        <div
-                          className={`text-[10px] leading-tight font-mono tabular-nums mt-0.5 ${theme.planTag}`}
-                        >
-                          {isRu ? 'осталось' : 'left'} {formatCountdown(segment.remainingMs)}
-                        </div>
-                      )}
-                      <span
-                        style={{ transform: `translateX(calc(-50% + ${pointerOffsetPx}px)) rotate(45deg)` }}
-                        className={`absolute left-1/2 -bottom-[4.5px] w-2.5 h-2.5 ${theme.pointerDown}`}
-                      />
-                    </div>
+                    {renderBubbleCard(group, pointerOffsetPx, false)}
                   </div>
                 );
               })}
 
             {/* Always-on hover/tap callout above the bar for ANY segment */}
-            {!isOffState && !hasError && activeSegment && activeBubblePlacement && (
+            {!isOffState && !hasError && activeGroup && activeBubblePlacement && (
               <div
-                key={`active-${activeSegment.id}`}
+                key={`active-${activeGroup.groupId}`}
                 style={{ left: `${activeBubblePlacement.bubblePct}%` }}
                 className="absolute bottom-2 -translate-x-1/2 z-40"
               >
-                {(() => {
-                  const theme = getBubbleTheme(activeSegment, true);
-                  return (
-                    <div
-                      className={`relative rounded-xl px-2.5 py-1.5 text-center whitespace-nowrap select-none ${theme.card}`}
-                    >
-                      <div className={`text-[10px] leading-tight font-semibold ${theme.title}`}>
-                        <span>{activeSegment.label}</span>
-                        {activeSegment.isCurrent ? (
-                          <span className={`ml-1 font-semibold ${theme.planTag}`}>
-                            · {isRu ? 'идёт' : 'live'}
-                          </span>
-                        ) : !activeSegment.actual ? (
-                          <span className={`ml-1 font-normal ${theme.planTag}`}>
-                            · {isRu ? 'план' : 'plan'}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div
-                        className={`text-[11px] leading-tight font-mono font-bold tabular-nums mt-0.5 ${theme.time}`}
-                      >
-                        {activeSegment.timeRange}
-                      </div>
-                      {activeSegment.isCurrent && (
-                        <div
-                          className={`text-[10px] leading-tight font-mono tabular-nums mt-0.5 ${theme.planTag}`}
-                        >
-                          {isRu ? 'осталось' : 'left'} {formatCountdown(activeSegment.remainingMs)}
-                        </div>
-                      )}
-                      <span
-                        style={{
-                          transform: `translateX(calc(-50% + ${activeBubblePlacement.pointerOffsetPx}px)) rotate(45deg)`,
-                        }}
-                        className={`absolute left-1/2 -bottom-[4.5px] w-2.5 h-2.5 ${theme.pointerDown}`}
-                      />
-                    </div>
-                  );
-                })()}
+                {renderBubbleCard(activeGroup, activeBubblePlacement.pointerOffsetPx, true)}
               </div>
             )}
 
@@ -935,7 +967,7 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
             )}
           </div>
 
-          {/* Horizontal baseline + interactive segments */}
+          {/* Horizontal baseline + interactive segment pieces (solid fact / hatched plan rendered per-piece) */}
           <div className="relative h-6 flex items-center">
             <div
               className={`w-full h-[1.5px] rounded-full pointer-events-none ${
@@ -952,7 +984,7 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
             {!isOffState &&
               !hasError &&
               segments.map((seg) => {
-                const isSelected = activeId === seg.id;
+                const isSelected = activeGroupId === seg.groupId;
                 const zClass =
                   seg.kind === 'wait_window'
                     ? 'z-[5]'
@@ -978,13 +1010,17 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
                       width: `${seg.widthPct}%`,
                       minWidth: seg.kind === 'farm' ? '10px' : '8px',
                     }}
-                    onMouseEnter={() => setHoveredId(seg.id)}
-                    onMouseLeave={() => setHoveredId((prev) => (prev === seg.id ? null : prev))}
-                    onFocus={() => setHoveredId(seg.id)}
-                    onBlur={() => setHoveredId((prev) => (prev === seg.id ? null : prev))}
+                    onMouseEnter={() => setHoveredGroupId(seg.groupId)}
+                    onMouseLeave={() =>
+                      setHoveredGroupId((prev) => (prev === seg.groupId ? null : prev))
+                    }
+                    onFocus={() => setHoveredGroupId(seg.groupId)}
+                    onBlur={() =>
+                      setHoveredGroupId((prev) => (prev === seg.groupId ? null : prev))
+                    }
                     onClick={(e) => {
                       e.stopPropagation();
-                      setPinnedId((prev) => (prev === seg.id ? null : seg.id));
+                      setPinnedGroupId((prev) => (prev === seg.groupId ? null : seg.groupId));
                     }}
                     className={`absolute top-1/2 -translate-y-1/2 h-6 flex items-center justify-center focus:outline-none cursor-pointer ${zClass}`}
                   >
@@ -992,11 +1028,19 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
                       <span className={`w-full rounded-full overflow-hidden flex ${heightClass}`}>
                         <span
                           style={{ width: `${seg.progressPct}%` }}
-                          className={`h-full shrink-0 ${getSegmentBarClasses(seg.kind, true, isSelected)}`}
+                          className={`h-full shrink-0 ${getSegmentBarClasses(
+                            seg.kind,
+                            true,
+                            isSelected
+                          )}`}
                         />
                         <span
                           style={{ width: `${Math.max(0, 100 - seg.progressPct)}%` }}
-                          className={`h-full shrink-0 ${getSegmentBarClasses(seg.kind, false, isSelected)}`}
+                          className={`h-full shrink-0 ${getSegmentBarClasses(
+                            seg.kind,
+                            false,
+                            isSelected
+                          )}`}
                         />
                       </span>
                     ) : (
@@ -1064,63 +1108,6 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
                   );
                 })}
           </div>
-
-          {/* BOTTOM callouts layer (second row below axis ticks, pointer up) */}
-          {hasBottomRow && (
-            <div
-              className={`pointer-events-none absolute inset-x-0 bottom-0 ${
-                hasCurrentSegment ? 'h-[70px]' : 'h-[58px]'
-              }`}
-            >
-              {bottomBubbles.map((item) => {
-                const { segment, bubblePct, pointerOffsetPx } = item;
-                if (activeId === segment.id) return null;
-
-                const theme = getBubbleTheme(segment, false);
-
-                return (
-                  <div
-                    key={`bottom-${segment.id}`}
-                    style={{ left: `${bubblePct}%` }}
-                    className="absolute top-2 -translate-x-1/2"
-                  >
-                    <div
-                      className={`relative rounded-xl px-2.5 py-1.5 text-center whitespace-nowrap select-none ${theme.card}`}
-                    >
-                      <span
-                        style={{ transform: `translateX(calc(-50% + ${pointerOffsetPx}px)) rotate(45deg)` }}
-                        className={`absolute left-1/2 -top-[4.5px] w-2.5 h-2.5 ${theme.pointerUp}`}
-                      />
-                      <div className={`text-[10px] leading-tight font-medium ${theme.title}`}>
-                        <span>{segment.label}</span>
-                        {segment.isCurrent ? (
-                          <span className={`ml-1 font-semibold ${theme.planTag}`}>
-                            · {isRu ? 'идёт' : 'live'}
-                          </span>
-                        ) : !segment.actual ? (
-                          <span className={`ml-1 font-normal ${theme.planTag}`}>
-                            · {isRu ? 'план' : 'plan'}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div
-                        className={`text-[11px] leading-tight font-mono font-semibold tabular-nums mt-0.5 ${theme.time}`}
-                      >
-                        {segment.timeRange}
-                      </div>
-                      {segment.isCurrent && (
-                        <div
-                          className={`text-[10px] leading-tight font-mono tabular-nums mt-0.5 ${theme.planTag}`}
-                        >
-                          {isRu ? 'осталось' : 'left'} {formatCountdown(segment.remainingMs)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       </div>
     </div>
