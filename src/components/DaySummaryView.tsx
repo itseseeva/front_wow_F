@@ -199,11 +199,6 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
   const [liveScheduleDay, setLiveScheduleDay] = useState<ScheduleDay | null>(null);
 
   useEffect(() => {
-    if (!isBotRunning) {
-      setLiveScheduleDay(null);
-      return;
-    }
-
     let cancelled = false;
 
     const loadScheduleDay = async () => {
@@ -634,18 +629,33 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
 
         {/* 2. Content: Empty day notice OR Sessions selector & Telemetry */}
         {!hasLiveOrPastSessions ? (
-          <div className="text-center py-16 flex flex-col items-center justify-center gap-3 font-mono">
-            <div className="w-12 h-12 flex items-center justify-center text-zinc-400 dark:text-zinc-600">
-              <CalendarIcon className="w-6 h-6" />
+          <div className="flex flex-col gap-6">
+            {liveScheduleDay && liveScheduleDay.ok && liveScheduleDay.segments.length > 0 && (
+              <ScheduleTimelineStrip
+                preview={liveScheduleDay}
+                isDayEnabled={!liveScheduleDay.off}
+                isScheduleEnabled={liveScheduleStatus?.enabled ?? scheduleSettings?.enabled ?? true}
+                isRu={isRu}
+                showShuffle={false}
+                nowMs={nowMs}
+                rightNote={isBotRunning ? (liveScheduleStatus?.note || null) : null}
+                className="pt-1"
+              />
+            )}
+
+            <div className="text-center py-16 flex flex-col items-center justify-center gap-3 font-mono">
+              <div className="w-12 h-12 flex items-center justify-center text-zinc-400 dark:text-zinc-600">
+                <CalendarIcon className="w-6 h-6" />
+              </div>
+              <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-400">
+                {isRu ? 'В этот день бот не работал' : 'No sessions on this day'}
+              </span>
+              <span className="text-xs text-zinc-500 max-w-sm text-center leading-relaxed">
+                {isRu
+                  ? 'Сессий за эту дату не зафиксировано. Выберите другой день с отметками в календаре.'
+                  : 'No bot runs recorded for this date. Pick another day with dots on the calendar.'}
+              </span>
             </div>
-            <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-400">
-              {isRu ? 'В этот день бот не работал' : 'No sessions on this day'}
-            </span>
-            <span className="text-xs text-zinc-500 max-w-sm text-center leading-relaxed">
-              {isRu
-                ? 'Сессий за эту дату не зафиксировано. Выберите другой день с отметками в календаре.'
-                : 'No bot runs recorded for this date. Pick another day with dots on the calendar.'}
-            </span>
           </div>
         ) : (
           <div className="flex flex-col gap-6">
@@ -841,8 +851,8 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                 </div>
                 )}
 
-                {/* Live Schedule Timeline Strip (real ScheduleDay from backend while bot is running) */}
-                {isBotRunning && liveScheduleDay && liveScheduleDay.ok && (
+                {/* Schedule Timeline Strip (real ScheduleDay from backend) */}
+                {liveScheduleDay && liveScheduleDay.ok && liveScheduleDay.segments.length > 0 && (
                   <ScheduleTimelineStrip
                     preview={liveScheduleDay}
                     isDayEnabled={!liveScheduleDay.off}
@@ -850,7 +860,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     isRu={isRu}
                     showShuffle={false}
                     nowMs={nowMs}
-                    rightNote={liveScheduleStatus?.note || null}
+                    rightNote={isBotRunning ? (liveScheduleStatus?.note || null) : null}
                     className="border-t border-white/10 pt-4"
                   />
                 )}
@@ -1101,6 +1111,20 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                       </div>
                     </div>
                   </div>
+                )}
+
+                {/* Schedule Timeline Strip (persists after Stop / on day summary when segments exist) */}
+                {liveScheduleDay && liveScheduleDay.ok && liveScheduleDay.segments.length > 0 && (
+                  <ScheduleTimelineStrip
+                    preview={liveScheduleDay}
+                    isDayEnabled={!liveScheduleDay.off}
+                    isScheduleEnabled={liveScheduleStatus?.enabled ?? scheduleSettings?.enabled ?? true}
+                    isRu={isRu}
+                    showShuffle={false}
+                    nowMs={nowMs}
+                    rightNote={isBotRunning ? (liveScheduleStatus?.note || null) : null}
+                    className="border-t border-white/10 pt-4"
+                  />
                 )}
 
                 {/* 6. Stop Reason & Targets Lost */}

@@ -676,17 +676,65 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
     return (preview.segments || []).filter((seg) => isVisibleKind(seg.kind));
   }, [preview]);
 
+  // When bot is stopped, stretch the trailing actual 'stopped' segment live up to effectiveNowMs
+  const effectiveSegments = useMemo(() => {
+    if (effectiveNowMs == null || !hasNowMs(preview) || rawVisibleSegments.length === 0) {
+      return rawVisibleSegments;
+    }
+
+    const lastIdx = rawVisibleSegments.length - 1;
+    let activeStoppedIdx = -1;
+    for (let i = lastIdx; i >= 0; i--) {
+      const seg = rawVisibleSegments[i];
+      const segActual = 'actual' in seg && typeof seg.actual === 'boolean' ? seg.actual : true;
+      if (seg.kind === 'stopped' && segActual) {
+        if (i === lastIdx || Math.abs(seg.end_ms - preview.now_ms) <= 2000) {
+          activeStoppedIdx = i;
+        }
+        break;
+      }
+    }
+
+    if (activeStoppedIdx === -1) return rawVisibleSegments;
+    const target = rawVisibleSegments[activeStoppedIdx];
+    if (effectiveNowMs <= target.end_ms) return rawVisibleSegments;
+
+    const nextSeg = rawVisibleSegments[activeStoppedIdx + 1];
+    const stretchedEndMs =
+      nextSeg && nextSeg.start_ms > target.end_ms
+        ? Math.min(effectiveNowMs, nextSeg.start_ms)
+        : effectiveNowMs;
+
+    return rawVisibleSegments.map((seg, i) => {
+      if (i === activeStoppedIdx) {
+        return {
+          ...seg,
+          end_ms: stretchedEndMs,
+          minutes: Math.max(0, Math.round((stretchedEndMs - seg.start_ms) / MIN_MS)),
+        };
+      }
+      if (i === activeStoppedIdx + 1 && seg.start_ms < stretchedEndMs && seg.end_ms > stretchedEndMs) {
+        return {
+          ...seg,
+          start_ms: stretchedEndMs,
+          minutes: Math.max(0, Math.round((seg.end_ms - stretchedEndMs) / MIN_MS)),
+        };
+      }
+      return seg;
+    });
+  }, [rawVisibleSegments, effectiveNowMs, preview]);
+
   const timelineRange = useMemo(
-    () => computeTimelineRange(rawVisibleSegments),
-    [rawVisibleSegments]
+    () => computeTimelineRange(effectiveSegments),
+    [effectiveSegments]
   );
 
   const { segments, groups } = useMemo(
     () =>
       preview && preview.ok && !preview.off
-        ? normalizeSegmentsAndGroups(preview.segments || [], timelineRange, effectiveNowMs, isRu)
+        ? normalizeSegmentsAndGroups(effectiveSegments, timelineRange, effectiveNowMs, isRu)
         : { segments: [], groups: [] },
-    [preview, timelineRange, effectiveNowMs, isRu]
+    [preview, effectiveSegments, timelineRange, effectiveNowMs, isRu]
   );
 
   const axisTicks = useMemo(
