@@ -634,95 +634,97 @@ export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
         </div>
       )}
 
-      {/* Main Interactive Canvas Area */}
-      <div
-        ref={canvasRef}
-        className={`flex-1 min-h-0 relative flex items-center justify-center overflow-hidden bg-[#09090b] ${
-          !image || showLoading ? 'cursor-default' : isDragging ? 'cursor-grabbing' : scale > 1 ? 'cursor-grab' : 'cursor-default'
-        }`}
-        onDoubleClick={handleDoubleClick}
-        onMouseLeave={() => {
-          setHoveredMark(null);
-          setHoveredKey(null);
-          setCursorPos(null);
-        }}
-      >
-        {image && !isTerminalEmpty ? (
-          <div
-            className={`relative w-full h-full transition-opacity duration-300 ease-out ${
-              isMapVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
-            }`}
-          >
+      {/* Visible Map Viewport Frame */}
+      <div className="flex-1 min-h-0 relative overflow-hidden bg-[#09090b]">
+        {/* Main Interactive Canvas Area */}
+        <div
+          ref={canvasRef}
+          className={`w-full h-full relative flex items-center justify-center overflow-hidden ${
+            !image || showLoading ? 'cursor-default' : isDragging ? 'cursor-grabbing' : scale > 1 ? 'cursor-grab' : 'cursor-default'
+          }`}
+          onDoubleClick={handleDoubleClick}
+          onMouseLeave={() => {
+            setHoveredMark(null);
+            setHoveredKey(null);
+            setCursorPos(null);
+          }}
+        >
+          {image && !isTerminalEmpty ? (
             <div
-              style={{
-                transform: `translate3d(${pan.x}px, ${pan.y}px, 0px) scale(${scale})`,
-                transformOrigin: '0 0',
-                transition: 'none',
-              }}
-              className="relative w-full h-full flex items-center justify-center pointer-events-none"
+              className={`relative w-full h-full transition-opacity duration-300 ease-out ${
+                isMapVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              }`}
             >
               <div
-                ref={stageRef}
-                style={dispW > 0 && dispH > 0 ? { width: `${dispW}px`, height: `${dispH}px` } : undefined}
-                className="relative shrink-0 flex items-center justify-center"
+                style={{
+                  transform: `translate3d(${pan.x}px, ${pan.y}px, 0px) scale(${scale})`,
+                  transformOrigin: '0 0',
+                  transition: 'none',
+                }}
+                className="relative w-full h-full flex items-center justify-center pointer-events-none"
               >
-                <img
-                  ref={imgRef}
-                  src={image}
-                  alt={routeName || 'Session Heatmap'}
-                  draggable={false}
-                  onLoad={handleImgLoad}
-                  className={
-                    dispW > 0 && dispH > 0
-                      ? 'w-full h-full block object-contain select-none'
-                      : 'max-w-[92vw] max-h-[75vh] w-auto h-auto object-contain block select-none'
-                  }
-                />
-
-                {(hasMarks || hasTimeline) && dispW > 0 && dispH > 0 && (
-                  <HeatmapMarksSvg
-                    marks={marks}
-                    timeline={timeline}
-                    currentT={currentT}
-                    isPlaying={isPlaying}
-                    layers={layers}
-                    width={dispW}
-                    height={dispH}
-                    scale={scale}
-                    language={language}
-                    hoveredKey={isDragging || showLoading ? null : hoveredKey}
-                    onHoverMark={handleHoverMark}
-                    onMoveMark={handleMoveMark}
+                <div
+                  ref={stageRef}
+                  style={dispW > 0 && dispH > 0 ? { width: `${dispW}px`, height: `${dispH}px` } : undefined}
+                  className="relative shrink-0 flex items-center justify-center"
+                >
+                  <img
+                    ref={imgRef}
+                    src={image}
+                    alt={routeName || 'Session Heatmap'}
+                    draggable={false}
+                    onLoad={handleImgLoad}
+                    className={
+                      dispW > 0 && dispH > 0
+                        ? 'w-full h-full block object-contain select-none'
+                        : 'max-w-[92vw] max-h-[75vh] w-auto h-auto object-contain block select-none'
+                    }
                   />
-                )}
+
+                  {(hasMarks || hasTimeline) && dispW > 0 && dispH > 0 && (
+                    <HeatmapMarksSvg
+                      marks={marks}
+                      timeline={timeline}
+                      currentT={currentT}
+                      isPlaying={isPlaying}
+                      layers={layers}
+                      width={dispW}
+                      height={dispH}
+                      scale={scale}
+                      language={language}
+                      hoveredKey={isDragging || showLoading ? null : hoveredKey}
+                      onHoverMark={handleHoverMark}
+                      onMoveMark={handleMoveMark}
+                    />
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ) : !showLoading ? (
-          <div className="flex flex-col items-center justify-center gap-3 text-center px-6 font-mono">
-            <MapPin className="w-8 h-8 text-zinc-600" />
-            <p className="text-xs text-zinc-400 max-w-md leading-relaxed">
-              {emptyMessage || (isRu ? 'Карта маршрута недоступна' : 'Route heatmap is unavailable')}
-            </p>
-          </div>
-        ) : null}
+          ) : !showLoading ? (
+            <div className="flex flex-col items-center justify-center gap-3 text-center px-6 font-mono">
+              <MapPin className="w-8 h-8 text-zinc-600" />
+              <p className="text-xs text-zinc-400 max-w-md leading-relaxed">
+                {emptyMessage || (isRu ? 'Карта маршрута недоступна' : 'Route heatmap is unavailable')}
+              </p>
+            </div>
+          ) : null}
 
-        {/* Hover tooltip clamped inside canvas bounds */}
-        {hasMarks && !isDragging && !showLoading && (
-          <HeatmapMarkTooltip
-            mark={hoveredMark}
-            cursor={cursorPos}
-            containerWidth={canvasSize.w}
-            containerHeight={canvasSize.h}
-            language={language}
-          />
-        )}
+          {/* Hover tooltip clamped inside canvas bounds */}
+          {hasMarks && !isDragging && !showLoading && (
+            <HeatmapMarkTooltip
+              mark={hoveredMark}
+              cursor={cursorPos}
+              containerWidth={canvasSize.w}
+              containerHeight={canvasSize.h}
+              language={language}
+            />
+          )}
+        </div>
 
         {showLoading && (
           <HeatmapLoadingPlaceholder
             mode={isBuilding ? 'building' : 'loading'}
             language={language}
-            className="absolute inset-0 z-10"
           />
         )}
       </div>

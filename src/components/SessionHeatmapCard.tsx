@@ -332,95 +332,97 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
           )}
 
           {/* Full uncropped map preview with interactive path & marks overlay */}
-          <div
-            ref={previewRef}
-            onClick={() => {
-              if (!isReady || showLoading) return;
-              soundFx.playClick();
-              setIsViewerOpen(true);
-            }}
-            onMouseLeave={() => {
-              setHoveredMark(null);
-              setHoveredKey(null);
-              setCursorPos(null);
-            }}
-            className={`group relative w-full h-[230px] sm:h-[270px] xl:h-[300px] overflow-hidden rounded-xl transition-all flex items-center justify-center bg-transparent border-0 shadow-none ${
-              isReady && !showLoading ? 'cursor-zoom-in' : 'cursor-default'
-            }`}
-          >
-            {isReady && heatmap.image && (
-              <div
-                style={dispW > 0 && dispH > 0 ? { width: `${dispW}px`, height: `${dispH}px` } : undefined}
-                className={`relative shrink-0 flex items-center justify-center transition-opacity duration-300 ease-out ${
-                  isMapVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                }`}
-              >
-                <img
-                  src={heatmap.image}
-                  alt={heatmap.route_name || t.heatmapCardTitle}
-                  draggable={false}
-                  onLoad={(e) => {
-                    const el = e.currentTarget;
-                    if (el.naturalWidth > 0 && el.naturalHeight > 0) {
-                      setNaturalSize((prev) =>
-                        prev.w === el.naturalWidth && prev.h === el.naturalHeight
-                          ? prev
-                          : { w: el.naturalWidth, h: el.naturalHeight }
-                      );
+          <div className="relative w-full h-[230px] sm:h-[270px] xl:h-[300px] overflow-hidden rounded-xl">
+            <div
+              ref={previewRef}
+              onClick={() => {
+                if (!isReady || showLoading) return;
+                soundFx.playClick();
+                setIsViewerOpen(true);
+              }}
+              onMouseLeave={() => {
+                setHoveredMark(null);
+                setHoveredKey(null);
+                setCursorPos(null);
+              }}
+              className={`group relative w-full h-full overflow-hidden rounded-xl transition-all flex items-center justify-center bg-transparent border-0 shadow-none ${
+                isReady && !showLoading ? 'cursor-zoom-in' : 'cursor-default'
+              }`}
+            >
+              {isReady && heatmap.image && (
+                <div
+                  style={dispW > 0 && dispH > 0 ? { width: `${dispW}px`, height: `${dispH}px` } : undefined}
+                  className={`relative shrink-0 flex items-center justify-center transition-opacity duration-300 ease-out ${
+                    isMapVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
+                >
+                  <img
+                    src={heatmap.image}
+                    alt={heatmap.route_name || t.heatmapCardTitle}
+                    draggable={false}
+                    onLoad={(e) => {
+                      const el = e.currentTarget;
+                      if (el.naturalWidth > 0 && el.naturalHeight > 0) {
+                        setNaturalSize((prev) =>
+                          prev.w === el.naturalWidth && prev.h === el.naturalHeight
+                            ? prev
+                            : { w: el.naturalWidth, h: el.naturalHeight }
+                        );
+                      }
+                    }}
+                    className={
+                      dispW > 0 && dispH > 0
+                        ? 'w-full h-full block object-contain select-none rounded-xl'
+                        : 'max-h-full max-w-full w-auto h-auto object-contain select-none rounded-xl'
                     }
-                  }}
-                  className={
-                    dispW > 0 && dispH > 0
-                      ? 'w-full h-full block object-contain select-none rounded-xl'
-                      : 'max-h-full max-w-full w-auto h-auto object-contain select-none rounded-xl'
-                  }
-                  loading="lazy"
-                />
-
-                {(hasMarks || hasTimeline) && dispW > 0 && dispH > 0 && (
-                  <HeatmapMarksSvg
-                    marks={heatmap.marks}
-                    timeline={heatmap.timeline}
-                    currentT={currentT}
-                    isPlaying={isPlaying}
-                    layers={layers}
-                    width={dispW}
-                    height={dispH}
-                    scale={1}
-                    language={language}
-                    hoveredKey={showLoading ? null : hoveredKey}
-                    onHoverMark={handleHoverMark}
-                    onMoveMark={handleMoveMark}
+                    loading="lazy"
                   />
-                )}
-              </div>
-            )}
+
+                  {(hasMarks || hasTimeline) && dispW > 0 && dispH > 0 && (
+                    <HeatmapMarksSvg
+                      marks={heatmap.marks}
+                      timeline={heatmap.timeline}
+                      currentT={currentT}
+                      isPlaying={isPlaying}
+                      layers={layers}
+                      width={dispW}
+                      height={dispH}
+                      scale={1}
+                      language={language}
+                      hoveredKey={showLoading ? null : hoveredKey}
+                      onHoverMark={handleHoverMark}
+                      onMoveMark={handleMoveMark}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Hover tooltip clamped inside preview bounds */}
+              {isReady && !showLoading && hasMarks && (
+                <HeatmapMarkTooltip
+                  mark={hoveredMark}
+                  cursor={cursorPos}
+                  containerWidth={previewSize.w}
+                  containerHeight={previewSize.h}
+                  language={language}
+                />
+              )}
+
+              {/* Subtle Hover Overlay Hint */}
+              {isReady && !showLoading && (
+                <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-zinc-950/80 backdrop-blur-sm border border-white/10 text-[10px] font-mono text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 pointer-events-none shadow-md">
+                  <Maximize2 className="w-3 h-3 text-zinc-400" />
+                  <span>{isRu ? 'Клик для зума' : 'Click to zoom'}</span>
+                </div>
+              )}
+            </div>
 
             {showLoading && (
               <HeatmapLoadingPlaceholder
                 mode={isBuilding ? 'building' : 'loading'}
                 language={language}
-                className="absolute inset-0 z-10 rounded-xl border border-white/[0.06]"
+                className="rounded-xl border border-white/[0.06]"
               />
-            )}
-
-            {/* Hover tooltip clamped inside preview bounds */}
-            {isReady && !showLoading && hasMarks && (
-              <HeatmapMarkTooltip
-                mark={hoveredMark}
-                cursor={cursorPos}
-                containerWidth={previewSize.w}
-                containerHeight={previewSize.h}
-                language={language}
-              />
-            )}
-
-            {/* Subtle Hover Overlay Hint */}
-            {isReady && !showLoading && (
-              <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-zinc-950/80 backdrop-blur-sm border border-white/10 text-[10px] font-mono text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 pointer-events-none shadow-md">
-                <Maximize2 className="w-3 h-3 text-zinc-400" />
-                <span>{isRu ? 'Клик для зума' : 'Click to zoom'}</span>
-              </div>
             )}
           </div>
 

@@ -419,21 +419,14 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     return isRu ? 'цены загружаются' : 'loading prices…';
   };
 
+  // 1. «Заработано»
   if (!hasItems) {
-    // items пустой — «Заработано: 0», «Золото в час: —», подпись «пока ничего не собрано»
     earnedValueNode = '0';
     earnedSubtext = isRu ? 'пока ничего не собрано' : 'nothing gathered yet';
-    goldPerHourNode = '—';
-    goldPerHourSubtext = isRu ? 'пока ничего не собрано' : 'nothing gathered yet';
   } else if (earnedCopper === null || earnedCopper === undefined) {
-    // предметы есть, а earned_copper === null — «нет цен», и подпись по PriceStatus
-    const pSub = getPriceSubtext();
     earnedValueNode = isRu ? 'нет цен' : 'no prices';
-    earnedSubtext = pSub;
-    goldPerHourNode = isRu ? 'нет цен' : 'no prices';
-    goldPerHourSubtext = pSub;
+    earnedSubtext = getPriceSubtext();
   } else {
-    // предметы есть и цена известна
     earnedValueNode = (
       <MoneyBadge
         copper={earnedCopper}
@@ -444,34 +437,48 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     earnedSubtext = lootStatus?.earned_complete === false
       ? (isRu ? 'не у всех предметов есть цена' : 'not all items have a price')
       : (isRu ? 'по аукциону' : 'auction price');
+  }
 
-    if (sessionSeconds < 300) {
-      goldPerHourNode = (
-        <span
-          className="inline-flex items-center h-8 sm:h-9"
-          role="status"
-          aria-label={isRu ? 'Расчёт золота в час' : 'Calculating gold per hour'}
-        >
-          <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-zinc-900 dark:border-t-white animate-spin" />
-        </span>
-      );
-      goldPerHourSubtext = lootStatus?.earned_complete === false
-        ? (isRu ? 'не у всех предметов есть цена' : 'not all items have a price')
-        : (isRu ? 'первые 5 минут' : 'first 5 minutes');
+  // 2. «Золото в час» — первые 5 минут работы бота всегда кружок (одно правило до ветвления по добыче)
+  if (isBotRunning && sessionSeconds < 300) {
+    goldPerHourNode = (
+      <span
+        className="inline-flex items-center h-8 sm:h-9"
+        role="status"
+        aria-label={isRu ? 'Расчёт золота в час' : 'Calculating gold per hour'}
+      >
+        <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-zinc-900 dark:border-t-white animate-spin" />
+      </span>
+    );
+    const hasNoPrices =
+      (hasItems && (earnedCopper === null || earnedCopper === undefined)) ||
+      (priceStatus !== null && (priceStatus.configured === false || priceStatus.house_id === null));
+    if (hasNoPrices) {
+      goldPerHourSubtext = getPriceSubtext();
+    } else if (hasItems && lootStatus?.earned_complete === false) {
+      goldPerHourSubtext = isRu ? 'не у всех предметов есть цена' : 'not all items have a price';
     } else {
-      const hours = sessionSeconds / 3600;
-      const copperPerHour = Math.round(earnedCopper / hours);
-      goldPerHourNode = (
-        <MoneyBadge
-          copper={copperPerHour}
-          language={language}
-          className="text-2xl sm:text-3xl font-bold tracking-tight leading-tight"
-        />
-      );
-      goldPerHourSubtext = lootStatus?.earned_complete === false
-        ? (isRu ? 'не у всех предметов есть цена' : 'not all items have a price')
-        : (isRu ? 'по ценам аукциона' : 'auction market rate');
+      goldPerHourSubtext = isRu ? 'первые 5 минут' : 'first 5 minutes';
     }
+  } else if (!hasItems) {
+    goldPerHourNode = '—';
+    goldPerHourSubtext = isRu ? 'пока ничего не собрано' : 'nothing gathered yet';
+  } else if (earnedCopper === null || earnedCopper === undefined) {
+    goldPerHourNode = isRu ? 'нет цен' : 'no prices';
+    goldPerHourSubtext = getPriceSubtext();
+  } else {
+    const hours = sessionSeconds / 3600;
+    const copperPerHour = Math.round(earnedCopper / hours);
+    goldPerHourNode = (
+      <MoneyBadge
+        copper={copperPerHour}
+        language={language}
+        className="text-2xl sm:text-3xl font-bold tracking-tight leading-tight"
+      />
+    );
+    goldPerHourSubtext = lootStatus?.earned_complete === false
+      ? (isRu ? 'не у всех предметов есть цена' : 'not all items have a price')
+      : (isRu ? 'по ценам аукциона' : 'auction market rate');
   }
 
   // Active session and summary calculation
