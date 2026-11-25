@@ -1095,41 +1095,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Галочка 2: «Выходить в меню на длинном перерыве» */}
-                  <div
-                    onClick={() => {
-                      if (!isLongBreaksEnabled) return;
-                      soundFx.playClick();
-                      updateCurrentDay({ longBreakLogout: !currentDay.longBreakLogout });
-                    }}
-                    className={`flex items-start gap-3 p-3 rounded-xl bg-black border border-white/10 transition-all select-none ${
-                      !isLongBreaksEnabled
-                        ? 'opacity-40 cursor-not-allowed'
-                        : 'hover:border-white/25 cursor-pointer'
-                    }`}
-                  >
-                    <div
-                      className={`w-4 h-4 rounded mt-0.5 flex items-center justify-center border transition-all ${
-                        isLongBreaksEnabled && currentDay.longBreakLogout
-                          ? 'bg-white border-white text-black'
-                          : 'border-zinc-600 bg-transparent text-transparent'
-                      }`}
-                    >
-                      {isLongBreaksEnabled && currentDay.longBreakLogout && (
-                        <Check className="w-3 h-3 stroke-[3]" />
-                      )}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-bold text-white text-xs">
-                        {isRu ? 'Выходить в меню на длинном перерыве' : 'Logout to menu on long break'}
-                      </span>
-                      <span className="text-[11px] text-zinc-400">
-                        {isRu
-                          ? 'Персонаж выходит в меню на время отдыха'
-                          : 'Character logs out to select screen during rest'}
-                      </span>
-                    </div>
-                  </div>
+                  <p className="text-[11px] font-mono text-zinc-400 px-1 py-0.5">
+                    {isRu
+                      ? 'В перерывах бот выходит в меню персонажей'
+                      : 'Bot logs out to character menu during breaks'}
+                  </p>
 
                   {/* Галочка 3: «Случайные выходные» (общая на неделю, 10 или 0) */}
                   <div
