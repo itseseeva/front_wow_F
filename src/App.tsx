@@ -1336,9 +1336,10 @@ export const App: React.FC = () => {
       return;
     }
 
+    const latestSession = dayData.sessions[dayData.sessions.length - 1];
     const targetSession = selectedSessionId === 'all'
-      ? dayData.sessions[0]
-      : dayData.sessions.find((s) => s.session_id === selectedSessionId) || dayData.sessions[0];
+      ? latestSession
+      : dayData.sessions.find((s) => s.session_id === selectedSessionId) || latestSession;
 
     if (!targetSession) {
       setActiveHeatmap(null);
@@ -1403,13 +1404,16 @@ export const App: React.FC = () => {
   useEffect(() => {
     const handleHeatmapEvent = (e: Event) => {
       const customEvent = e as CustomEvent<SessionHeatmapResponse>;
-      if (customEvent.detail) {
-        setActiveHeatmap(customEvent.detail);
+      if (!customEvent.detail) return;
+      if (selectedSessionId !== 'all' || selectedDate !== todayDateStr) return;
+      setActiveHeatmap(customEvent.detail);
+      if (customEvent.detail.status !== 'building') {
+        setIsHeatmapLoading(false);
       }
     };
     window.addEventListener('wowbot:session-heatmap', handleHeatmapEvent);
     return () => window.removeEventListener('wowbot:session-heatmap', handleHeatmapEvent);
-  }, []);
+  }, [selectedSessionId, selectedDate, todayDateStr]);
 
   // Export calendar JSON
   const handleExportCalendar = useCallback(() => {

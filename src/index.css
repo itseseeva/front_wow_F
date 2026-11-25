@@ -429,7 +429,8 @@ input[type="number"] {
   .tab-active-glow,
   .animate-laser-scan,
   .animate-tree-glow,
-  .animate-mesh-weave {
+  .animate-mesh-weave,
+  .animate-heatmap-shimmer {
     animation: none !important;
     transform: none !important;
     filter: none !important;
@@ -1033,4 +1034,20 @@ input[type="number"] {
 .btn-specular:hover {
   border-color: var(--default-hover-border, rgba(255, 255, 255, 0.12));
 }
+
+/* Heatmap placeholder soft shimmer sweep */
+@keyframes heatmapShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-heatmap-shimmer {
+  animation: heatmapShimmer 1.8s ease-in-out infinite;
+  will-change: transform;
+}
+
 

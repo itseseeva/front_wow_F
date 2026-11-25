@@ -6,7 +6,6 @@ import {
   BarChart3,
   Calendar as CalendarIcon,
   Clock,
-  Coffee,
   Map as MapIcon,
   TrendingUp,
   Coins,
@@ -172,9 +171,6 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
   // Active LIVE selection: when bot is running or scanning/building route, unless user explicitly selected a past session, LIVE is immediately open!
   const isSpecificPastSessionSelected = sessions.some((s) => s.session_id === selectedSessionId);
   const isLiveSelected = showLiveTab && !isSpecificPastSessionSelected;
-
-  // Live session calculations
-  const liveTotalLootCount = (lootStatus?.items || []).reduce((sum, item) => sum + item.count, 0);
 
   // Live Schedule Tracking & 1-second countdown ticker
   const [liveScheduleStatus, setLiveScheduleStatus] = useState<ScheduleStatus | null>(scheduleStatus || null);
@@ -403,36 +399,6 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     return () => window.removeEventListener('wowbot:prices', handlePrices);
   }, []);
 
-  // Card «До перерыва»: countdown to phase_until_ms based on phase
-  let breakValueNode: React.ReactNode = '—';
-  let breakSubtext = isRu ? 'без расписания' : 'no schedule';
-
-  const isScheduleActive = liveScheduleStatus && liveScheduleStatus.enabled && liveScheduleStatus.phase !== 'idle';
-
-  if (isScheduleActive && liveScheduleStatus.phase_until_ms) {
-    const totalSec = Math.max(0, Math.floor((liveScheduleStatus.phase_until_ms - nowMs) / 1000));
-    const hrs = Math.floor(totalSec / 3600);
-    const mins = Math.floor((totalSec % 3600) / 60);
-    const secs = totalSec % 60;
-    const timeFormatted = hrs > 0
-      ? `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-      : `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-
-    if (liveScheduleStatus.phase === 'farm') {
-      breakValueNode = `≈${timeFormatted}`;
-      breakSubtext = isRu ? 'до перерыва' : 'until break';
-    } else if (liveScheduleStatus.phase === 'short_break' || liveScheduleStatus.phase === 'long_break') {
-      breakValueNode = isRu ? `перерыв, ещё ${timeFormatted}` : `break, ${timeFormatted} left`;
-      breakSubtext = isRu ? 'пауза в работе' : 'scheduled break';
-    } else {
-      breakValueNode = timeFormatted;
-      breakSubtext = liveScheduleStatus.phase;
-    }
-  } else {
-    breakValueNode = '—';
-    breakSubtext = isRu ? 'без расписания' : 'no schedule';
-  }
-
   // Cards «Заработано» и «Золото в час»
   const items = lootStatus?.items || [];
   const hasItems = items.length > 0;
@@ -468,20 +434,40 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     goldPerHourSubtext = pSub;
   } else {
     // предметы есть и цена известна
-    earnedValueNode = <MoneyBadge copper={earnedCopper} language={language} />;
+    earnedValueNode = (
+      <MoneyBadge
+        copper={earnedCopper}
+        language={language}
+        className="text-2xl sm:text-3xl font-bold tracking-tight leading-tight"
+      />
+    );
     earnedSubtext = lootStatus?.earned_complete === false
       ? (isRu ? 'не у всех предметов есть цена' : 'not all items have a price')
       : (isRu ? 'по аукциону' : 'auction price');
 
     if (sessionSeconds < 300) {
-      goldPerHourNode = isRu ? 'считаю…' : 'calculating…';
+      goldPerHourNode = (
+        <span
+          className="inline-flex items-center h-8 sm:h-9"
+          role="status"
+          aria-label={isRu ? 'Расчёт золота в час' : 'Calculating gold per hour'}
+        >
+          <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-zinc-900 dark:border-t-white animate-spin" />
+        </span>
+      );
       goldPerHourSubtext = lootStatus?.earned_complete === false
         ? (isRu ? 'не у всех предметов есть цена' : 'not all items have a price')
         : (isRu ? 'первые 5 минут' : 'first 5 minutes');
     } else {
       const hours = sessionSeconds / 3600;
       const copperPerHour = Math.round(earnedCopper / hours);
-      goldPerHourNode = <MoneyBadge copper={copperPerHour} language={language} />;
+      goldPerHourNode = (
+        <MoneyBadge
+          copper={copperPerHour}
+          language={language}
+          className="text-2xl sm:text-3xl font-bold tracking-tight leading-tight"
+        />
+      );
       goldPerHourSubtext = lootStatus?.earned_complete === false
         ? (isRu ? 'не у всех предметов есть цена' : 'not all items have a price')
         : (isRu ? 'по ценам аукциона' : 'auction market rate');
@@ -489,10 +475,11 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
   }
 
   // Active session and summary calculation
+  const latestSession = sessions[sessions.length - 1];
   const isAllDay = !isLiveSelected && selectedSessionId === 'all';
   const activeSession = isAllDay
-    ? sessions[0]
-    : sessions.find((s) => s.session_id === selectedSessionId) || sessions[0];
+    ? latestSession
+    : sessions.find((s) => s.session_id === selectedSessionId) || latestSession;
 
   const currentSummary = isAllDay ? dayData?.total : activeSession?.summary;
 
@@ -763,92 +750,54 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     </span>
                   </div>
                 )}
-                {/* Live 5 Metric Cards (only when bot is running) */}
+                {/* Live 3 Metric Cards (only when bot is running) */}
                 {isBotRunning && (
-                <div data-tour="summary-live-cards" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 py-1 font-mono">
-                  {/* 1. Duration */}
-                  <div className="flex flex-col justify-between gap-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-zinc-500">{isRu ? 'Время в работе' : 'Live Uptime'}</span>
-                      <Clock className="w-3.5 h-3.5 text-zinc-400" />
-                    </div>
-                    <div>
-                      <span className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white tracking-tight">
+                  <div data-tour="summary-live-cards" className="flex flex-wrap items-start gap-x-8 sm:gap-x-10 gap-y-3 py-0.5 font-mono">
+                    {/* 1. Duration */}
+                    <div className="min-w-0 bg-transparent flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3 h-3 text-zinc-500 shrink-0" />
+                        <span className="text-[11px] text-zinc-500">{isRu ? 'Время в работе' : 'Live Uptime'}</span>
+                      </div>
+                      <div className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white tracking-tight tabular-nums leading-tight">
                         {formatDuration(sessionSeconds)}
-                      </span>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${isBotPaused ? 'bg-amber-400' : 'bg-zinc-950 dark:bg-white'} animate-pulse`} />
-                        <span className={`text-[10px] ${isBotPaused ? 'text-amber-500 dark:text-amber-400 font-medium' : 'text-zinc-500'}`}>
+                      </div>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isBotPaused ? 'bg-amber-400' : 'bg-zinc-950 dark:bg-white'} animate-pulse`} />
+                        <span className={`text-[10px] truncate ${isBotPaused ? 'text-amber-500 dark:text-amber-400 font-medium' : 'text-zinc-500'}`}>
                           {isBotPaused ? (isRu ? 'на паузе' : 'paused') : (isRu ? 'в процессе' : 'running')}
                         </span>
                       </div>
                     </div>
-                  </div>
 
-                  {/* 2. Break Countdown */}
-                  <div data-tour="summary-until-break" className="flex flex-col justify-between gap-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-zinc-500">{isRu ? 'До перерыва' : 'Until Break'}</span>
-                      <Coffee className="w-3.5 h-3.5 text-zinc-400" />
-                    </div>
-                    <div>
-                      <span className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white tracking-tight truncate">
-                        {breakValueNode}
-                      </span>
-                      <p className="text-[10px] text-zinc-500 mt-0.5 truncate">
-                        {breakSubtext}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* 3. Nodes Gathered */}
-                  <div className="flex flex-col justify-between gap-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-zinc-500">{isRu ? 'Собрано ресурсов' : 'Total Items'}</span>
-                      <Sparkles className="w-3.5 h-3.5 text-zinc-400" />
-                    </div>
-                    <div>
-                      <span className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white tracking-tight">
-                        {liveTotalLootCount}
-                      </span>
-                      <p className="text-[10px] text-zinc-500 mt-0.5">
-                        {(lootStatus?.items || []).length} {isRu ? 'уник. видов' : 'unique types'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* 4. Estimated Earnings */}
-                  <div className="flex flex-col justify-between gap-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-zinc-500">{isRu ? 'Заработано' : 'Earned'}</span>
-                      <Coins className="w-3.5 h-3.5 text-zinc-400" />
-                    </div>
-                    <div>
-                      <span className="text-xl sm:text-2xl font-bold text-zinc-950 dark:text-white tracking-tight">
+                    {/* 2. Estimated Earnings */}
+                    <div className="min-w-0 bg-transparent flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <Coins className="w-3 h-3 text-zinc-500 shrink-0" />
+                        <span className="text-[11px] text-zinc-500">{isRu ? 'Заработано' : 'Earned'}</span>
+                      </div>
+                      <div className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white tracking-tight tabular-nums leading-tight">
                         {earnedValueNode}
-                      </span>
-                      <p className="text-[10px] text-zinc-500 mt-0.5 truncate">
+                      </div>
+                      <p className="text-[10px] text-zinc-500 truncate">
                         {earnedSubtext}
                       </p>
                     </div>
-                  </div>
 
-                  {/* 5. Gold Per Hour */}
-                  <div data-tour="summary-gold-rate" className="flex flex-col justify-between gap-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-zinc-500">{isRu ? 'Золото в час' : 'Gold / hour'}</span>
-                      <TrendingUp className="w-3.5 h-3.5 text-zinc-400" />
-                    </div>
-                    <div>
-                      <span className="text-xl sm:text-2xl font-bold text-zinc-950 dark:text-white tracking-tight">
+                    {/* 3. Gold Per Hour */}
+                    <div data-tour="summary-gold-rate" className="min-w-0 bg-transparent flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <TrendingUp className="w-3 h-3 text-zinc-500 shrink-0" />
+                        <span className="text-[11px] text-zinc-500">{isRu ? 'Золото в час' : 'Gold / hour'}</span>
+                      </div>
+                      <div className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-white tracking-tight tabular-nums leading-tight">
                         {goldPerHourNode}
-                      </span>
-                      <p className="text-[10px] text-zinc-500 mt-0.5 truncate">
+                      </div>
+                      <p className="text-[10px] text-zinc-500 truncate">
                         {goldPerHourSubtext}
                       </p>
                     </div>
                   </div>
-                </div>
                 )}
 
                 {/* Schedule Timeline Strip (real ScheduleDay from backend) */}
@@ -1174,6 +1123,12 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
       {isViewerOpen && (
         <HeatmapViewer
           image={!isLiveSelected && hasSessions ? heatmap?.image : undefined}
+          status={!isLiveSelected && hasSessions ? (heatmap?.status ?? null) : 'none'}
+          loadKey={
+            !isLiveSelected && hasSessions
+              ? `${activeSession?.session_id ?? 'none'}_${selectedPassIndex ?? 'all'}`
+              : 'none'
+          }
           routeName={
             (!isLiveSelected && hasSessions && (heatmap?.route_name || heatmapLabel)) ||
             formatDateTitle(selectedDate, isRu)

@@ -155,6 +155,23 @@ function getKindLabel(kind: VisibleKind, isRu: boolean): string {
     case 'farm':
       return isRu ? 'Сессия' : 'Session';
     case 'long_break':
+      return isRu ? 'Отдых' : 'Rest';
+    case 'short_break':
+      return isRu ? 'Перерыв' : 'Break';
+    case 'wait_window':
+      return isRu ? 'Ожидание' : 'Waiting';
+    case 'stopped':
+      return isRu ? 'Стоп' : 'Stopped';
+    case 'paused':
+      return isRu ? 'Пауза' : 'Paused';
+  }
+}
+
+function getFullKindLabel(kind: VisibleKind, isRu: boolean): string {
+  switch (kind) {
+    case 'farm':
+      return isRu ? 'Сессия' : 'Session';
+    case 'long_break':
       return isRu ? 'Длинный перерыв' : 'Long break';
     case 'short_break':
       return isRu ? 'Перерыв' : 'Break';
@@ -165,6 +182,22 @@ function getKindLabel(kind: VisibleKind, isRu: boolean): string {
     case 'paused':
       return isRu ? 'Пауза' : 'Paused';
   }
+}
+
+function getGroupTooltip(group: BubbleGroup, isRu: boolean): string {
+  const fullLabel = getFullKindLabel(group.kind, isRu);
+  const statusText = group.isCurrent
+    ? isRu
+      ? 'идёт'
+      : 'live'
+    : group.actual
+    ? isRu
+      ? 'факт'
+      : 'actual'
+    : isRu
+    ? 'план'
+    : 'plan';
+  return `${fullLabel} · ${statusText} · ${group.timeRange}`;
 }
 
 function ceilToLocalMinutes(ms: number, stepMin: number): number {
@@ -781,6 +814,7 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
     [segments]
   );
 
+  const hasLongBreak = useMemo(() => segments.some((s) => s.kind === 'long_break'), [segments]);
   const hasPaused = useMemo(() => segments.some((s) => s.kind === 'paused'), [segments]);
   const hasStopped = useMemo(() => segments.some((s) => s.kind === 'stopped'), [segments]);
   const hasPlanned = useMemo(
@@ -807,16 +841,14 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
       ? isRu
         ? ' · идёт'
         : ' · live'
-      : !group.actual
-      ? isRu
-        ? ' · план'
-        : ' · plan'
       : '';
     const fullTitle = `${group.label}${titleSuffix}`;
+    const tooltipText = getGroupTooltip(group, isRu);
 
     return (
       <div
-        className={`relative w-[132px] rounded-xl px-2 py-1.5 text-center select-none ${theme.card}`}
+        title={tooltipText}
+        className={`pointer-events-auto relative w-[132px] rounded-xl px-2 py-1.5 text-center select-none ${theme.card}`}
       >
         {/* Row 1: fixed-height single-line title truncated with ellipsis */}
         <div
@@ -904,9 +936,15 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
                 <span>{isRu ? 'Сессия' : 'Session'}</span>
               </span>
               <span className="inline-flex items-center gap-1.5 text-zinc-500">
-                <span className="w-3.5 h-[4px] rounded-full bg-zinc-500" />
+                <span className="w-3.5 h-[4px] rounded-full bg-zinc-600" />
                 <span>{isRu ? 'Перерыв' : 'Break'}</span>
               </span>
+              {hasLongBreak && (
+                <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                  <span className="w-3.5 h-[4px] rounded-full bg-zinc-500" />
+                  <span>{isRu ? 'Отдых' : 'Rest'}</span>
+                </span>
+              )}
               {hasPaused && (
                 <span className="inline-flex items-center gap-1.5 text-amber-400/90">
                   <span className="w-3.5 h-[4px] rounded-full bg-amber-500" />
@@ -916,7 +954,7 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
               {hasStopped && (
                 <span className="inline-flex items-center gap-1.5 text-rose-400/90">
                   <span className="w-3.5 h-[4px] rounded-full bg-rose-800" />
-                  <span>{isRu ? 'Остановлено' : 'Stopped'}</span>
+                  <span>{isRu ? 'Стоп' : 'Stopped'}</span>
                 </span>
               )}
               {hasPlanned && (
@@ -1033,6 +1071,8 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
               !hasError &&
               segments.map((seg) => {
                 const isSelected = activeGroupId === seg.groupId;
+                const segGroup = groups.find((g) => g.groupId === seg.groupId);
+                const segTooltip = segGroup ? getGroupTooltip(segGroup, isRu) : `${seg.label} · ${seg.timeRange}`;
                 const zClass =
                   seg.kind === 'wait_window'
                     ? 'z-[5]'
@@ -1052,7 +1092,8 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
                   <button
                     key={seg.id}
                     type="button"
-                    aria-label={`${seg.label} ${seg.timeRange}`}
+                    title={segTooltip}
+                    aria-label={segTooltip}
                     style={{
                       left: `${seg.leftPct}%`,
                       width: `${seg.widthPct}%`,

@@ -12,8 +12,10 @@ import {
   useHeatmapPlayback,
 } from './HeatmapMarksOverlay';
 import { translations, Language, Theme } from '../utils/i18n';
-import { Map, Maximize2, Loader2, AlertCircle } from 'lucide-react';
+import { Map, Maximize2, AlertCircle } from 'lucide-react';
 import { soundFx } from '../utils/audio';
+import { useMinDelay } from '../hooks/useMinDelay';
+import { HeatmapLoadingPlaceholder } from './HeatmapLoadingPlaceholder';
 
 interface SessionHeatmapCardProps {
   summary: SessionSummaryData | null;
@@ -29,6 +31,7 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
   const isRu = language === 'ru';
 
   const [heatmap, setHeatmap] = useState<SessionHeatmapResponse | null>(null);
+  const [isFetching, setIsFetching] = useState<boolean>(false);
   const [isViewerOpen, setIsViewerOpen] = useState<boolean>(false);
   const pollTimerRef = useRef<any>(null);
   const pollCountRef = useRef<number>(0);
@@ -62,6 +65,7 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
 
     // Direct mock support for interactive test example preview
     if (summary?.mock_heatmap) {
+      setIsFetching(false);
       setHeatmap(summary.mock_heatmap);
       return;
     }
@@ -69,6 +73,7 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
     // Check if pywebview API exists and has get_session_heatmap
     const api = window.pywebview?.api;
     if (!api || typeof api.get_session_heatmap !== 'function') {
+      setIsFetching(false);
       return;
     }
 
@@ -123,8 +128,10 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
     };
 
     // Initial fetch
+    setIsFetching(true);
     fetchHeatmap().then(() => {
       if (!isMounted) return;
+      setIsFetching(false);
       setHeatmap((current) => {
         if (current?.status === 'building') {
           startPolling();
@@ -138,7 +145,11 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
       const customEvent = e as CustomEvent<SessionHeatmapResponse>;
       if (!isMounted || !customEvent.detail) return;
       setHeatmap(customEvent.detail);
-      stopPolling();
+      if (customEvent.detail.status !== 'building') {
+        stopPolling();
+      } else if (!pollTimerRef.current) {
+        startPolling();
+      }
     };
 
     window.addEventListener('wowbot:session-heatmap', handleHeatmapEvent);
@@ -209,44 +220,39 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
     [updateCursorFromEvent]
   );
 
+  const isBuilding = heatmap?.status === 'building';
+  const isTerminalEmpty =
+    !isFetching && (heatmap?.status === 'none' || heatmap?.status === 'error');
+  const triggerKey = `${sessionKey}::${heatmap?.image ?? ''}`;
+  const showLoading = useMinDelay(isFetching || Boolean(isBuilding), 500, {
+    immediateClear: isTerminalEmpty,
+    triggerKey,
+  });
+
+  const [revealedKey, setRevealedKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (showLoading || !heatmap?.image || heatmap.status !== 'ready') {
+      setRevealedKey(null);
+      return;
+    }
+    let cancelled = false;
+    const rafId = requestAnimationFrame(() => {
+      if (!cancelled) {
+        setRevealedKey(triggerKey);
+      }
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+    };
+  }, [showLoading, heatmap?.image, heatmap?.status, triggerKey]);
+
   // If method doesn't exist or status is 'none', do not render card at all
   if (!heatmap || heatmap.status === 'none') {
     return null;
   }
 
-  // 1. Building State - Compact Skeleton
-  if (heatmap.status === 'building') {
-    return (
-      <SpecularCard className="p-3 sm:p-4 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Map className="w-3.5 h-3.5 text-zinc-500 animate-pulse" />
-            <span className="text-xs font-mono font-medium text-zinc-950 dark:text-white uppercase tracking-wider">
-              {t.heatmapCardTitle}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs font-mono text-zinc-500">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />
-            <span>{t.heatmapBuilding}</span>
-          </div>
-        </div>
-
-        {/* Compact skeleton */}
-        <div className="relative w-full h-[180px] sm:h-[220px] rounded-lg bg-black/[0.04] dark:bg-white/[0.03] border border-dashed border-black/10 dark:border-white/10 flex flex-col items-center justify-center gap-1.5 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.04] to-transparent animate-pulse" />
-          <Loader2 className="w-5 h-5 animate-spin text-zinc-400 dark:text-zinc-500" />
-          <span className="text-xs font-mono text-zinc-600 dark:text-zinc-400 font-medium">
-            {t.heatmapBuilding}
-          </span>
-          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">
-            {t.heatmapBuildingSub}
-          </span>
-        </div>
-      </SpecularCard>
-    );
-  }
-
-  // 2. Error State - Compact
+  // Error State - Compact (shown immediately, no 500ms delay)
   if (heatmap.status === 'error') {
     return (
       <SpecularCard className="p-3 sm:p-4 rounded-xl border border-black/10 dark:border-white/10 flex flex-col gap-2">
@@ -264,8 +270,10 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
     );
   }
 
-  // 3. Ready State - Full uncropped map + time-gradient path + interactive marks + timeline + layer toggles + stat tiles
-  if (heatmap.status === 'ready' && heatmap.image) {
+  // Building / Loading / Ready State — same frame height so layout never jumps
+  if (isBuilding || (heatmap.status === 'ready' && heatmap.image)) {
+    const isReady = heatmap.status === 'ready' && Boolean(heatmap.image);
+    const isMapVisible = isReady && !showLoading && revealedKey === triggerKey;
     const hasMarks = Array.isArray(heatmap.marks);
     const hasTimeline = Boolean(
       heatmap.timeline && heatmap.timeline.pts && heatmap.timeline.pts.length > 0 && heatmap.timeline.end_s > 0
@@ -299,21 +307,23 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                soundFx.playClick();
-                setIsViewerOpen(true);
-              }}
-              className="p-1 rounded text-zinc-400 hover:text-zinc-950 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
-              title={isRu ? 'Полноэкранный просмотр (зум и сдвиг)' : 'Open fullscreen viewer'}
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-            </button>
+            {isReady && !showLoading && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundFx.playClick();
+                  setIsViewerOpen(true);
+                }}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-950 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                title={isRu ? 'Полноэкранный просмотр (зум и сдвиг)' : 'Open fullscreen viewer'}
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Savings Banner Above Map */}
-          {hasSavings && (
+          {isReady && !showLoading && hasSavings && (
             <HeatmapSavingsBanner
               savings={heatmap.savings}
               language={language}
@@ -325,6 +335,7 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
           <div
             ref={previewRef}
             onClick={() => {
+              if (!isReady || showLoading) return;
               soundFx.playClick();
               setIsViewerOpen(true);
             }}
@@ -333,54 +344,68 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
               setHoveredKey(null);
               setCursorPos(null);
             }}
-            className="group relative w-full h-[230px] sm:h-[270px] xl:h-[300px] overflow-hidden rounded-xl cursor-zoom-in transition-all flex items-center justify-center bg-transparent border-0 shadow-none"
+            className={`group relative w-full h-[230px] sm:h-[270px] xl:h-[300px] overflow-hidden rounded-xl transition-all flex items-center justify-center bg-transparent border-0 shadow-none ${
+              isReady && !showLoading ? 'cursor-zoom-in' : 'cursor-default'
+            }`}
           >
-            <div
-              style={dispW > 0 && dispH > 0 ? { width: `${dispW}px`, height: `${dispH}px` } : undefined}
-              className="relative shrink-0 flex items-center justify-center"
-            >
-              <img
-                src={heatmap.image}
-                alt={heatmap.route_name || t.heatmapCardTitle}
-                draggable={false}
-                onLoad={(e) => {
-                  const el = e.currentTarget;
-                  if (el.naturalWidth > 0 && el.naturalHeight > 0) {
-                    setNaturalSize((prev) =>
-                      prev.w === el.naturalWidth && prev.h === el.naturalHeight
-                        ? prev
-                        : { w: el.naturalWidth, h: el.naturalHeight }
-                    );
+            {isReady && heatmap.image && (
+              <div
+                style={dispW > 0 && dispH > 0 ? { width: `${dispW}px`, height: `${dispH}px` } : undefined}
+                className={`relative shrink-0 flex items-center justify-center transition-opacity duration-300 ease-out ${
+                  isMapVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+              >
+                <img
+                  src={heatmap.image}
+                  alt={heatmap.route_name || t.heatmapCardTitle}
+                  draggable={false}
+                  onLoad={(e) => {
+                    const el = e.currentTarget;
+                    if (el.naturalWidth > 0 && el.naturalHeight > 0) {
+                      setNaturalSize((prev) =>
+                        prev.w === el.naturalWidth && prev.h === el.naturalHeight
+                          ? prev
+                          : { w: el.naturalWidth, h: el.naturalHeight }
+                      );
+                    }
+                  }}
+                  className={
+                    dispW > 0 && dispH > 0
+                      ? 'w-full h-full block object-contain select-none rounded-xl'
+                      : 'max-h-full max-w-full w-auto h-auto object-contain select-none rounded-xl'
                   }
-                }}
-                className={
-                  dispW > 0 && dispH > 0
-                    ? 'w-full h-full block object-contain select-none rounded-xl'
-                    : 'max-h-full max-w-full w-auto h-auto object-contain select-none rounded-xl'
-                }
-                loading="lazy"
-              />
-
-              {(hasMarks || hasTimeline) && dispW > 0 && dispH > 0 && (
-                <HeatmapMarksSvg
-                  marks={heatmap.marks}
-                  timeline={heatmap.timeline}
-                  currentT={currentT}
-                  isPlaying={isPlaying}
-                  layers={layers}
-                  width={dispW}
-                  height={dispH}
-                  scale={1}
-                  language={language}
-                  hoveredKey={hoveredKey}
-                  onHoverMark={handleHoverMark}
-                  onMoveMark={handleMoveMark}
+                  loading="lazy"
                 />
-              )}
-            </div>
+
+                {(hasMarks || hasTimeline) && dispW > 0 && dispH > 0 && (
+                  <HeatmapMarksSvg
+                    marks={heatmap.marks}
+                    timeline={heatmap.timeline}
+                    currentT={currentT}
+                    isPlaying={isPlaying}
+                    layers={layers}
+                    width={dispW}
+                    height={dispH}
+                    scale={1}
+                    language={language}
+                    hoveredKey={showLoading ? null : hoveredKey}
+                    onHoverMark={handleHoverMark}
+                    onMoveMark={handleMoveMark}
+                  />
+                )}
+              </div>
+            )}
+
+            {showLoading && (
+              <HeatmapLoadingPlaceholder
+                mode={isBuilding ? 'building' : 'loading'}
+                language={language}
+                className="absolute inset-0 z-10 rounded-xl border border-white/[0.06]"
+              />
+            )}
 
             {/* Hover tooltip clamped inside preview bounds */}
-            {hasMarks && (
+            {isReady && !showLoading && hasMarks && (
               <HeatmapMarkTooltip
                 mark={hoveredMark}
                 cursor={cursorPos}
@@ -391,14 +416,16 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
             )}
 
             {/* Subtle Hover Overlay Hint */}
-            <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-zinc-950/80 backdrop-blur-sm border border-white/10 text-[10px] font-mono text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 pointer-events-none shadow-md">
-              <Maximize2 className="w-3 h-3 text-zinc-400" />
-              <span>{isRu ? 'Клик для зума' : 'Click to zoom'}</span>
-            </div>
+            {isReady && !showLoading && (
+              <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-zinc-950/80 backdrop-blur-sm border border-white/10 text-[10px] font-mono text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 pointer-events-none shadow-md">
+                <Maximize2 className="w-3 h-3 text-zinc-400" />
+                <span>{isRu ? 'Клик для зума' : 'Click to zoom'}</span>
+              </div>
+            )}
           </div>
 
           {/* Interactive Timeline Scrubber below map */}
-          {hasTimeline && heatmap.timeline && (
+          {isReady && !showLoading && hasTimeline && heatmap.timeline && (
             <HeatmapTimelineBar
               timeline={heatmap.timeline}
               marks={heatmap.marks}
@@ -414,7 +441,7 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
           )}
 
           {/* Layer toggle buttons + stat tiles below map */}
-          {hasMarks && heatmap.marks && (
+          {isReady && !showLoading && hasMarks && heatmap.marks && (
             <HeatmapLayerControlsAndStats
               marks={heatmap.marks}
               layers={layers}
@@ -427,9 +454,11 @@ export const SessionHeatmapCard: React.FC<SessionHeatmapCardProps> = ({
         </div>
 
         {/* Fullscreen Pan/Zoom Modal Viewer */}
-        {isViewerOpen && (
+        {isViewerOpen && isReady && heatmap.image && (
           <HeatmapViewer
             image={heatmap.image}
+            status={heatmap.status}
+            loadKey={sessionKey}
             routeName={heatmap.route_name}
             width={heatmap.width}
             height={heatmap.height}
