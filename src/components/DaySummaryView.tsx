@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { DayResponse, SessionHeatmapResponse, LootStatus, ScheduleStatus, ScheduleSettings, SchedulePreview, AutoRouteStatus, TerrainStatus, PriceStatus } from '../types';
+import { DayResponse, SessionHeatmapResponse, LootStatus, ScheduleStatus, ScheduleSettings, ScheduleDay, AutoRouteStatus, TerrainStatus, PriceStatus } from '../types';
 import { getPywebviewApi } from '../utils/pywebviewBridge';
 import { mockGetAutoRouteStatus, startMockAutoRouteSimulation } from '../data/mockRoutes';
-import { WEEKDAY_KEYS, mockPreviewScheduleDay } from '../data/mockSchedule';
 import {
   BarChart3,
   Calendar as CalendarIcon,
@@ -197,48 +196,57 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
   }, []);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [liveSchedulePreview, setLiveSchedulePreview] = useState<SchedulePreview | null>(null);
-
-  const todayWeekdayIdx = useMemo(() => {
-    const jsDay = new Date().getDay();
-    return jsDay === 0 ? 6 : jsDay - 1;
-  }, []);
-  const todayWeekdayKey = WEEKDAY_KEYS[todayWeekdayIdx] || 'mon';
-  const todayDaySchedule = scheduleSettings?.days?.[todayWeekdayKey] || null;
+  const [liveScheduleDay, setLiveScheduleDay] = useState<ScheduleDay | null>(null);
 
   useEffect(() => {
-    if (!isBotRunning || !scheduleSettings) {
+    if (!isBotRunning) {
+      setLiveScheduleDay(null);
       return;
     }
-    let cancelled = false;
-    const d = new Date();
-    const todaySeed = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
 
-    const loadLivePreview = async () => {
+    let cancelled = false;
+
+    const loadScheduleDay = async () => {
       try {
-        const configJson = JSON.stringify({ schedule: scheduleSettings });
         const api = await getPywebviewApi();
-        if (api?.preview_schedule_day) {
-          const res = await api.preview_schedule_day(configJson, todayWeekdayIdx, todaySeed);
-          if (!cancelled && res) {
-            setLiveSchedulePreview(res);
-            return;
+        if (!api?.get_schedule_day) {
+          if (!cancelled) setLiveScheduleDay(null);
+          return;
+        }
+        const res = await api.get_schedule_day();
+        if (!cancelled) {
+          if (res && res.ok) {
+            setLiveScheduleDay(res);
+          } else {
+            setLiveScheduleDay(null);
           }
         }
-        const mockRes = await mockPreviewScheduleDay(configJson, todayWeekdayIdx, todaySeed);
-        if (!cancelled) {
-          setLiveSchedulePreview(mockRes);
-        }
       } catch (err) {
-        console.warn('live preview_schedule_day error:', err);
+        console.warn('get_schedule_day error:', err);
+        if (!cancelled) setLiveScheduleDay(null);
       }
     };
 
-    loadLivePreview();
+    // Fetch immediately when strip is shown
+    loadScheduleDay();
+
+    // Refresh on schedule phase changes and pause toggle events
+    const handleRefreshEvent = () => {
+      loadScheduleDay();
+    };
+    window.addEventListener('wowbot:schedule-status', handleRefreshEvent);
+    window.addEventListener('wowbot:pause', handleRefreshEvent);
+
+    // Refresh every 60 seconds so now_ms boundary and pause advance
+    const pollInterval = setInterval(loadScheduleDay, 60000);
+
     return () => {
       cancelled = true;
+      window.removeEventListener('wowbot:schedule-status', handleRefreshEvent);
+      window.removeEventListener('wowbot:pause', handleRefreshEvent);
+      clearInterval(pollInterval);
     };
-  }, [isBotRunning, scheduleSettings, todayWeekdayIdx]);
+  }, [isBotRunning]);
   useEffect(() => {
     const interval = setInterval(() => {
       setNowMs(Date.now());
@@ -833,15 +841,14 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                 </div>
                 )}
 
-                {/* Live Schedule Timeline Strip (below live metric cards while bot is running) */}
-                {isBotRunning && scheduleSettings && (
+                {/* Live Schedule Timeline Strip (real ScheduleDay from backend while bot is running) */}
+                {isBotRunning && liveScheduleDay && liveScheduleDay.ok && (
                   <ScheduleTimelineStrip
-                    preview={liveSchedulePreview}
-                    isDayEnabled={todayDaySchedule ? todayDaySchedule.enabled : true}
-                    isScheduleEnabled={liveScheduleStatus?.enabled ?? scheduleSettings.enabled}
+                    preview={liveScheduleDay}
+                    isDayEnabled={!liveScheduleDay.off}
+                    isScheduleEnabled={liveScheduleStatus?.enabled ?? scheduleSettings?.enabled ?? true}
                     isRu={isRu}
                     showShuffle={false}
-                    nowMs={nowMs}
                     rightNote={liveScheduleStatus?.note || null}
                     className="border-t border-white/10 pt-4"
                   />

@@ -1,9 +1,17 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Shuffle, Moon, AlertTriangle } from 'lucide-react';
-import { SchedulePreview, SchedulePreviewSegment } from '../types';
+import {
+  SchedulePreview,
+  SchedulePreviewSegment,
+  ScheduleDay,
+  ScheduleDaySegment,
+} from '../types';
+
+type ScheduleTimelineData = SchedulePreview | ScheduleDay;
+type AnyTimelineSegment = SchedulePreviewSegment | ScheduleDaySegment;
 
 interface ScheduleTimelineStripProps {
-  preview: SchedulePreview | null;
+  preview: ScheduleTimelineData | null;
   isLoading?: boolean;
   isDayEnabled: boolean;
   isScheduleEnabled: boolean;
@@ -15,7 +23,7 @@ interface ScheduleTimelineStripProps {
   className?: string;
 }
 
-type VisibleKind = 'farm' | 'short_break' | 'long_break';
+type VisibleKind = 'farm' | 'short_break' | 'long_break' | 'stopped' | 'paused';
 
 interface TimelineRange {
   startMs: number;
@@ -26,6 +34,7 @@ interface TimelineRange {
 interface NormalizedSegment {
   id: number;
   kind: VisibleKind;
+  actual: boolean;
   isBreak: boolean;
   startMs: number;
   endMs: number;
@@ -55,6 +64,20 @@ interface PlacedBubble {
 const DEFAULT_OFF_TICKS = [0, 4, 8, 12, 16, 20, 24];
 const MIN_MS = 60 * 1000;
 
+function isVisibleKind(kind: string): kind is VisibleKind {
+  return (
+    kind === 'farm' ||
+    kind === 'short_break' ||
+    kind === 'long_break' ||
+    kind === 'stopped' ||
+    kind === 'paused'
+  );
+}
+
+function hasNowMs(data: ScheduleTimelineData | null): data is ScheduleDay {
+  return data !== null && 'now_ms' in data && typeof data.now_ms === 'number';
+}
+
 function formatClock(ms: number): string {
   const d = new Date(ms);
   const h = d.getHours();
@@ -63,7 +86,7 @@ function formatClock(ms: number): string {
 }
 
 function formatDuration(minutes: number, isRu: boolean): string {
-  const rounded = Math.max(1, Math.round(minutes));
+  const rounded = Math.max(0, Math.round(minutes));
   const h = Math.floor(rounded / 60);
   const m = rounded % 60;
   if (h === 0) {
@@ -107,13 +130,19 @@ function floorToLocalMinutes(ms: number, stepMin: number): number {
 
 function ceilToLocalMinutes(ms: number, stepMin: number): number {
   const d = new Date(ms);
-  const totalMin = d.getHours() * 60 + d.getMinutes() + (d.getSeconds() > 0 || d.getMilliseconds() > 0 ? 1 : 0);
+  const totalMin =
+    d.getHours() * 60 +
+    d.getMinutes() +
+    (d.getSeconds() > 0 || d.getMilliseconds() > 0 ? 1 : 0);
   const ceiledMin = Math.ceil(totalMin / stepMin) * stepMin;
   d.setHours(0, 0, 0, 0);
   return d.getTime() + ceiledMin * MIN_MS;
 }
 
-function computeTimelineRange(visibleSegments: SchedulePreviewSegment[]): TimelineRange | null {
+function computeTimelineRange(
+  visibleSegments: AnyTimelineSegment[],
+  nowMarkerMs: number | null
+): TimelineRange | null {
   if (visibleSegments.length === 0) return null;
 
   let minMs = Infinity;
@@ -123,12 +152,21 @@ function computeTimelineRange(visibleSegments: SchedulePreviewSegment[]): Timeli
     if (seg.end_ms > maxMs) maxMs = seg.end_ms;
   }
 
+  // Keep the "now" marker inside bounds if it sits just next to active segments
+  if (nowMarkerMs !== null && Number.isFinite(minMs) && Number.isFinite(maxMs)) {
+    if (nowMarkerMs < minMs && minMs - nowMarkerMs <= 60 * MIN_MS) {
+      minMs = nowMarkerMs;
+    }
+    if (nowMarkerMs > maxMs && nowMarkerMs - maxMs <= 60 * MIN_MS) {
+      maxMs = nowMarkerMs;
+    }
+  }
+
   if (!Number.isFinite(minMs) || !Number.isFinite(maxMs) || maxMs <= minMs) {
     return null;
   }
 
   const rawSpanMin = (maxMs - minMs) / MIN_MS;
-  // Snap tight to clean clock boundaries so active schedule fills almost the full bar width
   const snapStepMin = rawSpanMin <= 90 ? 5 : rawSpanMin <= 360 ? 15 : 30;
   let startMs = floorToLocalMinutes(minMs, snapStepMin);
   let endMs = ceilToLocalMinutes(maxMs, snapStepMin);
@@ -148,7 +186,6 @@ function buildAxisTicks(range: TimelineRange, containerWidth: number): AxisTick[
   const safeWidth = Math.max(containerWidth, 280);
   const spanMin = range.spanMs / MIN_MS;
 
-  // Choose a natural clock interval yielding roughly 4–7 ticks
   const candidateSteps = [15, 30, 60, 120, 180, 240];
   let stepMin = 60;
   for (const step of candidateSteps) {
@@ -164,7 +201,6 @@ function buildAxisTicks(range: TimelineRange, containerWidth: number): AxisTick[
     { ms: range.startMs, pct: 0, label: formatClock(range.startMs), edge: 'start' },
   ];
 
-  // Align first interior tick to the next clean local-clock multiple of stepMin
   let cursorMs = ceilToLocalMinutes(range.startMs + 1, stepMin);
   let lastPx = 0;
 
@@ -194,7 +230,7 @@ function buildAxisTicks(range: TimelineRange, containerWidth: number): AxisTick[
 }
 
 function normalizeSegments(
-  segments: SchedulePreviewSegment[],
+  segments: AnyTimelineSegment[],
   range: TimelineRange | null,
   isRu: boolean
 ): NormalizedSegment[] {
@@ -202,7 +238,7 @@ function normalizeSegments(
   const result: NormalizedSegment[] = [];
 
   segments.forEach((seg, idx) => {
-    if (seg.kind !== 'farm' && seg.kind !== 'short_break' && seg.kind !== 'long_break') {
+    if (!isVisibleKind(seg.kind)) {
       return;
     }
 
@@ -215,7 +251,9 @@ function normalizeSegments(
     const widthPct = Math.max(0.4, ((clampedEnd - clampedStart) / range.spanMs) * 100);
     const anchorPct = Math.min(100, leftPct + widthPct / 2);
 
-    const isBreak = seg.kind !== 'farm';
+    const actual = 'actual' in seg && typeof seg.actual === 'boolean' ? seg.actual : true;
+    const isBreak = seg.kind === 'short_break' || seg.kind === 'long_break';
+
     let label = isRu ? 'Сессия' : 'Session';
     let shortLabel = isRu ? 'Сессия' : 'Session';
     if (seg.kind === 'long_break') {
@@ -224,11 +262,18 @@ function normalizeSegments(
     } else if (seg.kind === 'short_break') {
       label = isRu ? 'Перерыв' : 'Short break';
       shortLabel = isRu ? 'Перерыв' : 'Break';
+    } else if (seg.kind === 'stopped') {
+      label = isRu ? 'Остановлено' : 'Stopped';
+      shortLabel = isRu ? 'Остановлено' : 'Stopped';
+    } else if (seg.kind === 'paused') {
+      label = isRu ? 'Пауза' : 'Paused';
+      shortLabel = isRu ? 'Пауза' : 'Paused';
     }
 
     result.push({
       id: idx,
       kind: seg.kind,
+      actual,
       isBreak,
       startMs: seg.start_ms,
       endMs: seg.end_ms,
@@ -268,17 +313,24 @@ function selectStaticBubbles(
   if (segments.length === 0) return [];
 
   const safeWidth = Math.max(containerWidth, 300);
-  const bubbleWidthPx = 104;
-  const minGapPx = 112;
+  const hasPlannedOrSpecial = segments.some(
+    (s) => !s.actual || s.kind === 'stopped' || s.kind === 'paused'
+  );
+  const bubbleWidthPx = hasPlannedOrSpecial ? 116 : 104;
+  const minGapPx = hasPlannedOrSpecial ? 124 : 112;
   const minGapPct = (minGapPx / safeWidth) * 100;
   const maxNudgePct = (24 / safeWidth) * 100;
 
-  const farmSegments = segments.filter((s) => !s.isBreak).sort((a, b) => b.minutes - a.minutes);
+  const farmSegments = segments.filter((s) => s.kind === 'farm').sort((a, b) => b.minutes - a.minutes);
   const longBreaks = segments.filter((s) => s.kind === 'long_break').sort((a, b) => b.minutes - a.minutes);
   const shortBreaks = segments.filter((s) => s.kind === 'short_break').sort((a, b) => b.minutes - a.minutes);
+  const stoppedSegments = segments.filter((s) => s.kind === 'stopped').sort((a, b) => b.minutes - a.minutes);
+  const pausedSegments = segments.filter((s) => s.kind === 'paused').sort((a, b) => b.minutes - a.minutes);
 
   const orderedCandidates: NormalizedSegment[] = [];
   if (farmSegments[0]) orderedCandidates.push(farmSegments[0]);
+  if (stoppedSegments[0]) orderedCandidates.push(stoppedSegments[0]);
+  if (pausedSegments[0]) orderedCandidates.push(pausedSegments[0]);
   if (longBreaks[0]) {
     orderedCandidates.push(longBreaks[0]);
   } else if (shortBreaks[0]) {
@@ -288,9 +340,14 @@ function selectStaticBubbles(
   const rest = segments
     .filter((s) => !orderedCandidates.some((c) => c.id === s.id))
     .sort((a, b) => {
-      const scoreA = a.minutes + (a.kind === 'long_break' ? 20 : a.kind === 'farm' ? 12 : 0);
-      const scoreB = b.minutes + (b.kind === 'long_break' ? 20 : b.kind === 'farm' ? 12 : 0);
-      return scoreB - scoreA;
+      const bonus = (seg: NormalizedSegment) => {
+        if (seg.kind === 'stopped') return 26;
+        if (seg.kind === 'paused') return 24;
+        if (seg.kind === 'long_break') return 20;
+        if (seg.kind === 'farm') return 12;
+        return 0;
+      };
+      return b.minutes + bonus(b) - (a.minutes + bonus(a));
     });
   orderedCandidates.push(...rest);
 
@@ -339,6 +396,83 @@ function selectStaticBubbles(
   return placed.sort((a, b) => a.bubblePct - b.bubblePct);
 }
 
+function getSegmentBarClasses(seg: NormalizedSegment): string {
+  if (!seg.actual) {
+    // Planned segment: same hue, dimmed (~0.45 opacity) with subtle diagonal hatching
+    switch (seg.kind) {
+      case 'farm':
+        return 'bg-[repeating-linear-gradient(-45deg,rgba(255,255,255,0.95)_0px,rgba(255,255,255,0.95)_3px,rgba(255,255,255,0.3)_3px,rgba(255,255,255,0.3)_6px)] opacity-45';
+      case 'long_break':
+      case 'short_break':
+        return 'bg-[repeating-linear-gradient(-45deg,rgba(161,161,170,0.95)_0px,rgba(161,161,170,0.95)_3px,rgba(113,113,122,0.35)_3px,rgba(113,113,122,0.35)_6px)] opacity-45 ring-1 ring-black/80';
+      case 'stopped':
+        return 'bg-[repeating-linear-gradient(-45deg,rgba(190,18,60,0.9)_0px,rgba(190,18,60,0.9)_3px,rgba(136,19,55,0.35)_3px,rgba(136,19,55,0.35)_6px)] opacity-45 ring-1 ring-black/80';
+      case 'paused':
+        return 'bg-[repeating-linear-gradient(-45deg,rgba(245,158,11,0.95)_0px,rgba(245,158,11,0.95)_3px,rgba(180,83,9,0.35)_3px,rgba(180,83,9,0.35)_6px)] opacity-45 ring-1 ring-black/80';
+    }
+  }
+
+  // Actual (completed or currently running) solid segment
+  switch (seg.kind) {
+    case 'farm':
+      return 'bg-white shadow-[0_0_12px_rgba(255,255,255,0.6)]';
+    case 'long_break':
+      return 'bg-zinc-500 ring-1 ring-black/80';
+    case 'short_break':
+      return 'bg-zinc-600 ring-1 ring-black/80';
+    case 'stopped':
+      return 'bg-rose-800 ring-1 ring-black/80';
+    case 'paused':
+      return 'bg-amber-500 ring-1 ring-black/80';
+  }
+}
+
+function getBubbleTheme(seg: NormalizedSegment): {
+  card: string;
+  title: string;
+  planTag: string;
+  time: string;
+  pointer: string;
+} {
+  const planOpacity = seg.actual ? '' : 'opacity-75';
+
+  switch (seg.kind) {
+    case 'farm':
+      return {
+        card: `bg-white text-black shadow-[0_6px_22px_rgba(255,255,255,0.22)] ${planOpacity}`,
+        title: 'text-zinc-800',
+        planTag: 'text-zinc-500',
+        time: 'text-black',
+        pointer: 'bg-white',
+      };
+    case 'long_break':
+    case 'short_break':
+      return {
+        card: `bg-zinc-800/95 border border-zinc-600/80 text-zinc-300 shadow-[0_6px_16px_rgba(0,0,0,0.65)] ${planOpacity}`,
+        title: 'text-zinc-300',
+        planTag: 'text-zinc-500',
+        time: 'text-zinc-400',
+        pointer: 'bg-zinc-800 border-r border-b border-zinc-600/80',
+      };
+    case 'stopped':
+      return {
+        card: `bg-rose-950/95 border border-rose-700/70 text-rose-200 shadow-[0_6px_16px_rgba(0,0,0,0.65)] ${planOpacity}`,
+        title: 'text-rose-200',
+        planTag: 'text-rose-400/80',
+        time: 'text-rose-300/85',
+        pointer: 'bg-rose-950 border-r border-b border-rose-700/70',
+      };
+    case 'paused':
+      return {
+        card: `bg-amber-950/95 border border-amber-500/60 text-amber-200 shadow-[0_6px_16px_rgba(0,0,0,0.65)] ${planOpacity}`,
+        title: 'text-amber-200',
+        planTag: 'text-amber-400/80',
+        time: 'text-amber-300/90',
+        pointer: 'bg-amber-950 border-r border-b border-amber-500/60',
+      };
+  }
+}
+
 export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
   preview,
   isLoading = false,
@@ -371,16 +505,19 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
     return () => window.removeEventListener('resize', updateWidth);
   }, []);
 
+  const effectiveNowMs = useMemo(() => {
+    if (hasNowMs(preview)) return preview.now_ms;
+    return nowMs;
+  }, [preview, nowMs]);
+
   const rawVisibleSegments = useMemo(() => {
     if (!preview || !preview.ok || preview.off) return [];
-    return (preview.segments || []).filter(
-      (seg) => seg.kind === 'farm' || seg.kind === 'short_break' || seg.kind === 'long_break'
-    );
+    return (preview.segments || []).filter((seg) => isVisibleKind(seg.kind));
   }, [preview]);
 
   const timelineRange = useMemo(
-    () => computeTimelineRange(rawVisibleSegments),
-    [rawVisibleSegments]
+    () => computeTimelineRange(rawVisibleSegments, effectiveNowMs),
+    [rawVisibleSegments, effectiveNowMs]
   );
 
   const segments = useMemo(
@@ -401,29 +538,41 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
     [segments, containerWidth]
   );
 
-  const farmCount = useMemo(() => segments.filter((s) => !s.isBreak).length, [segments]);
-  const breakCount = useMemo(() => segments.filter((s) => s.isBreak).length, [segments]);
-  const totalFarmMinutes = useMemo(() => {
-    if (preview?.farm_s) return Math.round(preview.farm_s / 60);
-    return segments.filter((s) => !s.isBreak).reduce((sum, s) => sum + s.minutes, 0);
+  // Strictly use backend-provided sessions & farm_s (pause does not split session count)
+  const sessionsCount = useMemo(() => {
+    if (preview && typeof preview.sessions === 'number') return preview.sessions;
+    return segments.filter((s) => s.kind === 'farm').length;
   }, [preview, segments]);
+
+  const totalFarmMinutes = useMemo(() => {
+    if (preview && typeof preview.farm_s === 'number') {
+      return Math.round(preview.farm_s / 60);
+    }
+    return segments.filter((s) => s.kind === 'farm').reduce((sum, s) => sum + s.minutes, 0);
+  }, [preview, segments]);
+
+  const breakCount = useMemo(() => segments.filter((s) => s.isBreak).length, [segments]);
   const totalBreakMinutes = useMemo(
     () => segments.filter((s) => s.isBreak).reduce((sum, s) => sum + s.minutes, 0),
     [segments]
   );
 
+  const hasPaused = useMemo(() => segments.some((s) => s.kind === 'paused'), [segments]);
+  const hasStopped = useMemo(() => segments.some((s) => s.kind === 'stopped'), [segments]);
+  const hasPlanned = useMemo(() => segments.some((s) => !s.actual), [segments]);
+
   const isOffState = !isScheduleEnabled || !isDayEnabled || preview?.off === true;
   const hasError = preview !== null && preview.ok === false && Boolean(preview.error);
 
   const nowPct = useMemo(() => {
-    if (nowMs == null || !timelineRange || timelineRange.spanMs <= 0) return null;
-    if (nowMs < timelineRange.startMs || nowMs > timelineRange.endMs) return null;
-    return ((nowMs - timelineRange.startMs) / timelineRange.spanMs) * 100;
-  }, [nowMs, timelineRange]);
+    if (effectiveNowMs == null || !timelineRange || timelineRange.spanMs <= 0) return null;
+    if (effectiveNowMs < timelineRange.startMs || effectiveNowMs > timelineRange.endMs) return null;
+    return ((effectiveNowMs - timelineRange.startMs) / timelineRange.spanMs) * 100;
+  }, [effectiveNowMs, timelineRange]);
 
   return (
     <div className={`${className} flex flex-col gap-3`}>
-      {/* Top summary row + legend + shuffle button */}
+      {/* Top summary row + legend + shuffle/note */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono tabular-nums">
           {isOffState ? (
@@ -447,7 +596,7 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
           ) : preview ? (
             <>
               <span className="text-zinc-200 font-semibold">
-                {formatSessionsCount(farmCount, isRu)} · ~{formatDuration(totalFarmMinutes, isRu)}
+                {formatSessionsCount(sessionsCount, isRu)} · ~{formatDuration(totalFarmMinutes, isRu)}
               </span>
               {breakCount > 0 && (
                 <span className="text-zinc-500">
@@ -462,7 +611,7 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
           )}
 
           {!isOffState && !hasError && (
-            <div className="flex items-center gap-3 pl-1 text-[10px] font-mono">
+            <div className="flex flex-wrap items-center gap-3 pl-1 text-[10px] font-mono">
               <span className="inline-flex items-center gap-1.5 text-zinc-300">
                 <span className="w-3.5 h-[4px] rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.75)]" />
                 <span>{isRu ? 'Сессия' : 'Session'}</span>
@@ -471,6 +620,24 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
                 <span className="w-3.5 h-[4px] rounded-full bg-zinc-500" />
                 <span>{isRu ? 'Перерыв' : 'Break'}</span>
               </span>
+              {hasPaused && (
+                <span className="inline-flex items-center gap-1.5 text-amber-400/90">
+                  <span className="w-3.5 h-[4px] rounded-full bg-amber-500" />
+                  <span>{isRu ? 'Пауза' : 'Paused'}</span>
+                </span>
+              )}
+              {hasStopped && (
+                <span className="inline-flex items-center gap-1.5 text-rose-400/90">
+                  <span className="w-3.5 h-[4px] rounded-full bg-rose-800" />
+                  <span>{isRu ? 'Остановлено' : 'Stopped'}</span>
+                </span>
+              )}
+              {hasPlanned && (
+                <span className="inline-flex items-center gap-1.5 text-zinc-500">
+                  <span className="w-3.5 h-[4px] rounded-full bg-[repeating-linear-gradient(-45deg,rgba(255,255,255,0.95)_0px,rgba(255,255,255,0.95)_2px,rgba(255,255,255,0.25)_2px,rgba(255,255,255,0.25)_4px)] opacity-45" />
+                  <span>{isRu ? 'План' : 'Plan'}</span>
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -513,6 +680,7 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
             !hasError &&
             staticBubbles.map((item) => {
               const { segment, bubblePct, pointerOffsetPx } = item;
+              const theme = getBubbleTheme(segment);
 
               return (
                 <div
@@ -521,33 +689,24 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
                   className="absolute bottom-2 -translate-x-1/2"
                 >
                   <div
-                    className={`relative rounded-xl px-2.5 py-1.5 text-center whitespace-nowrap select-none ${
-                      segment.isBreak
-                        ? 'bg-zinc-800/95 border border-zinc-600/80 text-zinc-300 shadow-[0_6px_16px_rgba(0,0,0,0.65)]'
-                        : 'bg-white text-black shadow-[0_6px_22px_rgba(255,255,255,0.22)]'
-                    }`}
+                    className={`relative rounded-xl px-2.5 py-1.5 text-center whitespace-nowrap select-none ${theme.card}`}
                   >
-                    <div
-                      className={`text-[10px] leading-tight font-medium ${
-                        segment.isBreak ? 'text-zinc-300' : 'text-zinc-800'
-                      }`}
-                    >
-                      {segment.shortLabel}
+                    <div className={`text-[10px] leading-tight font-medium ${theme.title}`}>
+                      <span>{segment.shortLabel}</span>
+                      {!segment.actual && (
+                        <span className={`ml-1 font-normal ${theme.planTag}`}>
+                          · {isRu ? 'план' : 'plan'}
+                        </span>
+                      )}
                     </div>
                     <div
-                      className={`text-[11px] leading-tight font-mono font-semibold tabular-nums mt-0.5 ${
-                        segment.isBreak ? 'text-zinc-400' : 'text-black'
-                      }`}
+                      className={`text-[11px] leading-tight font-mono font-semibold tabular-nums mt-0.5 ${theme.time}`}
                     >
                       {segment.timeRange}
                     </div>
                     <span
                       style={{ transform: `translateX(calc(-50% + ${pointerOffsetPx}px)) rotate(45deg)` }}
-                      className={`absolute left-1/2 -bottom-[4.5px] w-2.5 h-2.5 ${
-                        segment.isBreak
-                          ? 'bg-zinc-800 border-r border-b border-zinc-600/80'
-                          : 'bg-white'
-                      }`}
+                      className={`absolute left-1/2 -bottom-[4.5px] w-2.5 h-2.5 ${theme.pointer}`}
                     />
                   </div>
                 </div>
@@ -570,7 +729,7 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
           )}
         </div>
 
-        {/* Horizontal baseline + active white sessions & gray breaks */}
+        {/* Horizontal baseline + segments */}
         <div className="relative h-6 flex items-center pointer-events-none">
           <div
             className={`w-full h-[1.5px] rounded-full ${
@@ -592,31 +751,23 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
                 style={{
                   left: `${seg.leftPct}%`,
                   width: `${seg.widthPct}%`,
-                  minWidth: seg.isBreak ? '8px' : '10px',
+                  minWidth: seg.kind === 'farm' ? '10px' : '8px',
                 }}
                 className={`absolute top-1/2 -translate-y-1/2 h-6 flex items-center justify-center ${
-                  seg.isBreak ? 'z-20' : 'z-10'
+                  seg.kind === 'farm' ? 'z-10' : 'z-20'
                 }`}
               >
-                <span
-                  className={`w-full h-[6px] rounded-full ${
-                    seg.isBreak
-                      ? seg.kind === 'long_break'
-                        ? 'bg-zinc-500 ring-1 ring-black/80'
-                        : 'bg-zinc-600 ring-1 ring-black/80'
-                      : 'bg-white shadow-[0_0_12px_rgba(255,255,255,0.6)]'
-                  }`}
-                />
+                <span className={`w-full h-[6px] rounded-full ${getSegmentBarClasses(seg)}`} />
               </div>
             ))}
 
-          {/* Current time indicator when running live */}
+          {/* Thin vertical "now" marker at now_ms */}
           {!isOffState && !hasError && nowPct !== null && (
             <div
               style={{ left: `${nowPct}%` }}
               className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-30 flex flex-col items-center"
             >
-              <span className="w-[2px] h-4 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.95)]" />
+              <span className="w-[1.5px] h-5 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.95)]" />
             </div>
           )}
         </div>

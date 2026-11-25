@@ -426,6 +426,35 @@ export interface SchedulePreview {
   timezone: string;                       // например «UTC+03:00»
 }
 
+export type ScheduleDaySegmentKind =
+  | 'farm' | 'short_break' | 'long_break' | 'wait_window'
+  | 'stopped'   // человек нажал «Стоп» / панель была закрыта — до следующего «Старт» в тот же день
+  | 'paused';   // пауза клавишей
+
+export interface ScheduleDaySegment {
+  kind: ScheduleDaySegmentKind;
+  start_ms: number;
+  end_ms: number;
+  minutes: number;
+  actual: boolean;        // true — было на деле (факт); false — план (ещё впереди)
+}
+
+export interface ScheduleDay {
+  ok: boolean;
+  error?: string;
+  date: string;                           // 'YYYY-MM-DD' (игровой день с 05:00)
+  off: boolean;
+  daily_hours: [number, number] | null;
+  windows: { start_ms: number; end_ms: number }[];
+  segments: ScheduleDaySegment[];         // по времени, без наложений; факт и план идут подряд
+  sessions: number;                       // сессий за день (факт + план; пауза сессию не делит)
+  farm_s: number;
+  start_ms: number | null;
+  end_ms: number | null;
+  timezone: string;
+  now_ms: number;                         // «сейчас» по часам бота — граница факта и плана
+}
+
 export interface ScheduleToday {
   date: string;        // 'YYYY-MM-DD' (игровой день начинается в 05:00)
   off: boolean;        // сегодня выходной
@@ -489,6 +518,7 @@ declare global {
         get_schedule_status?(): Promise<ScheduleStatus>;
         get_schedule_styles?(): Promise<{ ok: boolean; styles: ScheduleStyle[] }>;
         preview_schedule_day?(configJson: string, weekday: number, seed: number): Promise<SchedulePreview>;
+        get_schedule_day?(): Promise<ScheduleDay>;
 
         // Auction & Prices API
         get_price_status?(): Promise<{ ok: boolean } & PriceStatus>;
