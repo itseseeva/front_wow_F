@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   CalendarClock,
   Clock,
@@ -31,6 +31,7 @@ import {
 } from '../types';
 import { SpecularCard, SpecularButton } from './ui/Specular';
 import { SpecularTimePicker } from './SpecularTimePicker';
+import { ScheduleTimelineStrip } from './ScheduleTimelineStrip';
 import {
   DEFAULT_SCHEDULE_SETTINGS,
   DEFAULT_SCHEDULE_STYLES,
@@ -128,7 +129,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   const [preview, setPreview] = useState<SchedulePreview | null>(null);
   const [previewSeed, setPreviewSeed] = useState<number>(() => Math.floor(Math.random() * 10000));
-  const [activeSegmentIdx, setActiveSegmentIdx] = useState<number | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState<boolean>(false);
+  const hasLoadedPreviewRef = useRef<boolean>(false);
 
   const [mergingIdx, setMergingIdx] = useState<number | null>(null);
   const [justMergedOrigIndex, setJustMergedOrigIndex] = useState<number | null>(null);
@@ -191,9 +193,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     };
   }, []);
 
-  // Debounced preview_schedule_day call (~300ms)
+  // Debounced preview_schedule_day call (immediate on first mount, ~250ms on edits)
   useEffect(() => {
     let cancelled = false;
+    const delayMs = hasLoadedPreviewRef.current ? 250 : 0;
+    setIsPreviewLoading(true);
     const timer = setTimeout(async () => {
       try {
         const weekdayIdx = WEEKDAY_KEYS.indexOf(selectedDayKey);
@@ -202,18 +206,24 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         if (api?.preview_schedule_day) {
           const res = await api.preview_schedule_day(configJson, weekdayIdx, previewSeed);
           if (!cancelled && res) {
+            hasLoadedPreviewRef.current = true;
             setPreview(res);
             return;
           }
         }
         const mockRes = await mockPreviewScheduleDay(configJson, weekdayIdx, previewSeed);
         if (!cancelled) {
+          hasLoadedPreviewRef.current = true;
           setPreview(mockRes);
         }
       } catch (err) {
         console.warn('preview_schedule_day error:', err);
+      } finally {
+        if (!cancelled) {
+          setIsPreviewLoading(false);
+        }
       }
-    }, 300);
+    }, delayMs);
 
     return () => {
       cancelled = true;
@@ -739,6 +749,15 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
               </p>
             </SpecularCard>
           </div>
+
+          <ScheduleTimelineStrip
+            preview={preview}
+            isLoading={isPreviewLoading}
+            isDayEnabled={currentDay.enabled}
+            isScheduleEnabled={scheduleSettings.enabled}
+            isRu={isRu}
+            onShuffle={handleShuffleSeed}
+          />
         </SpecularCard>
 
         {/* DAY CONFIGURATION */}

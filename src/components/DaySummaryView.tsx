@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { DayResponse, SessionHeatmapResponse, LootStatus, ScheduleStatus, AutoRouteStatus, TerrainStatus, PriceStatus } from '../types';
+import { DayResponse, SessionHeatmapResponse, LootStatus, ScheduleStatus, ScheduleSettings, SchedulePreview, AutoRouteStatus, TerrainStatus, PriceStatus } from '../types';
 import { getPywebviewApi } from '../utils/pywebviewBridge';
 import { mockGetAutoRouteStatus, startMockAutoRouteSimulation } from '../data/mockRoutes';
+import { WEEKDAY_KEYS, mockPreviewScheduleDay } from '../data/mockSchedule';
 import {
   BarChart3,
   Calendar as CalendarIcon,
@@ -21,6 +22,7 @@ import { MoneyBadge } from '../utils/money';
 import { SplitLootTables } from './SplitLootTables';
 import { RouteItem } from './StealthHUDLeftSidebar';
 import { SalesLogModal } from './SalesLogModal';
+import { ScheduleTimelineStrip } from './ScheduleTimelineStrip';
 
 interface DaySummaryViewProps {
   selectedDate: string;
@@ -39,6 +41,7 @@ interface DaySummaryViewProps {
   lootStatus?: LootStatus | null;
   activeRoute?: RouteItem | null;
   scheduleStatus?: ScheduleStatus | null;
+  scheduleSettings?: ScheduleSettings | null;
   initialAutoRouteStatus?: AutoRouteStatus | null;
   initialTerrainStatus?: TerrainStatus | null;
   onStopBot?: () => void;
@@ -129,6 +132,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
   lootStatus = null,
   activeRoute = null,
   scheduleStatus = null,
+  scheduleSettings = null,
   initialAutoRouteStatus = null,
   initialTerrainStatus = null,
   onStopBot,
@@ -193,6 +197,48 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
   }, []);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [liveSchedulePreview, setLiveSchedulePreview] = useState<SchedulePreview | null>(null);
+
+  const todayWeekdayIdx = useMemo(() => {
+    const jsDay = new Date().getDay();
+    return jsDay === 0 ? 6 : jsDay - 1;
+  }, []);
+  const todayWeekdayKey = WEEKDAY_KEYS[todayWeekdayIdx] || 'mon';
+  const todayDaySchedule = scheduleSettings?.days?.[todayWeekdayKey] || null;
+
+  useEffect(() => {
+    if (!isBotRunning || !scheduleSettings) {
+      return;
+    }
+    let cancelled = false;
+    const d = new Date();
+    const todaySeed = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+
+    const loadLivePreview = async () => {
+      try {
+        const configJson = JSON.stringify({ schedule: scheduleSettings });
+        const api = await getPywebviewApi();
+        if (api?.preview_schedule_day) {
+          const res = await api.preview_schedule_day(configJson, todayWeekdayIdx, todaySeed);
+          if (!cancelled && res) {
+            setLiveSchedulePreview(res);
+            return;
+          }
+        }
+        const mockRes = await mockPreviewScheduleDay(configJson, todayWeekdayIdx, todaySeed);
+        if (!cancelled) {
+          setLiveSchedulePreview(mockRes);
+        }
+      } catch (err) {
+        console.warn('live preview_schedule_day error:', err);
+      }
+    };
+
+    loadLivePreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [isBotRunning, scheduleSettings, todayWeekdayIdx]);
   useEffect(() => {
     const interval = setInterval(() => {
       setNowMs(Date.now());
@@ -785,6 +831,20 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     </div>
                   </div>
                 </div>
+                )}
+
+                {/* Live Schedule Timeline Strip (below live metric cards while bot is running) */}
+                {isBotRunning && scheduleSettings && (
+                  <ScheduleTimelineStrip
+                    preview={liveSchedulePreview}
+                    isDayEnabled={todayDaySchedule ? todayDaySchedule.enabled : true}
+                    isScheduleEnabled={liveScheduleStatus?.enabled ?? scheduleSettings.enabled}
+                    isRu={isRu}
+                    showShuffle={false}
+                    nowMs={nowMs}
+                    rightNote={liveScheduleStatus?.note || null}
+                    className="border-t border-white/10 pt-4"
+                  />
                 )}
 
                 {/* 1. Unified «Сканирование местности» loading block / AutoRoute ready / error */}

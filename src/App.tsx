@@ -1887,6 +1887,7 @@ export const App: React.FC = () => {
                 lootStatus={lootStatus}
                 activeRoute={activeRoute}
                 scheduleStatus={scheduleStatus}
+                scheduleSettings={scheduleSettings}
                 initialAutoRouteStatus={liveAutoRouteStatus}
                 initialTerrainStatus={liveTerrainStatus}
                 onStopBot={handleToggleBot}
