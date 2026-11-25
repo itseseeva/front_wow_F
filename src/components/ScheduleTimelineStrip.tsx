@@ -35,6 +35,9 @@ interface NormalizedSegment {
   id: number;
   kind: VisibleKind;
   actual: boolean;
+  isCurrent: boolean;
+  progressPct: number; // 0..100 fill of fact portion inside this segment when isCurrent
+  remainingMs: number;
   isBreak: boolean;
   startMs: number;
   endMs: number;
@@ -99,6 +102,17 @@ function formatDuration(minutes: number, isRu: boolean): string {
     return isRu ? `${h}ч` : `${h}h`;
   }
   return isRu ? `${h}ч ${m}м` : `${h}h ${m}m`;
+}
+
+function formatCountdown(remainingMs: number): string {
+  const totalSec = Math.max(0, Math.ceil(remainingMs / 1000));
+  const hrs = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  if (hrs > 0) {
+    return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+  return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
 function formatSessionsCount(count: number, isRu: boolean): string {
@@ -217,6 +231,7 @@ function buildAxisTicks(range: TimelineRange, containerWidth: number): AxisTick[
 function normalizeSegments(
   segments: AnyTimelineSegment[],
   range: TimelineRange | null,
+  effectiveNowMs: number | null,
   isRu: boolean
 ): NormalizedSegment[] {
   if (!range || range.spanMs <= 0) return [];
@@ -236,7 +251,28 @@ function normalizeSegments(
     const widthPct = Math.max(0.35, ((clampedEnd - clampedStart) / range.spanMs) * 100);
     const anchorPct = Math.min(100, leftPct + widthPct / 2);
 
-    const actual = 'actual' in seg && typeof seg.actual === 'boolean' ? seg.actual : true;
+    const rawActual = 'actual' in seg && typeof seg.actual === 'boolean' ? seg.actual : true;
+
+    // Local per-second fact | plan boundary when live clock is active
+    let actual = rawActual;
+    let isCurrent = false;
+    let progressPct = rawActual ? 100 : 0;
+    let remainingMs = 0;
+
+    if (effectiveNowMs !== null) {
+      if (seg.start_ms < effectiveNowMs && effectiveNowMs < seg.end_ms) {
+        isCurrent = true;
+        actual = true;
+        const segSpanMs = Math.max(1, seg.end_ms - seg.start_ms);
+        progressPct = Math.max(0, Math.min(100, ((effectiveNowMs - seg.start_ms) / segSpanMs) * 100));
+        remainingMs = Math.max(0, seg.end_ms - effectiveNowMs);
+      } else if (!rawActual && seg.end_ms <= effectiveNowMs) {
+        // Planned segment already passed before next backend refresh -> render as fact
+        actual = true;
+        progressPct = 100;
+      }
+    }
+
     const isBreak = seg.kind === 'short_break' || seg.kind === 'long_break';
 
     let label = isRu ? 'Сессия' : 'Session';
@@ -256,6 +292,9 @@ function normalizeSegments(
       id: idx,
       kind: seg.kind,
       actual,
+      isCurrent,
+      progressPct,
+      remainingMs,
       isBreak,
       startMs: seg.start_ms,
       endMs: seg.end_ms,
@@ -272,11 +311,20 @@ function normalizeSegments(
 }
 
 function estimateBubbleWidthPx(seg: NormalizedSegment, isRu: boolean): number {
-  const planSuffix = !seg.actual ? (isRu ? ' · план' : ' · plan') : '';
-  const titleLen = seg.label.length + planSuffix.length;
+  const suffix = seg.isCurrent
+    ? isRu
+      ? ' · идёт'
+      : ' · live'
+    : !seg.actual
+    ? isRu
+      ? ' · план'
+      : ' · plan'
+    : '';
+  const titleLen = seg.label.length + suffix.length;
   const timeLen = seg.timeRange.length;
-  const maxChars = Math.max(titleLen, timeLen);
-  return Math.max(88, Math.min(172, Math.round(maxChars * 6.4 + 24)));
+  const countdownLen = seg.isCurrent ? (isRu ? 15 : 11) : 0;
+  const maxChars = Math.max(titleLen, timeLen, countdownLen);
+  return Math.max(88, Math.min(182, Math.round(maxChars * 6.4 + 24)));
 }
 
 function clampBubblePosition(
@@ -390,11 +438,15 @@ function selectStaticBubbles(
   return { top: topRow, bottom: bottomRow };
 }
 
-function getSegmentBarClasses(seg: NormalizedSegment, isSelected: boolean): string {
+function getSegmentBarClasses(
+  kind: VisibleKind,
+  isFact: boolean,
+  isSelected: boolean
+): string {
   const highlightRing = isSelected ? 'ring-1 ring-white/70' : '';
 
-  if (!seg.actual) {
-    switch (seg.kind) {
+  if (!isFact) {
+    switch (kind) {
       case 'farm':
         return `bg-[repeating-linear-gradient(-45deg,rgba(255,255,255,0.95)_0px,rgba(255,255,255,0.95)_3px,rgba(255,255,255,0.3)_3px,rgba(255,255,255,0.3)_6px)] ${
           isSelected ? 'opacity-80' : 'opacity-45'
@@ -419,7 +471,7 @@ function getSegmentBarClasses(seg: NormalizedSegment, isSelected: boolean): stri
     }
   }
 
-  switch (seg.kind) {
+  switch (kind) {
     case 'farm':
       return isSelected
         ? 'bg-white shadow-[0_0_16px_rgba(255,255,255,0.95)]'
@@ -558,10 +610,12 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
     setPinnedId(null);
   }, [preview]);
 
+  // Prefer the 1-second ticking nowMs prop; fall back to preview.now_ms only when prop is omitted
   const effectiveNowMs = useMemo(() => {
+    if (nowMs != null) return nowMs;
     if (hasNowMs(preview)) return preview.now_ms;
-    return nowMs;
-  }, [preview, nowMs]);
+    return null;
+  }, [nowMs, preview]);
 
   const rawVisibleSegments = useMemo(() => {
     if (!preview || !preview.ok || preview.off) return [];
@@ -576,9 +630,9 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
   const segments = useMemo(
     () =>
       preview && preview.ok && !preview.off
-        ? normalizeSegments(preview.segments || [], timelineRange, isRu)
+        ? normalizeSegments(preview.segments || [], timelineRange, effectiveNowMs, isRu)
         : [],
-    [preview, timelineRange, isRu]
+    [preview, timelineRange, effectiveNowMs, isRu]
   );
 
   const axisTicks = useMemo(
@@ -627,7 +681,11 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
 
   const hasPaused = useMemo(() => segments.some((s) => s.kind === 'paused'), [segments]);
   const hasStopped = useMemo(() => segments.some((s) => s.kind === 'stopped'), [segments]);
-  const hasPlanned = useMemo(() => segments.some((s) => !s.actual), [segments]);
+  const hasPlanned = useMemo(
+    () => segments.some((s) => !s.actual || s.isCurrent),
+    [segments]
+  );
+  const hasCurrentSegment = useMemo(() => segments.some((s) => s.isCurrent), [segments]);
 
   const isOffState = !isScheduleEnabled || !isDayEnabled || preview?.off === true;
   const hasError = preview !== null && preview.ok === false && Boolean(preview.error);
@@ -746,12 +804,16 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
       <div className="px-3">
         <div
           ref={trackRef}
-          className={`relative w-full pt-[66px] ${hasBottomRow ? 'pb-[64px]' : 'pb-1'} transition-opacity duration-200 ${
-            isLoading ? 'opacity-65' : 'opacity-100'
-          }`}
+          className={`relative w-full ${hasCurrentSegment ? 'pt-[78px]' : 'pt-[66px]'} ${
+            hasBottomRow ? (hasCurrentSegment ? 'pb-[76px]' : 'pb-[64px]') : 'pb-1'
+          } transition-opacity duration-200 ${isLoading ? 'opacity-65' : 'opacity-100'}`}
         >
           {/* TOP callouts layer (above the horizontal baseline, pointer down) */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-[60px]">
+          <div
+            className={`pointer-events-none absolute inset-x-0 top-0 ${
+              hasCurrentSegment ? 'h-[72px]' : 'h-[60px]'
+            }`}
+          >
             {!isOffState &&
               !hasError &&
               topBubbles.map((item) => {
@@ -777,17 +839,28 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
                     >
                       <div className={`text-[10px] leading-tight font-medium ${theme.title}`}>
                         <span>{segment.label}</span>
-                        {!segment.actual && (
+                        {segment.isCurrent ? (
+                          <span className={`ml-1 font-semibold ${theme.planTag}`}>
+                            · {isRu ? 'идёт' : 'live'}
+                          </span>
+                        ) : !segment.actual ? (
                           <span className={`ml-1 font-normal ${theme.planTag}`}>
                             · {isRu ? 'план' : 'plan'}
                           </span>
-                        )}
+                        ) : null}
                       </div>
                       <div
                         className={`text-[11px] leading-tight font-mono font-semibold tabular-nums mt-0.5 ${theme.time}`}
                       >
                         {segment.timeRange}
                       </div>
+                      {segment.isCurrent && (
+                        <div
+                          className={`text-[10px] leading-tight font-mono tabular-nums mt-0.5 ${theme.planTag}`}
+                        >
+                          {isRu ? 'осталось' : 'left'} {formatCountdown(segment.remainingMs)}
+                        </div>
+                      )}
                       <span
                         style={{ transform: `translateX(calc(-50% + ${pointerOffsetPx}px)) rotate(45deg)` }}
                         className={`absolute left-1/2 -bottom-[4.5px] w-2.5 h-2.5 ${theme.pointerDown}`}
@@ -812,17 +885,28 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
                     >
                       <div className={`text-[10px] leading-tight font-semibold ${theme.title}`}>
                         <span>{activeSegment.label}</span>
-                        {!activeSegment.actual && (
+                        {activeSegment.isCurrent ? (
+                          <span className={`ml-1 font-semibold ${theme.planTag}`}>
+                            · {isRu ? 'идёт' : 'live'}
+                          </span>
+                        ) : !activeSegment.actual ? (
                           <span className={`ml-1 font-normal ${theme.planTag}`}>
                             · {isRu ? 'план' : 'plan'}
                           </span>
-                        )}
+                        ) : null}
                       </div>
                       <div
                         className={`text-[11px] leading-tight font-mono font-bold tabular-nums mt-0.5 ${theme.time}`}
                       >
                         {activeSegment.timeRange}
                       </div>
+                      {activeSegment.isCurrent && (
+                        <div
+                          className={`text-[10px] leading-tight font-mono tabular-nums mt-0.5 ${theme.planTag}`}
+                        >
+                          {isRu ? 'осталось' : 'left'} {formatCountdown(activeSegment.remainingMs)}
+                        </div>
+                      )}
                       <span
                         style={{
                           transform: `translateX(calc(-50% + ${activeBubblePlacement.pointerOffsetPx}px)) rotate(45deg)`,
@@ -904,12 +988,26 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
                     }}
                     className={`absolute top-1/2 -translate-y-1/2 h-6 flex items-center justify-center focus:outline-none cursor-pointer ${zClass}`}
                   >
-                    <span
-                      className={`w-full rounded-full transition-all duration-100 ${heightClass} ${getSegmentBarClasses(
-                        seg,
-                        isSelected
-                      )}`}
-                    />
+                    {seg.isCurrent ? (
+                      <span className={`w-full rounded-full overflow-hidden flex ${heightClass}`}>
+                        <span
+                          style={{ width: `${seg.progressPct}%` }}
+                          className={`h-full shrink-0 ${getSegmentBarClasses(seg.kind, true, isSelected)}`}
+                        />
+                        <span
+                          style={{ width: `${Math.max(0, 100 - seg.progressPct)}%` }}
+                          className={`h-full shrink-0 ${getSegmentBarClasses(seg.kind, false, isSelected)}`}
+                        />
+                      </span>
+                    ) : (
+                      <span
+                        className={`w-full rounded-full transition-all duration-100 ${heightClass} ${getSegmentBarClasses(
+                          seg.kind,
+                          seg.actual,
+                          isSelected
+                        )}`}
+                      />
+                    )}
                   </button>
                 );
               })}
@@ -969,7 +1067,11 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
 
           {/* BOTTOM callouts layer (second row below axis ticks, pointer up) */}
           {hasBottomRow && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[58px]">
+            <div
+              className={`pointer-events-none absolute inset-x-0 bottom-0 ${
+                hasCurrentSegment ? 'h-[70px]' : 'h-[58px]'
+              }`}
+            >
               {bottomBubbles.map((item) => {
                 const { segment, bubblePct, pointerOffsetPx } = item;
                 if (activeId === segment.id) return null;
@@ -991,17 +1093,28 @@ export const ScheduleTimelineStrip: React.FC<ScheduleTimelineStripProps> = ({
                       />
                       <div className={`text-[10px] leading-tight font-medium ${theme.title}`}>
                         <span>{segment.label}</span>
-                        {!segment.actual && (
+                        {segment.isCurrent ? (
+                          <span className={`ml-1 font-semibold ${theme.planTag}`}>
+                            · {isRu ? 'идёт' : 'live'}
+                          </span>
+                        ) : !segment.actual ? (
                           <span className={`ml-1 font-normal ${theme.planTag}`}>
                             · {isRu ? 'план' : 'plan'}
                           </span>
-                        )}
+                        ) : null}
                       </div>
                       <div
                         className={`text-[11px] leading-tight font-mono font-semibold tabular-nums mt-0.5 ${theme.time}`}
                       >
                         {segment.timeRange}
                       </div>
+                      {segment.isCurrent && (
+                        <div
+                          className={`text-[10px] leading-tight font-mono tabular-nums mt-0.5 ${theme.planTag}`}
+                        >
+                          {isRu ? 'осталось' : 'left'} {formatCountdown(segment.remainingMs)}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

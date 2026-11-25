@@ -237,8 +237,8 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
     window.addEventListener('wowbot:schedule-status', handleRefreshEvent);
     window.addEventListener('wowbot:pause', handleRefreshEvent);
 
-    // Refresh every 60 seconds so now_ms boundary and pause advance
-    const pollInterval = setInterval(loadScheduleDay, 60000);
+    // Refresh every 15 seconds to pick up pauses, extended fights, and recalculated plan
+    const pollInterval = setInterval(loadScheduleDay, 15000);
 
     return () => {
       cancelled = true;
@@ -849,6 +849,7 @@ export const DaySummaryView: React.FC<DaySummaryViewProps> = ({
                     isScheduleEnabled={liveScheduleStatus?.enabled ?? scheduleSettings?.enabled ?? true}
                     isRu={isRu}
                     showShuffle={false}
+                    nowMs={nowMs}
                     rightNote={liveScheduleStatus?.note || null}
                     className="border-t border-white/10 pt-4"
                   />
