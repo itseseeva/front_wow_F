@@ -171,27 +171,41 @@ export function normalizeScheduleSettings(raw: any): ScheduleSettings {
 }
 
 /**
- * Convert "HH:MM" to minutes from 05:00 game day start (0..1440)
- * Game day starts at 05:00 and ends at 05:00 the next morning.
+ * Convert "HH:MM" to minutes from midnight (0..1439).
+ * Игровой день — от первого окна дня (без фиксированной границы 05:00).
  */
-export function getGameDayMinutes(timeStr: string, isEnd = false): number {
+export function parseClockMinutes(timeStr: string): number {
   if (!timeStr || !timeStr.includes(':')) return 0;
   const [hStr, mStr] = timeStr.split(':');
-  const h = parseInt(hStr, 10) || 0;
-  const m = parseInt(mStr, 10) || 0;
-  const totalMin = h * 60 + m;
+  const h = ((parseInt(hStr, 10) || 0) % 24 + 24) % 24;
+  const m = ((parseInt(mStr, 10) || 0) % 60 + 60) % 60;
+  return h * 60 + m;
+}
 
-  if (isEnd && h === 5 && m === 0) {
-    return 1440;
-  }
+/**
+ * Duration of a window "start–end" in minutes:
+ * ((end - start) mod 1440) || 1440.
+ * If end < start, it crosses midnight into the next day.
+ * If end === start, it equals a full 24h (1440 min).
+ */
+export function getWindowDurationMinutes(start: string, end: string): number {
+  const s = parseClockMinutes(start);
+  const e = parseClockMinutes(end);
+  const diff = (((e - s) % 1440) + 1440) % 1440;
+  return diff === 0 ? 1440 : diff;
+}
 
-  if (totalMin >= 300) {
-    // 05:00..23:59
-    return totalMin - 300;
-  } else {
-    // 00:00..04:59 (after midnight)
-    return totalMin + 1140;
-  }
+/**
+ * Minutes from midnight (0..1439) for a clock string "HH:MM".
+ * Игровой день — от первого окна дня.
+ */
+export function getGameDayMinutes(timeStr: string, _isEnd = false): number {
+  return parseClockMinutes(timeStr);
+}
+
+function formatClockFromMinutes(totalMin: number): string {
+  const m = ((totalMin % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
 
 const DAY_NAMES_RU: Record<WeekdayKey, string> = {
@@ -234,35 +248,13 @@ export function validateScheduleSettings(settings: ScheduleSettings, isRu = true
         : `Schedule: ${dayName}: maximum 4 time windows allowed`;
     }
 
-    // Convert windows to game day spans
-    const spans: { start: number; end: number; raw: { start: string; end: string } }[] = [];
+    // Validate window minimum duration (>= 10 min); overnight and overlapping windows are valid
     for (const w of day.windows) {
-      const startMin = getGameDayMinutes(w.start, false);
-      const endMin = getGameDayMinutes(w.end, true);
-
-      if (endMin <= startMin) {
+      const durMin = getWindowDurationMinutes(w.start, w.end);
+      if (durMin < 10) {
         return isRu
-          ? `Расписание: ${dayName}: окно ${w.start}–${w.end} некорректно (конец должен быть позже начала)`
-          : `Schedule: ${dayName}: window ${w.start}–${w.end} invalid (end must be after start)`;
-      }
-
-      // Check not past 05:00 next day
-      if (endMin > 1440) {
-        return isRu
-          ? `Расписание: ${dayName}: окно не может заканчиваться позже 05:00`
-          : `Schedule: ${dayName}: window cannot end later than 05:00`;
-      }
-
-      spans.push({ start: startMin, end: endMin, raw: w });
-    }
-
-    // Sort spans and check overlaps
-    spans.sort((a, b) => a.start - b.start);
-    for (let i = 0; i < spans.length - 1; i++) {
-      if (spans[i].end > spans[i + 1].start) {
-        return isRu
-          ? `Расписание: ${dayName}: окна ${spans[i].raw.start}–${spans[i].raw.end} и ${spans[i + 1].raw.start}–${spans[i + 1].raw.end} пересекаются`
-          : `Schedule: ${dayName}: windows ${spans[i].raw.start}–${spans[i].raw.end} and ${spans[i + 1].raw.start}–${spans[i + 1].raw.end} overlap`;
+          ? `Расписание: ${dayName}: окно ${w.start}–${w.end} короче 10 мин`
+          : `Schedule: ${dayName}: window ${w.start}–${w.end} shorter than 10 min`;
       }
     }
 
@@ -407,20 +399,60 @@ export async function mockPreviewScheduleDay(
 
   const rng = seededRandom(seed || 42);
 
-  // Base timestamp for 05:00 today
-  const base05 = new Date(d);
-  base05.setHours(5, 0, 0, 0);
-  const baseMs = base05.getTime();
+  // Base timestamp for 00:00 today (игровой день — от первого окна дня)
+  const base00 = new Date(d);
+  base00.setHours(0, 0, 0, 0);
+  const baseMs = base00.getTime();
 
-  // Convert windows to start_ms and end_ms
-  const windowsMs = day.windows.map((w) => {
-    const sMin = getGameDayMinutes(w.start, false);
-    const eMin = getGameDayMinutes(w.end, true);
-    return {
-      start_ms: baseMs + sMin * 60 * 1000,
-      end_ms: baseMs + eMin * 60 * 1000,
-    };
-  });
+  // Sort raw windows by start (minutes from midnight) and merge overlaps
+  const notes: string[] = [];
+  const rawSpans = day.windows
+    .map((w) => {
+      const s = parseClockMinutes(w.start);
+      const e = s + getWindowDurationMinutes(w.start, w.end);
+      return { s, e, start: w.start, end: w.end };
+    })
+    .sort((a, b) => a.s - b.s);
+
+  const mergedSpans: { s: number; e: number }[] = [];
+  for (const span of rawSpans) {
+    const prev = mergedSpans[mergedSpans.length - 1];
+    if (prev && span.s <= prev.e) {
+      const prevStr = `${formatClockFromMinutes(prev.s)}–${formatClockFromMinutes(prev.e)}`;
+      prev.e = Math.max(prev.e, span.e);
+      const mergedStr = `${formatClockFromMinutes(prev.s)}–${formatClockFromMinutes(prev.e)}`;
+      if (span.s < prev.e) {
+        notes.push(`склеил ${prevStr} и ${span.start}–${span.end} в ${mergedStr}`);
+      }
+    } else {
+      mergedSpans.push({ s: span.s, e: span.e });
+    }
+  }
+
+  // Trim tail extending past next enabled weekday's first window start
+  const nextWeekdayIdx = (weekday + 1) % 7;
+  const nextDayKey = WEEKDAY_KEYS[nextWeekdayIdx];
+  const nextDay = scheduleSettings.days[nextDayKey];
+  if (nextDay && nextDay.enabled && nextDay.windows.length > 0 && mergedSpans.length > 0) {
+    const nextFirstStart = Math.min(...nextDay.windows.map((w) => parseClockMinutes(w.start)));
+    const nextLimit = 1440 + nextFirstStart;
+    for (const sp of mergedSpans) {
+      if (sp.e > nextLimit) {
+        const origStr = `${formatClockFromMinutes(sp.s)}–${formatClockFromMinutes(sp.e)}`;
+        const cutStr = formatClockFromMinutes(nextLimit);
+        sp.e = Math.max(sp.s + 10, nextLimit);
+        notes.push(
+          `окно ${origStr} обрезано до ${cutStr}: там начинается окно дня «${DAY_NAMES_RU[nextDayKey]}»`
+        );
+      }
+    }
+  }
+
+  // Convert merged windows to start_ms and end_ms
+  const windowsMs = mergedSpans.map((sp) => ({
+    start_ms: baseMs + sp.s * 60 * 1000,
+    end_ms: baseMs + sp.e * 60 * 1000,
+  }));
 
   // Calculate spread bounds based on dailySpread
   let spreadRatio = 0.25;
@@ -526,6 +558,7 @@ export async function mockPreviewScheduleDay(
     start_ms: segments[0]?.start_ms || null,
     end_ms: segments[segments.length - 1]?.end_ms || null,
     timezone: tz,
+    ...(notes.length > 0 ? { notes } : {}),
   };
 }
 
@@ -543,14 +576,20 @@ export function getMockScheduleStatus(isBotRunning: boolean, settings: ScheduleS
   const currentKey = WEEKDAY_KEYS[weekdayIdx];
   const daySchedule = settings.days[currentKey] || createDefaultDaySchedule();
 
-  const base05 = new Date(d);
-  base05.setHours(5, 0, 0, 0);
-  const baseMs = base05.getTime();
+  const base00 = new Date(d);
+  base00.setHours(0, 0, 0, 0);
+  const baseMs = base00.getTime();
 
-  const windowsMs = (daySchedule.windows || []).map((w) => ({
-    start_ms: baseMs + getGameDayMinutes(w.start, false) * 60 * 1000,
-    end_ms: baseMs + getGameDayMinutes(w.end, true) * 60 * 1000,
-  }));
+  const windowsMs = [...(daySchedule.windows || [])]
+    .sort((a, b) => parseClockMinutes(a.start) - parseClockMinutes(b.start))
+    .map((w) => {
+      const sMin = parseClockMinutes(w.start);
+      const eMin = sMin + getWindowDurationMinutes(w.start, w.end);
+      return {
+        start_ms: baseMs + sMin * 60 * 1000,
+        end_ms: baseMs + eMin * 60 * 1000,
+      };
+    });
 
   const start_ms = windowsMs[0]?.start_ms || baseMs + 10 * 60 * 60 * 1000;
   const end_ms = windowsMs[windowsMs.length - 1]?.end_ms || baseMs + 26 * 60 * 60 * 1000;

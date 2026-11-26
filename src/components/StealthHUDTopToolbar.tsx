@@ -7,6 +7,7 @@ interface StealthHUDTopToolbarProps {
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   isBotRunning: boolean;
+  isBotStopping?: boolean;
   isBotPaused?: boolean;
   pauseKey?: string;
   onToggleBot: () => void;
@@ -22,6 +23,7 @@ export const StealthHUDTopToolbar: React.FC<StealthHUDTopToolbarProps> = ({
   theme,
   onToggleTheme,
   isBotRunning,
+  isBotStopping = false,
   isBotPaused = false,
   pauseKey = 'PAUSE',
   onToggleBot,
@@ -74,7 +76,7 @@ export const StealthHUDTopToolbar: React.FC<StealthHUDTopToolbarProps> = ({
       </button>
 
       {/* 4. Amber Pause Badge (рядом с кнопкой СТОП) */}
-      {isBotRunning && isBotPaused && (
+      {isBotRunning && isBotPaused && !isBotStopping && (
         <div
           className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-500 dark:text-amber-400 font-mono text-xs font-semibold shadow-sm animate-pulse select-none whitespace-nowrap"
           title={isRu ? `Бот на паузе. Нажми ${formattedPauseKey}, чтобы продолжить` : `Bot paused. Press ${formattedPauseKey} to resume`}
@@ -87,24 +89,34 @@ export const StealthHUDTopToolbar: React.FC<StealthHUDTopToolbarProps> = ({
         </div>
       )}
 
-      {/* 5. Action Button: START / STOP (Ghost Specular Button) */}
+      {/* 5. Action Button: START / STOP / STOPPING (Ghost Specular Button) */}
       <SpecularButton
+        disabled={isBotStopping}
         onClick={() => {
-          if (isBotRunning) {
-            soundFx.playStop();
-          } else {
-            soundFx.playStart();
-          }
+          if (isBotStopping) return;
           onToggleBot();
         }}
-        className={`px-3 py-1 rounded-lg text-xs font-mono font-semibold tracking-wider cursor-pointer transition-all border border-transparent hover:border-black/15 dark:hover:border-white/[0.12] bg-transparent ${
-          isBotRunning
-            ? 'text-zinc-950 dark:text-white font-bold'
-            : 'text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white'
+        className={`px-3 py-1 rounded-lg text-xs font-mono font-semibold tracking-wider transition-all border border-transparent bg-transparent ${
+          isBotStopping
+            ? 'text-zinc-500 dark:text-zinc-400 cursor-not-allowed opacity-75'
+            : isBotRunning
+            ? 'text-zinc-950 dark:text-white font-bold cursor-pointer hover:border-black/15 dark:hover:border-white/[0.12]'
+            : 'text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white cursor-pointer hover:border-black/15 dark:hover:border-white/[0.12]'
         }`}
-        title={isBotRunning ? (isRu ? 'Остановить бота (F5)' : 'Stop bot (F5)') : (isRu ? 'Запустить бота (F5)' : 'Start bot (F5)')}
+        title={
+          isBotStopping
+            ? (isRu ? 'Останавливаем бота…' : 'Stopping bot…')
+            : isBotRunning
+            ? (isRu ? 'Остановить бота (F5)' : 'Stop bot (F5)')
+            : (isRu ? 'Запустить бота (F5)' : 'Start bot (F5)')
+        }
       >
-        {isBotRunning ? (
+        {isBotStopping ? (
+          <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+            <span className="w-3 h-3 rounded-full border-[1.5px] border-zinc-400/30 border-t-zinc-400 animate-spin shrink-0" />
+            {isRu ? 'Останавливаю…' : 'Stopping…'}
+          </span>
+        ) : isBotRunning ? (
           <span className="flex items-center gap-1.5 text-zinc-950 dark:text-white">
             <span className="w-2 h-2 rounded-[1.5px] bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.85)] animate-pulse shrink-0" />
             {isRu ? 'СТОП' : 'STOP'}

@@ -111,6 +111,7 @@ export const App: React.FC = () => {
 
   // Bot Execution State
   const [isBotRunning, setIsBotRunning] = useState<boolean>(false);
+  const [isBotStopping, setIsBotStopping] = useState<boolean>(false);
   const [isBotPaused, setIsBotPaused] = useState<boolean>(false);
   const [sessionSeconds, setSessionSeconds] = useState<number>(0);
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -226,6 +227,10 @@ export const App: React.FC = () => {
   const routesRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef<boolean>(true);
   const isBotRunningRef = useRef<boolean>(isBotRunning);
+  const isBotStoppingRef = useRef<boolean>(false);
+  const stopGuardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statusEpochRef = useRef<number>(0);
+  const stopCooldownUntilRef = useRef<number>(0);
   const sessionSecondsRef = useRef<number>(sessionSeconds);
   const [activeCasting] = useState<{ chainId: string; stepId: string } | null>(null);
   const [sessionSummary, setSessionSummary] = useState<SessionSummaryData | null>(null);
@@ -423,6 +428,13 @@ export const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [chains, settings, scheduleSettings, saveCurrentConfigToBackend]);
 
+  const clearStopGuardTimer = useCallback(() => {
+    if (stopGuardTimerRef.current !== null) {
+      clearTimeout(stopGuardTimerRef.current);
+      stopGuardTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -431,8 +443,9 @@ export const App: React.FC = () => {
         clearTimeout(routesRetryTimerRef.current);
         routesRetryTimerRef.current = null;
       }
+      clearStopGuardTimer();
     };
-  }, []);
+  }, [clearStopGuardTimer]);
 
   // Fetch routes from backend (retries up to 10x every 300ms if api exists without list_routes yet;
   // browser-only mock fallback when window.pywebview is absent)
@@ -662,6 +675,10 @@ export const App: React.FC = () => {
 
   const activateRunningBotUI = useCallback(
     (paused: boolean) => {
+      clearStopGuardTimer();
+      stopCooldownUntilRef.current = 0;
+      isBotStoppingRef.current = false;
+      setIsBotStopping(false);
       isBotRunningRef.current = true;
       setGlobalError(null);
       soundFx.playStart();
@@ -678,7 +695,7 @@ export const App: React.FC = () => {
       setSelectedPassIndex(null);
       setActiveTab('summary');
     },
-    [fetchScheduleStatus, todayDateStr]
+    [clearStopGuardTimer, fetchScheduleStatus, todayDateStr]
   );
 
   // 3) Bot status polling: call api.get_status() every 1 second
@@ -690,29 +707,40 @@ export const App: React.FC = () => {
         const api = await getPywebviewApi();
         if (!api?.get_status) return;
 
+        const pollEpoch = statusEpochRef.current;
         const status = await api.get_status();
-        if (cancelled || !status) return;
+        if (cancelled || !status || pollEpoch !== statusEpochRef.current) return;
 
         // Take schedule from get_status() if available
         if (status.schedule !== undefined) {
           setScheduleStatus(status.schedule);
         }
 
-        // If bot started externally (e.g. via start_autoroute, schedule, or hotkey)
-        if (!isBotRunningRef.current && status.running) {
+        // If bot started externally (e.g. via start_autoroute, schedule, or hotkey).
+        // Never fire while stopping (running: true is just a stop in progress) or during brief post-stop cooldown.
+        if (
+          !isBotRunningRef.current &&
+          !isBotStoppingRef.current &&
+          status.running &&
+          Date.now() >= stopCooldownUntilRef.current
+        ) {
           activateRunningBotUI(Boolean(status.paused));
           return;
         }
 
         // Update paused state from get_status()
-        if (status.running) {
+        if (status.running && !isBotStoppingRef.current) {
           setIsBotPaused(Boolean(status.paused));
         } else {
           setIsBotPaused(false);
         }
 
-        // If bot stopped on its own (running was true and became false)
-        if (isBotRunningRef.current && !status.running) {
+        // Bot finished stopping (either after Stop button or stopped on its own)
+        if ((isBotRunningRef.current || isBotStoppingRef.current) && !status.running) {
+          clearStopGuardTimer();
+          statusEpochRef.current += 1;
+          isBotStoppingRef.current = false;
+          setIsBotStopping(false);
           isBotRunningRef.current = false;
           setIsBotRunning(false);
           setIsBotPaused(false);
@@ -755,7 +783,7 @@ export const App: React.FC = () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [activateRunningBotUI, fetchScheduleStatus]);
+  }, [activateRunningBotUI, clearStopGuardTimer, fetchScheduleStatus]);
 
   // Route Selection & Deletion Handlers (allow playing without route on re-clicking selected route)
   const handleSelectRoute = async (id: string) => {
@@ -1460,7 +1488,7 @@ export const App: React.FC = () => {
       // Reset live gathering loot counter on session summary
       setLootStatus({ items: [], earned_copper: null, earned_complete: true });
 
-      if (isBotRunningRef.current) {
+      if (isBotRunningRef.current && !isBotStoppingRef.current) {
         // Scheduled session completed while bot keeps running:
         // Do NOT open modal summary! Show brief toast notification.
         const durMin = Math.max(1, Math.round((detail.duration_s || 0) / 60));
@@ -1470,10 +1498,23 @@ export const App: React.FC = () => {
           : `Scheduled session: ${durMin} min, gathered ${collected}`;
         setScheduleToast(toastMsg);
       } else {
-        // Bot has stopped: open modal summary
-        setSessionSummary(detail);
+        // Bot has stopped (or just finished stopping after Stop button): open summary
+        const wasStopping = isBotStoppingRef.current;
+        clearStopGuardTimer();
+        statusEpochRef.current += 1;
+        if (wasStopping) {
+          stopCooldownUntilRef.current = Date.now() + 1500;
+        }
+        isBotStoppingRef.current = false;
+        setIsBotStopping(false);
+        isBotRunningRef.current = false;
         setIsBotRunning(false);
         setIsBotPaused(false);
+        if (wasStopping) {
+          soundFx.playStop();
+          fetchScheduleStatus();
+        }
+        setSessionSummary(detail);
         setActiveTab('summary');
         if (todayDateStr) {
           setSelectedDate(todayDateStr);
@@ -1487,33 +1528,57 @@ export const App: React.FC = () => {
     return () => {
       window.removeEventListener('wowbot:session-summary', handleSessionSummaryEvent);
     };
-  }, [calendarYear, calendarMonth, todayDateStr, fetchDayData, fetchCalendarMonth, language]);
+  }, [calendarYear, calendarMonth, todayDateStr, fetchDayData, fetchCalendarMonth, clearStopGuardTimer, fetchScheduleStatus, language]);
 
   // Bot Start / Stop
   const handleToggleBot = async () => {
+    if (isBotStoppingRef.current) return;
+
     const isRu = language === 'ru';
     const api = await getPywebviewApi();
 
-    if (isBotRunning) {
-      soundFx.playStop();
-      isBotRunningRef.current = false;
-      setIsBotRunning(false);
+    if (isBotRunningRef.current) {
+      // Mark as stopping BEFORE calling api.stop_bot() so polling won't re-enable running UI
+      isBotStoppingRef.current = true;
+      setIsBotStopping(true);
       setIsBotPaused(false);
-      fetchScheduleStatus();
-      let backendSummary: SessionSummaryData | null = null;
+      statusEpochRef.current += 1;
+
       if (api?.stop_bot) {
+        // 15s safeguard in case running: false never arrives
+        clearStopGuardTimer();
+        stopGuardTimerRef.current = setTimeout(() => {
+          stopGuardTimerRef.current = null;
+          if (!isBotStoppingRef.current) return;
+          console.warn('stop_bot safeguard triggered: running: false not received within 15s');
+          statusEpochRef.current += 1;
+          isBotStoppingRef.current = false;
+          setIsBotStopping(false);
+          isBotRunningRef.current = false;
+          setIsBotRunning(false);
+          setIsBotPaused(false);
+          soundFx.playStop();
+          fetchScheduleStatus();
+        }, 15000);
+
         try {
           await api.stop_bot();
-          if (api.get_last_session) {
-            backendSummary = await api.get_last_session();
-          }
         } catch (err) {
           console.warn('stop_bot error:', err);
         }
+      } else {
+        // Browser preview mock mode (no pywebview get_status poll)
+        clearStopGuardTimer();
+        isBotStoppingRef.current = false;
+        setIsBotStopping(false);
+        isBotRunningRef.current = false;
+        setIsBotRunning(false);
+        setIsBotPaused(false);
+        soundFx.playStop();
+        fetchScheduleStatus();
+        setSessionSummary(null);
+        setActiveTab('summary');
       }
-
-      setSessionSummary(backendSummary || null);
-      setActiveTab('summary');
     } else {
       // 1. Check board connection and start bot via backend
       await saveCurrentConfigToBackend();
@@ -1729,6 +1794,7 @@ export const App: React.FC = () => {
             theme={theme}
             onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
             isBotRunning={isBotRunning}
+            isBotStopping={isBotStopping}
             isBotPaused={isBotPaused}
             pauseKey={settings.pauseKey}
             onToggleBot={handleToggleBot}

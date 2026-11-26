@@ -424,6 +424,7 @@ export interface SchedulePreview {
   start_ms: number | null;
   end_ms: number | null;
   timezone: string;                       // например «UTC+03:00»
+  notes?: string[];                       // что расписание поправило в окнах само: склеило, обрезало по соседнему дню
 }
 
 export type ScheduleDaySegmentKind =
@@ -442,7 +443,7 @@ export interface ScheduleDaySegment {
 export interface ScheduleDay {
   ok: boolean;
   error?: string;
-  date: string;                           // 'YYYY-MM-DD' (игровой день с 05:00)
+  date: string;                           // 'YYYY-MM-DD' (игровой день — от первого окна дня)
   off: boolean;
   daily_hours: [number, number] | null;
   windows: { start_ms: number; end_ms: number }[];
@@ -456,7 +457,7 @@ export interface ScheduleDay {
 }
 
 export interface ScheduleToday {
-  date: string;        // 'YYYY-MM-DD' (игровой день начинается в 05:00)
+  date: string;        // 'YYYY-MM-DD' (игровой день — от первого окна дня)
   off: boolean;        // сегодня выходной
   budget_s: number;    // норма на сегодня, секунды
   played_s: number;    // уже сыграно сегодня

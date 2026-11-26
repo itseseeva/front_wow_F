@@ -17,6 +17,7 @@ import {
   Swords,
   Coffee,
   Merge,
+  Info,
 } from 'lucide-react';
 import {
   ScheduleSettings,
@@ -36,7 +37,8 @@ import {
   DEFAULT_SCHEDULE_SETTINGS,
   DEFAULT_SCHEDULE_STYLES,
   WEEKDAY_KEYS,
-  getGameDayMinutes,
+  parseClockMinutes,
+  getWindowDurationMinutes,
   mockGetScheduleStyles,
   mockPreviewScheduleDay,
 } from '../data/mockSchedule';
@@ -81,22 +83,8 @@ function formatMsToTime(ms: number | null | undefined): string {
   return `${h}:${m}`;
 }
 
-function getWindowDurationMinutes(start: string, end: string): number {
-  const sMin = getGameDayMinutes(start, false);
-  const eMin = getGameDayMinutes(end, true);
-  if (eMin > sMin) {
-    return eMin - sMin;
-  }
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  const s = (sh || 0) * 60 + (sm || 0);
-  let e = (eh || 0) * 60 + (em || 0);
-  if (e <= s) e += 24 * 60;
-  return Math.max(0, e - s);
-}
-
-function toClock(gameMin: number): string {
-  const m = (((gameMin + 300) % 1440) + 1440) % 1440;
+function toClock(minutesFromMidnight: number): string {
+  const m = ((minutesFromMidnight % 1440) + 1440) % 1440;
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
 
@@ -235,37 +223,38 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     return currentDay.windows.map((w) => getWindowDurationMinutes(w.start, w.end));
   }, [currentDay.windows]);
 
-  // Sort windows by game day start time (starting at 05:00)
+  // Sort windows by start time (minutes from midnight; игровой день — от первого окна дня)
   const sortedWindows = useMemo(() => {
     return currentDay.windows
       .map((win, originalIndex) => ({ ...win, originalIndex }))
-      .sort((a, b) => getGameDayMinutes(a.start, false) - getGameDayMinutes(b.start, false));
+      .sort((a, b) => parseClockMinutes(a.start) - parseClockMinutes(b.start));
   }, [currentDay.windows]);
 
-  // Что между соседними окнами (по порядку игрового дня с 05:00): перерыв, стык вплотную или пересечение.
-  // Конец окна = начало + длительность: так окно через полночь (22:00–02:00) считается правильно.
+  // Что между соседними окнами (игровой день — от первого окна дня): перерыв, стык вплотную или пересечение.
+  // Конец окна = начало + длительность (может быть > 1440, если окно идёт через полночь).
   // between[i] — то, что стоит после окна i и перед окном i + 1.
   const windowBetween = useMemo(() => {
     const spans = sortedWindows.map((w) => {
-      const s = getGameDayMinutes(w.start, false);
+      const s = parseClockMinutes(w.start);
       return { s, e: s + getWindowDurationMinutes(w.start, w.end) };
     });
     const between: { kind: 'gap' | 'touch' | 'overlap'; from: string; to: string }[] = [];
+    let maxEndSoFar = spans[0]?.e ?? 0;
     for (let i = 0; i < spans.length - 1; i++) {
-      const prev = spans[i];
+      maxEndSoFar = Math.max(maxEndSoFar, spans[i].e);
       const next = spans[i + 1];
-      if (next.s > prev.e) {
-        between.push({ kind: 'gap', from: toClock(prev.e), to: toClock(next.s) });
-      } else if (next.s === prev.e) {
-        between.push({ kind: 'touch', from: toClock(prev.e), to: toClock(next.s) });
+      if (next.s > maxEndSoFar) {
+        between.push({ kind: 'gap', from: toClock(maxEndSoFar), to: toClock(next.s) });
+      } else if (next.s === maxEndSoFar) {
+        between.push({ kind: 'touch', from: toClock(maxEndSoFar), to: toClock(next.s) });
       } else {
-        between.push({ kind: 'overlap', from: toClock(next.s), to: toClock(Math.min(prev.e, next.e)) });
+        between.push({ kind: 'overlap', from: toClock(next.s), to: toClock(Math.min(maxEndSoFar, next.e)) });
       }
     }
     return between;
   }, [sortedWindows]);
 
-  // Окна, задетые пересечением, — подсветить; бэкенд такие окна всё равно не примет.
+  // Окна, задетые пересечением — для мягкой подсветки (бэкенд сам склеит их в одно окно).
   const overlappingIdx = useMemo(() => {
     const set = new Set<number>();
     windowBetween.forEach((b, i) => {
@@ -305,11 +294,13 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     let newEnd = '18:00';
 
     if (lastWindow) {
-      const lastEndMin = getGameDayMinutes(lastWindow.end, true);
-      if (lastEndMin <= 780) {
+      const lastEndMin =
+        parseClockMinutes(lastWindow.start) +
+        getWindowDurationMinutes(lastWindow.start, lastWindow.end);
+      if (lastEndMin <= 14 * 60) {
         newStart = '14:00';
         newEnd = '18:00';
-      } else if (lastEndMin <= 1080) {
+      } else if (lastEndMin <= 19 * 60) {
         newStart = '19:00';
         newEnd = '23:00';
       } else {
@@ -343,9 +334,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     const w2 = sortedWindows[idx + 1];
     if (!w1 || !w2) return;
 
-    const s1 = getGameDayMinutes(w1.start, false);
+    const s1 = parseClockMinutes(w1.start);
     const e1 = s1 + getWindowDurationMinutes(w1.start, w1.end);
-    const s2 = getGameDayMinutes(w2.start, false);
+    const s2 = parseClockMinutes(w2.start);
     const e2 = s2 + getWindowDurationMinutes(w2.start, w2.end);
 
     const mergedStart = toClock(Math.min(s1, s2));
@@ -758,6 +749,27 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
             isRu={isRu}
             onShuffle={handleShuffleSeed}
           />
+
+          {scheduleError && (
+            <div className="flex items-start gap-2 text-xs font-mono text-red-400 px-1 pt-1">
+              <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+              <span className="leading-snug">{scheduleError}</span>
+            </div>
+          )}
+
+          {preview?.ok && Array.isArray(preview.notes) && preview.notes.length > 0 && (
+            <div className="flex flex-col gap-1 px-1 pt-1">
+              {preview.notes.map((note, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-start gap-1.5 text-[11px] font-mono text-zinc-400"
+                >
+                  <Info className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
+                  <span className="leading-snug">{note}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </SpecularCard>
 
         {/* DAY CONFIGURATION */}
@@ -840,11 +852,12 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                     )}
                   </div>
 
-                  {/* Windows List - sorted by game day starting at 05:00 */}
+                  {/* Windows List - sorted by start time (game day starts at the first window of the day) */}
                   <div className="flex flex-col gap-2">
                     {sortedWindows.map((win, idx) => {
                       const durMin = getWindowDurationMinutes(win.start, win.end);
                       const durHours = (durMin / 60).toFixed(1).replace(/\.0$/, '');
+                      const isTooShort = durMin < 10;
 
                       const between = windowBetween[idx];
                       const overlaps = overlappingIdx.has(idx);
@@ -858,8 +871,10 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                           className={`flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-black border transition-all duration-300 font-mono text-xs ${
                             isJustMerged
                               ? 'border-white ring-2 ring-white/50 shadow-[0_0_20px_rgba(255,255,255,0.3)] scale-[1.01]'
+                              : isTooShort
+                              ? 'border-red-500/70'
                               : overlaps
-                              ? 'border-white border-dashed'
+                              ? 'border-white/25'
                               : 'border-white/10 hover:border-white/25'
                           } ${
                             isBeingMerged
@@ -924,28 +939,28 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                         )}
                         {between?.kind === 'overlap' && (
                           <div
-                            className={`flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 p-2.5 rounded-xl border border-white/40 border-dashed text-white font-mono text-xs transition-all duration-300 ${
+                            className={`flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 px-3 py-2 rounded-xl border border-white/15 bg-white/[0.02] text-zinc-400 font-mono text-[11px] transition-all duration-300 ${
                               isMergingNext
                                 ? 'opacity-0 max-h-0 py-0 scale-95 overflow-hidden'
                                 : 'opacity-100 max-h-32 scale-100'
                             }`}
                           >
                             <div className="flex items-center gap-2">
-                              <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-white" />
+                              <Info className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
                               <span>
                                 {isRu
-                                  ? `Окна пересекаются ${between.from}–${between.to} — сдвиньте время или объедините в одно. Пока так, расписание не сохранится.`
-                                  : `Windows overlap ${between.from}–${between.to} — shift the time or merge them. The schedule won't save until fixed.`}
+                                  ? `Пересечение ${between.from}–${between.to} — склеятся в одно окно`
+                                  : `Overlap ${between.from}–${between.to} — will merge into one window`}
                               </span>
                             </div>
                             <SpecularButton
                               type="button"
                               onClick={() => handleMergeWindows(idx)}
-                              className="shrink-0 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/40 hover:border-white text-white font-mono font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                              className="shrink-0 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/15 border border-white/15 hover:border-white/30 text-zinc-200 font-mono font-medium text-[11px] flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
                               title={isRu ? 'Объединить эти окна' : 'Merge these windows'}
                             >
-                              <Merge className="w-3.5 h-3.5 text-white" />
-                              <span className="text-white font-bold">{isRu ? 'Объединить' : 'Merge'}</span>
+                              <Merge className="w-3 h-3 text-zinc-300" />
+                              <span>{isRu ? 'Объединить' : 'Merge'}</span>
                             </SpecularButton>
                           </div>
                         )}
