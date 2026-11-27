@@ -7,7 +7,7 @@ export interface ChainStep {
   independent?: boolean;
   actionType?: 'press';
   hpBelowPercent?: number | null;
-  stepType?: 'skill' | 'water';
+  stepType?: 'skill' | 'water' | 'paw';
   mpBelowPercent?: number | null;
 }
 

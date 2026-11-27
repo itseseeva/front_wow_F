@@ -151,7 +151,7 @@ export const App: React.FC = () => {
               independent: Boolean(s.independent),
               skillCooldownSeconds: s.skillCooldownSeconds != null ? Number(s.skillCooldownSeconds) : 0,
               hpBelowPercent: s.hpBelowPercent != null ? Number(s.hpBelowPercent) : null,
-              stepType: s.stepType === 'water' ? 'water' : 'skill',
+              stepType: s.stepType === 'water' ? 'water' : s.stepType === 'paw' ? 'paw' : 'skill',
               mpBelowPercent: s.mpBelowPercent != null ? Number(s.mpBelowPercent) : null,
               actionType: 'press' as const,
             })),
@@ -170,7 +170,7 @@ export const App: React.FC = () => {
     let zoomOut = 'PAGEDOWN';
     let startStop = 'F5';
     let interact = 'G';
-    let clearTarget = 'ESC';
+    let clearTarget = language === 'en' ? "'" : 'Э';
     let pause = 'PAUSE';
     let herbSearch = 'F9';
     let oreSearch = 'F10';
@@ -185,7 +185,14 @@ export const App: React.FC = () => {
         if (parsed.minimapZoomOutKey) zoomOut = parsed.minimapZoomOutKey;
         if (parsed.startStopKey) startStop = parsed.startStopKey;
         if (parsed.interactKey !== undefined) interact = parsed.interactKey;
-        if (parsed.clearTargetKey) clearTarget = parsed.clearTargetKey;
+        if (parsed.clearTargetKey) {
+          clearTarget =
+            language === 'en' && (parsed.clearTargetKey === 'Э' || parsed.clearTargetKey === 'э')
+              ? "'"
+              : language === 'ru' && parsed.clearTargetKey === "'"
+              ? 'Э'
+              : parsed.clearTargetKey;
+        }
         if (parsed.pauseKey) pause = parsed.pauseKey;
         if (parsed.herbSearchKey !== undefined) herbSearch = parsed.herbSearchKey;
         if (parsed.oreSearchKey !== undefined) oreSearch = parsed.oreSearchKey;
@@ -308,6 +315,15 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem('wowbot_lang', language);
+    setSettings((prev) => {
+      if (language === 'en' && (prev.clearTargetKey === 'Э' || prev.clearTargetKey === 'э')) {
+        return { ...prev, clearTargetKey: "'" };
+      }
+      if (language === 'ru' && prev.clearTargetKey === "'") {
+        return { ...prev, clearTargetKey: 'Э' };
+      }
+      return prev;
+    });
   }, [language]);
 
   // Fetch schedule status when bot is idle/stopped
@@ -361,7 +377,7 @@ export const App: React.FC = () => {
           minimapZoomOutKey: customSettings.minimapZoomOutKey || 'PAGEDOWN',
           startStopKey: customSettings.startStopKey || 'F5',
           interactKey: customSettings.interactKey || 'G',
-          clearTargetKey: customSettings.clearTargetKey || 'ESC',
+          clearTargetKey: customSettings.clearTargetKey || (language === 'en' ? "'" : 'Э'),
           pauseKey: customSettings.pauseKey || 'PAUSE',
           herbSearchKey: customSettings.herbSearchKey !== undefined ? customSettings.herbSearchKey : 'F9',
           oreSearchKey: customSettings.oreSearchKey !== undefined ? customSettings.oreSearchKey : 'F10',
@@ -378,7 +394,7 @@ export const App: React.FC = () => {
               repeatCount: s.repeatCount ?? 1,
               independent: Boolean(s.independent),
               hpBelowPercent: s.hpBelowPercent != null ? Number(s.hpBelowPercent) : null,
-              stepType: s.stepType === 'water' ? 'water' : 'skill',
+              stepType: s.stepType === 'water' ? 'water' : s.stepType === 'paw' ? 'paw' : 'skill',
               mpBelowPercent: s.mpBelowPercent != null ? Number(s.mpBelowPercent) : null,
             })),
           },
@@ -552,7 +568,13 @@ export const App: React.FC = () => {
                 minimapZoomOutKey: parsed.settings.minimapZoomOutKey ?? prev.minimapZoomOutKey,
                 startStopKey: parsed.settings.startStopKey ?? prev.startStopKey,
                 interactKey: parsed.settings.interactKey ?? prev.interactKey,
-                clearTargetKey: parsed.settings.clearTargetKey ?? prev.clearTargetKey,
+                clearTargetKey: (() => {
+                  const raw = parsed.settings.clearTargetKey ?? prev.clearTargetKey;
+                  const activeLang = localStorage.getItem('wowbot_lang') === 'en' ? 'en' : 'ru';
+                  if (activeLang === 'en' && (raw === 'Э' || raw === 'э')) return "'";
+                  if (activeLang === 'ru' && raw === "'") return 'Э';
+                  return raw;
+                })(),
                 pauseKey: parsed.settings.pauseKey ?? prev.pauseKey,
                 herbSearchKey: parsed.settings.herbSearchKey ?? prev.herbSearchKey,
                 oreSearchKey: parsed.settings.oreSearchKey ?? prev.oreSearchKey,
@@ -580,7 +602,7 @@ export const App: React.FC = () => {
                       repeatCount: step.repeatCount ?? 1,
                       independent: Boolean(step.independent),
                       hpBelowPercent: step.hpBelowPercent != null ? Number(step.hpBelowPercent) : null,
-                      stepType: step.stepType === 'water' ? 'water' : 'skill',
+                      stepType: step.stepType === 'water' ? 'water' : step.stepType === 'paw' ? 'paw' : 'skill',
                       mpBelowPercent: step.mpBelowPercent != null ? Number(step.mpBelowPercent) : null,
                       actionType: 'press' as const,
                     })),

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ComboChain, ChainStep } from '../data/skillsLibrary';
-import { Plus, Clock, RotateCcw, X, Check, Zap, Heart, Droplet, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Plus, Clock, RotateCcw, X, Check, Zap, Heart, Droplet, PawPrint, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Language, Theme } from '../utils/i18n';
 import { soundFx } from '../utils/audio';
 
@@ -76,8 +76,9 @@ export const ComboSequence: React.FC<Props> = ({
     steps: [],
   };
 
-  const regularSteps = currentChain.steps.filter((s) => s.stepType !== 'water');
+  const regularSteps = currentChain.steps.filter((s) => s.stepType !== 'water' && s.stepType !== 'paw');
   const waterStep = currentChain.steps.find((s) => s.stepType === 'water') || null;
+  const pawStep = currentChain.steps.find((s) => s.stepType === 'paw') || null;
 
   // Active step being configured in bottom docked editor (Open by default on slot 1)
   const [editingStep, setEditingStep] = useState<{ chainId: string; stepId: string } | null>(() => {
@@ -89,7 +90,7 @@ export const ComboSequence: React.FC<Props> = ({
   });
 
   // Active key listening on '+' morph button
-  const [isAddingNewStep, setIsAddingNewStep] = useState<'regular' | 'water' | null>(null);
+  const [isAddingNewStep, setIsAddingNewStep] = useState<'regular' | 'water' | 'paw' | null>(null);
   const addingBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // Active key listening in bottom editor panel
@@ -109,7 +110,7 @@ export const ComboSequence: React.FC<Props> = ({
     skillCooldownSeconds: number;
     hpBelowPercent: number | null;
     mpBelowPercent: number | null;
-    stepType?: 'skill' | 'water';
+    stepType?: 'skill' | 'water' | 'paw';
   }>({
     key: '',
     castTimeSeconds: 1.5,
@@ -129,7 +130,9 @@ export const ComboSequence: React.FC<Props> = ({
   // Keep a step selected by default whenever steps exist, unless adding a new step
   useEffect(() => {
     if (!editingStep && !isAddingNewStep && currentChain.steps.length > 0) {
-      const firstRegular = currentChain.steps.find((s) => s.stepType !== 'water') || currentChain.steps[0];
+      const firstRegular =
+        currentChain.steps.find((s) => s.stepType !== 'water' && s.stepType !== 'paw') ||
+        currentChain.steps[0];
       setEditingStep({ chainId: currentChain.id, stepId: firstRegular.id });
     }
   }, [currentChain.steps, editingStep, currentChain.id, isAddingNewStep]);
@@ -210,16 +213,12 @@ export const ComboSequence: React.FC<Props> = ({
   };
 
   // Create a new step with captured key and open docked editor panel
-  const handleCreateStepWithKey = (chainId: string, key: string, stepType: 'skill' | 'water' = 'skill') => {
+  const handleCreateStepWithKey = (chainId: string, key: string, stepType: 'skill' | 'water' | 'paw' = 'skill') => {
     const upKey = key.toUpperCase();
-    if (stepType === 'water') {
-      const clash = currentChain.steps.some((s) => s.stepType !== 'water' && s.key.toUpperCase() === upKey);
-      if (clash) {
-        setIsAddingNewStep(null);
-        return;
-      }
-    } else {
-      const clash = currentChain.steps.some((s) => s.stepType === 'water' && s.key.toUpperCase() === upKey);
+    if (upKey) {
+      const clash = currentChain.steps.some(
+        (s) => (s.stepType || 'skill') !== stepType && s.key.toUpperCase() === upKey
+      );
       if (clash) {
         setIsAddingNewStep(null);
         return;
@@ -231,10 +230,10 @@ export const ComboSequence: React.FC<Props> = ({
     const newStep: ChainStep = {
       id: newStepId,
       key: upKey,
-      castTimeSeconds: stepType === 'water' ? 0 : 1.5,
+      castTimeSeconds: stepType === 'skill' ? 1.5 : 0,
       skillCooldownSeconds: 0,
       repeatCount: 1,
-      independent: stepType === 'water',
+      independent: stepType !== 'skill',
       actionType: 'press',
       stepType,
       ...(stepType === 'water' ? { mpBelowPercent: 40 } : {}),
@@ -295,7 +294,7 @@ export const ComboSequence: React.FC<Props> = ({
   const editingStepData = editingStep
     ? currentChain.steps.find((s) => s.id === editingStep.stepId)
     : null;
-  const editingRegularIdx = editingStepData && editingStepData.stepType !== 'water'
+  const editingRegularIdx = editingStepData && editingStepData.stepType !== 'water' && editingStepData.stepType !== 'paw'
     ? regularSteps.findIndex((s) => s.id === editingStepData.id)
     : -1;
   const prevRegularChainIdx = editingRegularIdx > 0
@@ -544,6 +543,84 @@ export const ComboSequence: React.FC<Props> = ({
             </button>
           )}
         </div>
+
+        {/* Orange Paw Separate Bind Slot (to the right of Water) */}
+        <div data-tour="rotation-paw" className="inline-flex shrink-0 relative group">
+          {isAddingNewStep === 'paw' ? (
+            <button
+              ref={addingBtnRef}
+              type="button"
+              tabIndex={0}
+              autoFocus
+              onBlur={() => setIsAddingNewStep(null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setIsAddingNewStep(null);
+                  return;
+                }
+                const captured = getPhysicalKeyFromEvent(e);
+                if (captured !== null) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleCreateStepWithKey(currentChain.id, captured, 'paw');
+                }
+              }}
+              className="w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg border-2 border-orange-400 bg-orange-500/20 text-orange-300 shadow-[0_0_14px_rgba(249,115,22,0.5)] scale-105 animate-pulse font-mono font-bold text-[11px] sm:text-xs flex items-center justify-center cursor-pointer shrink-0 transition-all outline-none relative"
+              title={isRu ? 'Нажмите клавишу для отдельного бинда (Esc для отмены)' : 'Press key for separate bind (Esc to cancel)'}
+            >
+              <PawPrint className="absolute top-1 right-1 w-2.5 h-2.5 stroke-[2] text-orange-300 fill-orange-300/35 pointer-events-none" />
+              {isRu ? 'ЖМИ' : 'PRESS'}
+            </button>
+          ) : pawStep ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setEditingStep({ chainId: currentChain.id, stepId: pawStep.id })}
+                title={isRu ? 'Отдельный бинд — кликните для настройки' : 'Separate keybind — click to configure'}
+                className={`w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg p-1 relative flex flex-col items-center justify-center cursor-pointer transition-all duration-150 select-none ${
+                  activeCasting?.chainId === currentChain.id && activeCasting?.stepId === pawStep.id
+                    ? 'border-2 border-orange-300 text-orange-200 scale-105 bg-orange-500/20 z-20'
+                    : editingStep?.stepId === pawStep.id
+                    ? 'border-2 border-orange-400 text-orange-300 shadow-[0_0_12px_rgba(249,115,22,0.35)] bg-orange-500/15 z-20'
+                    : 'border border-orange-500/45 bg-orange-500/10 hover:border-orange-400 hover:bg-orange-500/15 text-orange-400'
+                }`}
+              >
+                <PawPrint className="absolute top-1 right-1 w-2.5 h-2.5 stroke-[2] text-orange-400 fill-orange-400/35 pointer-events-none" />
+                <div
+                  className={`w-full text-center font-mono font-bold text-xs tracking-wide transition-colors pointer-events-none select-none ${
+                    pawStep.key
+                      ? 'text-orange-600 dark:text-orange-300'
+                      : 'text-orange-400/60'
+                  }`}
+                >
+                  {pawStep.key || '—'}
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => handleDeleteStep(currentChain.id, pawStep.id, e)}
+                title={isRu ? 'Удалить бинд' : 'Delete bind'}
+                className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-zinc-200 dark:bg-zinc-900 border border-black/20 dark:border-white/30 text-zinc-700 dark:text-zinc-300 text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-zinc-950 hover:text-white dark:hover:bg-white dark:hover:text-black cursor-pointer z-30"
+              >
+                ✕
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                soundFx.playClick();
+                setIsAddingNewStep('paw');
+              }}
+              title={isRu ? 'Добавить отдельный бинд' : 'Add separate bind'}
+              className="w-[44px] sm:w-[48px] h-[44px] sm:h-[48px] rounded-lg border border-dashed border-orange-500/60 bg-orange-500/[0.06] hover:border-orange-400 hover:bg-orange-500/15 text-orange-400 hover:text-orange-300 transition-all flex items-center justify-center cursor-pointer shrink-0 relative"
+            >
+              <PawPrint className="absolute top-1 right-1 w-3 h-3 stroke-[2] text-orange-400 fill-orange-400/35 pointer-events-none group-hover:scale-110 transition-transform" />
+              <Plus className="w-3.5 h-3.5 stroke-[1.75] text-orange-400/70" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 3. DOCKED BOTTOM EDITING PANEL (Ghost Mode) */}
@@ -558,6 +635,10 @@ export const ComboSequence: React.FC<Props> = ({
                     <span className="px-2 py-0.5 rounded font-mono font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 inline-flex items-center">
                       <Droplet className="w-3.5 h-3.5 text-blue-400 fill-blue-400/25" />
                     </span>
+                  ) : editingStepData.stepType === 'paw' ? (
+                    <span className="px-2 py-0.5 rounded font-mono font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 inline-flex items-center">
+                      <PawPrint className="w-3.5 h-3.5 text-orange-400 fill-orange-400/25" />
+                    </span>
                   ) : (
                     <span className="px-2 py-0.5 rounded font-mono font-bold text-zinc-950 dark:text-white">
                       #{editingRegularIdx + 1}
@@ -568,12 +649,16 @@ export const ComboSequence: React.FC<Props> = ({
                       ? isRu
                         ? 'Слот для воды (манареген)'
                         : 'Water slot (mana regen)'
+                      : editingStepData.stepType === 'paw'
+                      ? isRu
+                        ? 'Отдельный бинд'
+                        : 'Separate keybind'
                       : isRu
                       ? 'Редактирование умения'
                       : 'Edit spell slot'}
                   </span>
                 </span>
-                {editingStepData.stepType !== 'water' && (
+                {editingStepData.stepType !== 'water' && editingStepData.stepType !== 'paw' && (
                   <div className="flex items-center gap-0.5 ml-1">
                     <button
                       type="button"
@@ -595,7 +680,15 @@ export const ComboSequence: React.FC<Props> = ({
                     </button>
                   </div>
                 )}
-                <span className={`text-xs font-mono ${editingStepData.stepType === 'water' ? 'text-blue-400' : 'text-zinc-500'}`}>
+                <span
+                  className={`text-xs font-mono ${
+                    editingStepData.stepType === 'water'
+                      ? 'text-blue-400'
+                      : editingStepData.stepType === 'paw'
+                      ? 'text-orange-400'
+                      : 'text-zinc-500'
+                  }`}
+                >
                   {draftStep.key ? `[${draftStep.key}]` : isRu ? '(клавиша не привязана)' : '(no key)'}
                 </span>
               </div>
@@ -612,8 +705,71 @@ export const ComboSequence: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* Editing Cards: Simplified 2-card layout for Water, 4-card layout for Regular Skills */}
-            {editingStepData.stepType === 'water' ? (
+            {/* Editing Cards: 2-card layout for Water, 1-card layout for Paw, 2-card layout for Regular Skills */}
+            {editingStepData.stepType === 'paw' ? (
+              <div className="grid grid-cols-1 gap-3 max-w-xs">
+                <div className="p-3 rounded-xl border border-transparent hover:border-orange-500/20 bg-transparent flex flex-col justify-between gap-2.5 transition-all">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-mono font-semibold text-zinc-700 dark:text-zinc-300">
+                      1. {isRu ? 'Клавиша' : 'Keybind'}
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        tabIndex={0}
+                        onClick={() => setIsPanelKeyCapturing(true)}
+                        onBlur={() => setIsPanelKeyCapturing(false)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') {
+                            setIsPanelKeyCapturing(false);
+                            e.currentTarget.blur();
+                            return;
+                          }
+                          const captured = getPhysicalKeyFromEvent(e);
+                          if (captured !== null) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleUpdateCurrentStep({ key: captured.toUpperCase() });
+                            setIsPanelKeyCapturing(false);
+                            e.currentTarget.blur();
+                          }
+                        }}
+                        className={`h-7 px-2.5 rounded font-mono font-bold text-xs uppercase flex items-center justify-center border transition-all cursor-pointer outline-none select-none ${
+                          isPanelKeyCapturing
+                            ? 'border-orange-400 text-orange-400 animate-pulse bg-orange-500/15'
+                            : draftStep.key
+                            ? 'bg-transparent border-orange-500/35 text-orange-600 dark:text-orange-300 hover:border-orange-400'
+                            : 'bg-transparent border-dashed border-orange-500/35 text-orange-400/70 hover:border-orange-400'
+                        }`}
+                      >
+                        <span>{isPanelKeyCapturing ? (isRu ? '[ЖМИ]' : '[PRESS]') : `[${draftStep.key || '—'}]`}</span>
+                      </button>
+
+                      {draftStep.key && (
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateCurrentStep({ key: '' })}
+                          className="w-7 h-7 rounded text-zinc-400 hover:text-red-500 text-xs flex items-center justify-center transition-colors cursor-pointer"
+                          title={isRu ? 'Очистить клавишу' : 'Clear key'}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <span className="text-[10px] text-zinc-500 font-mono">
+                    {isPanelKeyCapturing
+                      ? isRu
+                        ? 'ЖМИ КЛАВИШУ НА КЛАВИАТУРЕ...'
+                        : 'PRESS KEY ON KEYBOARD...'
+                      : isRu
+                      ? 'кликните для назначения клавиши'
+                      : 'click to assign key'}
+                  </span>
+                </div>
+              </div>
+            ) : editingStepData.stepType === 'water' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-xl">
                 {/* CARD 1: Keybind Capture */}
                 <div className="p-3 rounded-xl border border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent flex flex-col justify-between gap-2.5 transition-all">

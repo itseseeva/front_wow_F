@@ -150,6 +150,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const isRu = language === 'ru';
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>(readSavedSettingsTab);
   const [capturingId, setCapturingId] = useState<keyof AppSettings | null>(null);
+  const [clearTargetError, setClearTargetError] = useState(false);
   const [priceStatus, setPriceStatus] = useState<PriceStatus | null>(null);
   const [isPriceLoading, setIsPriceLoading] = useState(false);
 
@@ -266,9 +267,37 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       e.stopPropagation();
 
       const isSearchBind = capturingId === 'herbSearchKey' || capturingId === 'oreSearchKey';
+      const isClearTargetBind = capturingId === 'clearTargetKey';
+
+      // Clear target bind: single key only, no modifiers, not Esc/Enter/Tab/Space
+      if (isClearTargetBind) {
+        const hasModifier =
+          e.ctrlKey ||
+          e.shiftKey ||
+          e.altKey ||
+          e.metaKey ||
+          ['Control', 'Shift', 'Alt', 'Meta'].includes(e.key);
+        const isForbiddenKey =
+          e.key === 'Escape' ||
+          e.code === 'Escape' ||
+          e.key === 'Enter' ||
+          e.code === 'Enter' ||
+          e.code === 'NumpadEnter' ||
+          e.key === 'Tab' ||
+          e.code === 'Tab' ||
+          e.key === ' ' ||
+          e.code === 'Space';
+
+        if (hasModifier || isForbiddenKey) {
+          setClearTargetError(true);
+          setCapturingId(null);
+          return;
+        }
+      }
 
       // Backspace or Delete clears the bind (value '')
       if (e.key === 'Backspace' || e.key === 'Delete') {
+        if (isClearTargetBind) setClearTargetError(false);
         onSettingsChange({
           ...settings,
           [capturingId]: '',
@@ -300,6 +329,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         return;
       }
 
+      if (isClearTargetBind) setClearTargetError(false);
       onSettingsChange({
         ...settings,
         [capturingId]: keyName,
@@ -320,12 +350,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleResetKeybinds = () => {
     soundFx.playClick();
     setCapturingId(null);
+    setClearTargetError(false);
     onSettingsChange({
       ...settings,
       previousTargetKey: 'H',
       startStopKey: 'F5',
       interactKey: 'G',
-      clearTargetKey: 'ESC',
+      clearTargetKey: isRu ? 'Э' : "'",
       pauseKey: 'PAUSE',
       herbSearchKey: 'F9',
       oreSearchKey: 'F10',
@@ -375,8 +406,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       items: [
         {
           id: 'startStopKey',
-          nameRu: 'Старт / пауза бота',
-          nameEn: 'Start / Pause Bot',
+          nameRu: 'Старт / Стоп',
+          nameEn: 'Start / Stop',
           hintRu: 'Клавиша самого бота — в игре настраивать не нужно',
           hintEn: 'Bot hotkey — nothing to set in game',
           defaultVal: 'F5',
@@ -416,9 +447,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           id: 'clearTargetKey',
           nameRu: 'Сброс цели',
           nameEn: 'Clear Target',
-          hintRu: 'В игре Esc снимает цель сам — настраивать не нужно',
-          hintEn: 'Esc clears the target in game — nothing to set',
-          defaultVal: 'ESC',
+          hintRu: 'Одна клавиша без Ctrl/Shift. Её назначает аддон при входе в игру; поменял — /reload в игре.',
+          hintEn: 'Single key, no Ctrl/Shift. The addon binds it on login; changed it — /reload in game.',
+          defaultVal: isRu ? 'Э' : "'",
         },
       ],
     },
@@ -561,37 +592,50 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                             : 'border-transparent hover:border-black/10 dark:hover:border-white/[0.08] bg-transparent'
                         }`}
                       >
-                        <div className="flex items-center justify-between w-full gap-4">
-                          <div className="flex flex-col min-w-0 pr-2">
-                            <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white tracking-wide">
-                              {isRu ? item.nameRu : item.nameEn}
-                            </span>
-                            <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono leading-snug mt-0.5 break-words">
-                              {isRu ? item.hintRu : item.hintEn}
-                            </span>
+                        <div className="flex flex-col w-full">
+                          <div className="flex items-center justify-between w-full gap-4">
+                            <div className="flex flex-col min-w-0 pr-2">
+                              <span className="text-xs sm:text-sm font-mono font-medium text-zinc-950 dark:text-white tracking-wide">
+                                {isRu ? item.nameRu : item.nameEn}
+                              </span>
+                              <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono leading-snug mt-0.5 break-words">
+                                {isRu ? item.hintRu : item.hintEn}
+                              </span>
+                            </div>
+
+                            <div className="relative shrink-0 ml-auto flex items-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  soundFx.playClick();
+                                  if (item.id === 'clearTargetKey') {
+                                    setClearTargetError(false);
+                                  }
+                                  setCapturingId(isCapturing ? null : item.id);
+                                }}
+                                className={`min-w-[78px] h-8 px-3 rounded-lg border font-mono font-bold text-xs uppercase flex items-center justify-center transition-colors duration-150 cursor-pointer select-none outline-none focus-visible:ring-1 focus-visible:ring-zinc-950 dark:focus-visible:ring-white ${
+                                  isCapturing
+                                    ? 'border-zinc-950 dark:border-white text-zinc-950 dark:text-white animate-pulse bg-black/5 dark:bg-white/10'
+                                    : currentKey
+                                    ? 'border-black/15 dark:border-white/15 hover:border-black/35 dark:hover:border-white/40 text-zinc-800 dark:text-zinc-200 hover:text-zinc-950 dark:hover:text-white bg-transparent'
+                                    : 'border-dashed border-black/15 dark:border-white/10 text-zinc-400 dark:text-zinc-600 hover:border-zinc-400 dark:hover:border-white/30'
+                                }`}
+                                title={isRu ? 'Нажмите для привязки клавиши' : 'Click to rebind key'}
+                              >
+                                <span className="tracking-widest">
+                                  {isCapturing ? (isRu ? 'ЖМИ…' : 'KEY…') : `[${currentKey || '—'}]`}
+                                </span>
+                              </button>
+                            </div>
                           </div>
 
-                          <div className="relative shrink-0 ml-auto flex items-center">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                soundFx.playClick();
-                                setCapturingId(isCapturing ? null : item.id);
-                              }}
-                              className={`min-w-[78px] h-8 px-3 rounded-lg border font-mono font-bold text-xs uppercase flex items-center justify-center transition-colors duration-150 cursor-pointer select-none outline-none focus-visible:ring-1 focus-visible:ring-zinc-950 dark:focus-visible:ring-white ${
-                                isCapturing
-                                  ? 'border-zinc-950 dark:border-white text-zinc-950 dark:text-white animate-pulse bg-black/5 dark:bg-white/10'
-                                  : currentKey
-                                  ? 'border-black/15 dark:border-white/15 hover:border-black/35 dark:hover:border-white/40 text-zinc-800 dark:text-zinc-200 hover:text-zinc-950 dark:hover:text-white bg-transparent'
-                                  : 'border-dashed border-black/15 dark:border-white/10 text-zinc-400 dark:text-zinc-600 hover:border-zinc-400 dark:hover:border-white/30'
-                              }`}
-                              title={isRu ? 'Нажмите для привязки клавиши' : 'Click to rebind key'}
-                            >
-                              <span className="tracking-widest">
-                                {isCapturing ? (isRu ? 'ЖМИ…' : 'KEY…') : `[${currentKey || '—'}]`}
-                              </span>
-                            </button>
-                          </div>
+                          {item.id === 'clearTargetKey' && clearTargetError && (
+                            <p className="text-xs text-red-400 font-mono mt-1.5">
+                              {isRu
+                                ? 'Нужна одна клавиша без Ctrl/Shift, не Esc/Enter/Tab/ пробел'
+                                : 'Single key without Ctrl/Shift, not Esc/Enter/Tab/Space'}
+                            </p>
+                          )}
                         </div>
                       </SpecularCard>
                     );
